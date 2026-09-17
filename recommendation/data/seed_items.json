@@ -1,0 +1,794 @@
+[
+  {
+    "item_id": "ele-001",
+    "title": "VoltCore Electronics Product 1",
+    "brand_id": "VoltCore",
+    "category_path": [
+      "electronics"
+    ],
+    "price_cents": 84309,
+    "image_url": "https://example.com/img/electronics-001.jpg",
+    "available": true
+  },
+  {
+    "item_id": "ele-002",
+    "title": "CircuitPro Electronics Product 2",
+    "brand_id": "CircuitPro",
+    "category_path": [
+      "electronics"
+    ],
+    "price_cents": 97695,
+    "image_url": "https://example.com/img/electronics-002.jpg",
+    "available": true
+  },
+  {
+    "item_id": "ele-003",
+    "title": "VoltCore Electronics Product 3",
+    "brand_id": "VoltCore",
+    "category_path": [
+      "electronics"
+    ],
+    "price_cents": 29755,
+    "image_url": "https://example.com/img/electronics-003.jpg",
+    "available": true
+  },
+  {
+    "item_id": "ele-004",
+    "title": "CircuitPro Electronics Product 4",
+    "brand_id": "CircuitPro",
+    "category_path": [
+      "electronics"
+    ],
+    "price_cents": 13933,
+    "image_url": "https://example.com/img/electronics-004.jpg",
+    "available": true
+  },
+  {
+    "item_id": "ele-005",
+    "title": "VoltCore Electronics Product 5",
+    "brand_id": "VoltCore",
+    "category_path": [
+      "electronics"
+    ],
+    "price_cents": 71981,
+    "image_url": "https://example.com/img/electronics-005.jpg",
+    "available": true
+  },
+  {
+    "item_id": "ele-006",
+    "title": "CircuitPro Electronics Product 6",
+    "brand_id": "CircuitPro",
+    "category_path": [
+      "electronics"
+    ],
+    "price_cents": 55801,
+    "image_url": "https://example.com/img/electronics-006.jpg",
+    "available": true
+  },
+  {
+    "item_id": "ele-007",
+    "title": "VoltCore Electronics Product 7",
+    "brand_id": "VoltCore",
+    "category_path": [
+      "electronics"
+    ],
+    "price_cents": 12779,
+    "image_url": "https://example.com/img/electronics-007.jpg",
+    "available": true
+  },
+  {
+    "item_id": "ele-008",
+    "title": "CircuitPro Electronics Product 8",
+    "brand_id": "CircuitPro",
+    "category_path": [
+      "electronics"
+    ],
+    "price_cents": 66736,
+    "image_url": "https://example.com/img/electronics-008.jpg",
+    "available": true
+  },
+  {
+    "item_id": "ele-009",
+    "title": "VoltCore Electronics Product 9",
+    "brand_id": "VoltCore",
+    "category_path": [
+      "electronics"
+    ],
+    "price_cents": 74062,
+    "image_url": "https://example.com/img/electronics-009.jpg",
+    "available": true
+  },
+  {
+    "item_id": "ele-010",
+    "title": "CircuitPro Electronics Product 10",
+    "brand_id": "CircuitPro",
+    "category_path": [
+      "electronics"
+    ],
+    "price_cents": 85680,
+    "image_url": "https://example.com/img/electronics-010.jpg",
+    "available": true
+  },
+  {
+    "item_id": "ele-011",
+    "title": "VoltCore Electronics Product 11",
+    "brand_id": "VoltCore",
+    "category_path": [
+      "electronics"
+    ],
+    "price_cents": 55486,
+    "image_url": "https://example.com/img/electronics-011.jpg",
+    "available": true
+  },
+  {
+    "item_id": "ele-012",
+    "title": "CircuitPro Electronics Product 12",
+    "brand_id": "CircuitPro",
+    "category_path": [
+      "electronics"
+    ],
+    "price_cents": 77735,
+    "image_url": "https://example.com/img/electronics-012.jpg",
+    "available": true
+  },
+  {
+    "item_id": "boo-001",
+    "title": "Inkwell Books Product 1",
+    "brand_id": "Inkwell",
+    "category_path": [
+      "books"
+    ],
+    "price_cents": 1350,
+    "image_url": "https://example.com/img/books-001.jpg",
+    "available": true
+  },
+  {
+    "item_id": "boo-002",
+    "title": "FolioPress Books Product 2",
+    "brand_id": "FolioPress",
+    "category_path": [
+      "books"
+    ],
+    "price_cents": 21425,
+    "image_url": "https://example.com/img/books-002.jpg",
+    "available": true
+  },
+  {
+    "item_id": "boo-003",
+    "title": "Inkwell Books Product 3",
+    "brand_id": "Inkwell",
+    "category_path": [
+      "books"
+    ],
+    "price_cents": 45096,
+    "image_url": "https://example.com/img/books-003.jpg",
+    "available": true
+  },
+  {
+    "item_id": "boo-004",
+    "title": "FolioPress Books Product 4",
+    "brand_id": "FolioPress",
+    "category_path": [
+      "books"
+    ],
+    "price_cents": 28720,
+    "image_url": "https://example.com/img/books-004.jpg",
+    "available": false
+  },
+  {
+    "item_id": "boo-005",
+    "title": "Inkwell Books Product 5",
+    "brand_id": "Inkwell",
+    "category_path": [
+      "books"
+    ],
+    "price_cents": 44617,
+    "image_url": "https://example.com/img/books-005.jpg",
+    "available": true
+  },
+  {
+    "item_id": "boo-006",
+    "title": "FolioPress Books Product 6",
+    "brand_id": "FolioPress",
+    "category_path": [
+      "books"
+    ],
+    "price_cents": 50296,
+    "image_url": "https://example.com/img/books-006.jpg",
+    "available": true
+  },
+  {
+    "item_id": "boo-007",
+    "title": "Inkwell Books Product 7",
+    "brand_id": "Inkwell",
+    "category_path": [
+      "books"
+    ],
+    "price_cents": 45581,
+    "image_url": "https://example.com/img/books-007.jpg",
+    "available": true
+  },
+  {
+    "item_id": "boo-008",
+    "title": "FolioPress Books Product 8",
+    "brand_id": "FolioPress",
+    "category_path": [
+      "books"
+    ],
+    "price_cents": 6194,
+    "image_url": "https://example.com/img/books-008.jpg",
+    "available": true
+  },
+  {
+    "item_id": "boo-009",
+    "title": "Inkwell Books Product 9",
+    "brand_id": "Inkwell",
+    "category_path": [
+      "books"
+    ],
+    "price_cents": 70783,
+    "image_url": "https://example.com/img/books-009.jpg",
+    "available": true
+  },
+  {
+    "item_id": "boo-010",
+    "title": "FolioPress Books Product 10",
+    "brand_id": "FolioPress",
+    "category_path": [
+      "books"
+    ],
+    "price_cents": 50114,
+    "image_url": "https://example.com/img/books-010.jpg",
+    "available": true
+  },
+  {
+    "item_id": "boo-011",
+    "title": "Inkwell Books Product 11",
+    "brand_id": "Inkwell",
+    "category_path": [
+      "books"
+    ],
+    "price_cents": 38926,
+    "image_url": "https://example.com/img/books-011.jpg",
+    "available": true
+  },
+  {
+    "item_id": "boo-012",
+    "title": "FolioPress Books Product 12",
+    "brand_id": "FolioPress",
+    "category_path": [
+      "books"
+    ],
+    "price_cents": 81569,
+    "image_url": "https://example.com/img/books-012.jpg",
+    "available": true
+  },
+  {
+    "item_id": "clo-001",
+    "title": "Threadline Clothing Product 1",
+    "brand_id": "Threadline",
+    "category_path": [
+      "clothing"
+    ],
+    "price_cents": 47899,
+    "image_url": "https://example.com/img/clothing-001.jpg",
+    "available": true
+  },
+  {
+    "item_id": "clo-002",
+    "title": "UrbanWeave Clothing Product 2",
+    "brand_id": "UrbanWeave",
+    "category_path": [
+      "clothing"
+    ],
+    "price_cents": 92848,
+    "image_url": "https://example.com/img/clothing-002.jpg",
+    "available": true
+  },
+  {
+    "item_id": "clo-003",
+    "title": "Threadline Clothing Product 3",
+    "brand_id": "Threadline",
+    "category_path": [
+      "clothing"
+    ],
+    "price_cents": 87172,
+    "image_url": "https://example.com/img/clothing-003.jpg",
+    "available": true
+  },
+  {
+    "item_id": "clo-004",
+    "title": "UrbanWeave Clothing Product 4",
+    "brand_id": "UrbanWeave",
+    "category_path": [
+      "clothing"
+    ],
+    "price_cents": 38429,
+    "image_url": "https://example.com/img/clothing-004.jpg",
+    "available": false
+  },
+  {
+    "item_id": "clo-005",
+    "title": "Threadline Clothing Product 5",
+    "brand_id": "Threadline",
+    "category_path": [
+      "clothing"
+    ],
+    "price_cents": 31011,
+    "image_url": "https://example.com/img/clothing-005.jpg",
+    "available": true
+  },
+  {
+    "item_id": "clo-006",
+    "title": "UrbanWeave Clothing Product 6",
+    "brand_id": "UrbanWeave",
+    "category_path": [
+      "clothing"
+    ],
+    "price_cents": 50322,
+    "image_url": "https://example.com/img/clothing-006.jpg",
+    "available": true
+  },
+  {
+    "item_id": "clo-007",
+    "title": "Threadline Clothing Product 7",
+    "brand_id": "Threadline",
+    "category_path": [
+      "clothing"
+    ],
+    "price_cents": 83819,
+    "image_url": "https://example.com/img/clothing-007.jpg",
+    "available": true
+  },
+  {
+    "item_id": "clo-008",
+    "title": "UrbanWeave Clothing Product 8",
+    "brand_id": "UrbanWeave",
+    "category_path": [
+      "clothing"
+    ],
+    "price_cents": 21818,
+    "image_url": "https://example.com/img/clothing-008.jpg",
+    "available": true
+  },
+  {
+    "item_id": "clo-009",
+    "title": "Threadline Clothing Product 9",
+    "brand_id": "Threadline",
+    "category_path": [
+      "clothing"
+    ],
+    "price_cents": 27959,
+    "image_url": "https://example.com/img/clothing-009.jpg",
+    "available": true
+  },
+  {
+    "item_id": "clo-010",
+    "title": "UrbanWeave Clothing Product 10",
+    "brand_id": "UrbanWeave",
+    "category_path": [
+      "clothing"
+    ],
+    "price_cents": 92487,
+    "image_url": "https://example.com/img/clothing-010.jpg",
+    "available": false
+  },
+  {
+    "item_id": "clo-011",
+    "title": "Threadline Clothing Product 11",
+    "brand_id": "Threadline",
+    "category_path": [
+      "clothing"
+    ],
+    "price_cents": 85438,
+    "image_url": "https://example.com/img/clothing-011.jpg",
+    "available": true
+  },
+  {
+    "item_id": "clo-012",
+    "title": "UrbanWeave Clothing Product 12",
+    "brand_id": "UrbanWeave",
+    "category_path": [
+      "clothing"
+    ],
+    "price_cents": 83726,
+    "image_url": "https://example.com/img/clothing-012.jpg",
+    "available": true
+  },
+  {
+    "item_id": "hom-001",
+    "title": "HearthNest Home Product 1",
+    "brand_id": "HearthNest",
+    "category_path": [
+      "home"
+    ],
+    "price_cents": 96067,
+    "image_url": "https://example.com/img/home-001.jpg",
+    "available": true
+  },
+  {
+    "item_id": "hom-002",
+    "title": "OakHaven Home Product 2",
+    "brand_id": "OakHaven",
+    "category_path": [
+      "home"
+    ],
+    "price_cents": 61088,
+    "image_url": "https://example.com/img/home-002.jpg",
+    "available": true
+  },
+  {
+    "item_id": "hom-003",
+    "title": "HearthNest Home Product 3",
+    "brand_id": "HearthNest",
+    "category_path": [
+      "home"
+    ],
+    "price_cents": 84385,
+    "image_url": "https://example.com/img/home-003.jpg",
+    "available": true
+  },
+  {
+    "item_id": "hom-004",
+    "title": "OakHaven Home Product 4",
+    "brand_id": "OakHaven",
+    "category_path": [
+      "home"
+    ],
+    "price_cents": 29284,
+    "image_url": "https://example.com/img/home-004.jpg",
+    "available": true
+  },
+  {
+    "item_id": "hom-005",
+    "title": "HearthNest Home Product 5",
+    "brand_id": "HearthNest",
+    "category_path": [
+      "home"
+    ],
+    "price_cents": 7830,
+    "image_url": "https://example.com/img/home-005.jpg",
+    "available": true
+  },
+  {
+    "item_id": "hom-006",
+    "title": "OakHaven Home Product 6",
+    "brand_id": "OakHaven",
+    "category_path": [
+      "home"
+    ],
+    "price_cents": 4706,
+    "image_url": "https://example.com/img/home-006.jpg",
+    "available": true
+  },
+  {
+    "item_id": "hom-007",
+    "title": "HearthNest Home Product 7",
+    "brand_id": "HearthNest",
+    "category_path": [
+      "home"
+    ],
+    "price_cents": 53080,
+    "image_url": "https://example.com/img/home-007.jpg",
+    "available": true
+  },
+  {
+    "item_id": "hom-008",
+    "title": "OakHaven Home Product 8",
+    "brand_id": "OakHaven",
+    "category_path": [
+      "home"
+    ],
+    "price_cents": 28152,
+    "image_url": "https://example.com/img/home-008.jpg",
+    "available": false
+  },
+  {
+    "item_id": "hom-009",
+    "title": "HearthNest Home Product 9",
+    "brand_id": "HearthNest",
+    "category_path": [
+      "home"
+    ],
+    "price_cents": 74840,
+    "image_url": "https://example.com/img/home-009.jpg",
+    "available": true
+  },
+  {
+    "item_id": "hom-010",
+    "title": "OakHaven Home Product 10",
+    "brand_id": "OakHaven",
+    "category_path": [
+      "home"
+    ],
+    "price_cents": 41744,
+    "image_url": "https://example.com/img/home-010.jpg",
+    "available": true
+  },
+  {
+    "item_id": "hom-011",
+    "title": "HearthNest Home Product 11",
+    "brand_id": "HearthNest",
+    "category_path": [
+      "home"
+    ],
+    "price_cents": 65934,
+    "image_url": "https://example.com/img/home-011.jpg",
+    "available": true
+  },
+  {
+    "item_id": "hom-012",
+    "title": "OakHaven Home Product 12",
+    "brand_id": "OakHaven",
+    "category_path": [
+      "home"
+    ],
+    "price_cents": 84758,
+    "image_url": "https://example.com/img/home-012.jpg",
+    "available": true
+  },
+  {
+    "item_id": "spo-001",
+    "title": "PeakForm Sports Product 1",
+    "brand_id": "PeakForm",
+    "category_path": [
+      "sports"
+    ],
+    "price_cents": 35217,
+    "image_url": "https://example.com/img/sports-001.jpg",
+    "available": true
+  },
+  {
+    "item_id": "spo-002",
+    "title": "TrailBlaze Sports Product 2",
+    "brand_id": "TrailBlaze",
+    "category_path": [
+      "sports"
+    ],
+    "price_cents": 98146,
+    "image_url": "https://example.com/img/sports-002.jpg",
+    "available": true
+  },
+  {
+    "item_id": "spo-003",
+    "title": "PeakForm Sports Product 3",
+    "brand_id": "PeakForm",
+    "category_path": [
+      "sports"
+    ],
+    "price_cents": 34937,
+    "image_url": "https://example.com/img/sports-003.jpg",
+    "available": true
+  },
+  {
+    "item_id": "spo-004",
+    "title": "TrailBlaze Sports Product 4",
+    "brand_id": "TrailBlaze",
+    "category_path": [
+      "sports"
+    ],
+    "price_cents": 56654,
+    "image_url": "https://example.com/img/sports-004.jpg",
+    "available": true
+  },
+  {
+    "item_id": "spo-005",
+    "title": "PeakForm Sports Product 5",
+    "brand_id": "PeakForm",
+    "category_path": [
+      "sports"
+    ],
+    "price_cents": 52849,
+    "image_url": "https://example.com/img/sports-005.jpg",
+    "available": true
+  },
+  {
+    "item_id": "spo-006",
+    "title": "TrailBlaze Sports Product 6",
+    "brand_id": "TrailBlaze",
+    "category_path": [
+      "sports"
+    ],
+    "price_cents": 18630,
+    "image_url": "https://example.com/img/sports-006.jpg",
+    "available": true
+  },
+  {
+    "item_id": "spo-007",
+    "title": "PeakForm Sports Product 7",
+    "brand_id": "PeakForm",
+    "category_path": [
+      "sports"
+    ],
+    "price_cents": 12414,
+    "image_url": "https://example.com/img/sports-007.jpg",
+    "available": true
+  },
+  {
+    "item_id": "spo-008",
+    "title": "TrailBlaze Sports Product 8",
+    "brand_id": "TrailBlaze",
+    "category_path": [
+      "sports"
+    ],
+    "price_cents": 14870,
+    "image_url": "https://example.com/img/sports-008.jpg",
+    "available": true
+  },
+  {
+    "item_id": "spo-009",
+    "title": "PeakForm Sports Product 9",
+    "brand_id": "PeakForm",
+    "category_path": [
+      "sports"
+    ],
+    "price_cents": 21468,
+    "image_url": "https://example.com/img/sports-009.jpg",
+    "available": true
+  },
+  {
+    "item_id": "spo-010",
+    "title": "TrailBlaze Sports Product 10",
+    "brand_id": "TrailBlaze",
+    "category_path": [
+      "sports"
+    ],
+    "price_cents": 55832,
+    "image_url": "https://example.com/img/sports-010.jpg",
+    "available": true
+  },
+  {
+    "item_id": "spo-011",
+    "title": "PeakForm Sports Product 11",
+    "brand_id": "PeakForm",
+    "category_path": [
+      "sports"
+    ],
+    "price_cents": 50931,
+    "image_url": "https://example.com/img/sports-011.jpg",
+    "available": true
+  },
+  {
+    "item_id": "spo-012",
+    "title": "TrailBlaze Sports Product 12",
+    "brand_id": "TrailBlaze",
+    "category_path": [
+      "sports"
+    ],
+    "price_cents": 61847,
+    "image_url": "https://example.com/img/sports-012.jpg",
+    "available": true
+  },
+  {
+    "item_id": "toy-001",
+    "title": "PlayBright Toys Product 1",
+    "brand_id": "PlayBright",
+    "category_path": [
+      "toys"
+    ],
+    "price_cents": 73011,
+    "image_url": "https://example.com/img/toys-001.jpg",
+    "available": true
+  },
+  {
+    "item_id": "toy-002",
+    "title": "KidCraft Toys Product 2",
+    "brand_id": "KidCraft",
+    "category_path": [
+      "toys"
+    ],
+    "price_cents": 2003,
+    "image_url": "https://example.com/img/toys-002.jpg",
+    "available": true
+  },
+  {
+    "item_id": "toy-003",
+    "title": "PlayBright Toys Product 3",
+    "brand_id": "PlayBright",
+    "category_path": [
+      "toys"
+    ],
+    "price_cents": 15513,
+    "image_url": "https://example.com/img/toys-003.jpg",
+    "available": true
+  },
+  {
+    "item_id": "toy-004",
+    "title": "KidCraft Toys Product 4",
+    "brand_id": "KidCraft",
+    "category_path": [
+      "toys"
+    ],
+    "price_cents": 70880,
+    "image_url": "https://example.com/img/toys-004.jpg",
+    "available": true
+  },
+  {
+    "item_id": "toy-005",
+    "title": "PlayBright Toys Product 5",
+    "brand_id": "PlayBright",
+    "category_path": [
+      "toys"
+    ],
+    "price_cents": 84511,
+    "image_url": "https://example.com/img/toys-005.jpg",
+    "available": true
+  },
+  {
+    "item_id": "toy-006",
+    "title": "KidCraft Toys Product 6",
+    "brand_id": "KidCraft",
+    "category_path": [
+      "toys"
+    ],
+    "price_cents": 38968,
+    "image_url": "https://example.com/img/toys-006.jpg",
+    "available": true
+  },
+  {
+    "item_id": "toy-007",
+    "title": "PlayBright Toys Product 7",
+    "brand_id": "PlayBright",
+    "category_path": [
+      "toys"
+    ],
+    "price_cents": 59969,
+    "image_url": "https://example.com/img/toys-007.jpg",
+    "available": true
+  },
+  {
+    "item_id": "toy-008",
+    "title": "KidCraft Toys Product 8",
+    "brand_id": "KidCraft",
+    "category_path": [
+      "toys"
+    ],
+    "price_cents": 95145,
+    "image_url": "https://example.com/img/toys-008.jpg",
+    "available": true
+  },
+  {
+    "item_id": "toy-009",
+    "title": "PlayBright Toys Product 9",
+    "brand_id": "PlayBright",
+    "category_path": [
+      "toys"
+    ],
+    "price_cents": 35021,
+    "image_url": "https://example.com/img/toys-009.jpg",
+    "available": false
+  },
+  {
+    "item_id": "toy-010",
+    "title": "KidCraft Toys Product 10",
+    "brand_id": "KidCraft",
+    "category_path": [
+      "toys"
+    ],
+    "price_cents": 23915,
+    "image_url": "https://example.com/img/toys-010.jpg",
+    "available": true
+  },
+  {
+    "item_id": "toy-011",
+    "title": "PlayBright Toys Product 11",
+    "brand_id": "PlayBright",
+    "category_path": [
+      "toys"
+    ],
+    "price_cents": 14446,
+    "image_url": "https://example.com/img/toys-011.jpg",
+    "available": true
+  },
+  {
+    "item_id": "toy-012",
+    "title": "KidCraft Toys Product 12",
+    "brand_id": "KidCraft",
+    "category_path": [
+      "toys"
+    ],
+    "price_cents": 39616,
+    "image_url": "https://example.com/img/toys-012.jpg",
+    "available": true
+  }
+]

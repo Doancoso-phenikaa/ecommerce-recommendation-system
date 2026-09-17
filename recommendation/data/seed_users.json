@@ -1,0 +1,224 @@
+[
+  {
+    "user_id": "user-001",
+    "gender": "female",
+    "age_group": "25-34",
+    "country": "BR",
+    "affinity_categories": [
+      "books"
+    ]
+  },
+  {
+    "user_id": "user-002",
+    "gender": "female",
+    "age_group": "45+",
+    "country": "US",
+    "affinity_categories": [
+      "sports"
+    ]
+  },
+  {
+    "user_id": "user-003",
+    "gender": "female",
+    "age_group": "25-34",
+    "country": "US",
+    "affinity_categories": [
+      "clothing"
+    ]
+  },
+  {
+    "user_id": "user-004",
+    "gender": "male",
+    "age_group": "18-24",
+    "country": "IN",
+    "affinity_categories": [
+      "sports"
+    ]
+  },
+  {
+    "user_id": "user-005",
+    "gender": "male",
+    "age_group": "25-34",
+    "country": "IN",
+    "affinity_categories": [
+      "sports"
+    ]
+  },
+  {
+    "user_id": "user-006",
+    "gender": "other",
+    "age_group": "45+",
+    "country": "GB",
+    "affinity_categories": [
+      "clothing"
+    ]
+  },
+  {
+    "user_id": "user-007",
+    "gender": "female",
+    "age_group": "45+",
+    "country": "DE",
+    "affinity_categories": [
+      "toys"
+    ]
+  },
+  {
+    "user_id": "user-008",
+    "gender": "male",
+    "age_group": "25-34",
+    "country": "GB",
+    "affinity_categories": [
+      "sports",
+      "home"
+    ]
+  },
+  {
+    "user_id": "user-009",
+    "gender": "male",
+    "age_group": "25-34",
+    "country": "BR",
+    "affinity_categories": [
+      "clothing"
+    ]
+  },
+  {
+    "user_id": "user-010",
+    "gender": "male",
+    "age_group": "18-24",
+    "country": "GB",
+    "affinity_categories": [
+      "electronics"
+    ]
+  },
+  {
+    "user_id": "user-011",
+    "gender": "female",
+    "age_group": "18-24",
+    "country": "BR",
+    "affinity_categories": [
+      "electronics"
+    ]
+  },
+  {
+    "user_id": "user-012",
+    "gender": "other",
+    "age_group": "45+",
+    "country": "GB",
+    "affinity_categories": [
+      "clothing"
+    ]
+  },
+  {
+    "user_id": "user-013",
+    "gender": "other",
+    "age_group": "45+",
+    "country": "GB",
+    "affinity_categories": [
+      "toys"
+    ]
+  },
+  {
+    "user_id": "user-014",
+    "gender": "male",
+    "age_group": "18-24",
+    "country": "IN",
+    "affinity_categories": [
+      "home",
+      "books"
+    ]
+  },
+  {
+    "user_id": "user-015",
+    "gender": "female",
+    "age_group": "18-24",
+    "country": "US",
+    "affinity_categories": [
+      "home",
+      "toys"
+    ]
+  },
+  {
+    "user_id": "user-016",
+    "gender": "other",
+    "age_group": "35-44",
+    "country": "US",
+    "affinity_categories": [
+      "home"
+    ]
+  },
+  {
+    "user_id": "user-017",
+    "gender": "male",
+    "age_group": "45+",
+    "country": "GB",
+    "affinity_categories": [
+      "books"
+    ]
+  },
+  {
+    "user_id": "user-018",
+    "gender": "female",
+    "age_group": "25-34",
+    "country": "US",
+    "affinity_categories": [
+      "books",
+      "clothing"
+    ]
+  },
+  {
+    "user_id": "user-019",
+    "gender": "male",
+    "age_group": "18-24",
+    "country": "US",
+    "affinity_categories": [
+      "sports",
+      "electronics"
+    ]
+  },
+  {
+    "user_id": "user-020",
+    "gender": "female",
+    "age_group": "45+",
+    "country": "IN",
+    "affinity_categories": [
+      "books"
+    ]
+  },
+  {
+    "user_id": "user-021",
+    "gender": "male",
+    "age_group": "25-34",
+    "country": "IN",
+    "affinity_categories": [
+      "home"
+    ]
+  },
+  {
+    "user_id": "user-022",
+    "gender": "female",
+    "age_group": "45+",
+    "country": "DE",
+    "affinity_categories": [
+      "home"
+    ]
+  },
+  {
+    "user_id": "user-023",
+    "gender": "other",
+    "age_group": "45+",
+    "country": "GB",
+    "affinity_categories": [
+      "toys",
+      "sports"
+    ]
+  },
+  {
+    "user_id": "user-024",
+    "gender": "male",
+    "age_group": "18-24",
+    "country": "BR",
+    "affinity_categories": [
+      "clothing"
+    ]
+  }
+]
