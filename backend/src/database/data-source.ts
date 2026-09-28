@@ -1,8 +1,8 @@
-import { registerAs } from '@nestjs/config';
-import type { TypeOrmModuleOptions } from '@nestjs/typeorm';
+import 'dotenv/config';
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DataSource } from 'typeorm';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 
@@ -68,19 +68,19 @@ function getDatabaseSsl():
   };
 }
 
-export default registerAs(
-  'database',
-  (): TypeOrmModuleOptions => ({
-    type: 'postgres',
-    host: getRequiredEnvironmentVariable('DB_HOST'),
-    port: getDatabasePort(),
-    username: getRequiredEnvironmentVariable('DB_USERNAME'),
-    password: getRequiredEnvironmentVariable('DB_PASSWORD'),
-    database: getRequiredEnvironmentVariable('DB_NAME'),
-    ssl: getDatabaseSsl(),
-    entities: [join(currentDirectory, '../modules/**/*.entity{.ts,.js}')],
-    autoLoadEntities: true,
-    synchronize: false,
-    migrationsRun: false,
-  }),
-);
+const dataSource = new DataSource({
+  type: 'postgres',
+  host: getRequiredEnvironmentVariable('DB_HOST'),
+  port: getDatabasePort(),
+  username: getRequiredEnvironmentVariable('DB_USERNAME'),
+  password: getRequiredEnvironmentVariable('DB_PASSWORD'),
+  database: getRequiredEnvironmentVariable('DB_NAME'),
+  ssl: getDatabaseSsl(),
+  entities: [join(currentDirectory, '../modules/**/*.entity{.ts,.js}')],
+  migrations: [join(currentDirectory, 'migrations/*{.ts,.js}')],
+  migrationsTableName: 'migrations',
+  migrationsRun: false,
+  synchronize: false,
+});
+
+export default dataSource;
