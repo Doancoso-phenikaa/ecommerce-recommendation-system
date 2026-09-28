@@ -24,7 +24,7 @@ export class Seller {
     type: 'enum',
     enum: SellerStatus,
     enumName: 'seller_status_enum',
-    default: SellerStatus.PENDING,
+    default: SellerStatus.ACTIVE,
   })
   status: SellerStatus;
 
