@@ -199,7 +199,7 @@ export class AuthService {
         const seller = await sellerRepository.save(
           sellerRepository.create({
             userId: user.userId,
-            status: SellerStatus.PENDING,
+            status: SellerStatus.ACTIVE,
           }),
         );
 
