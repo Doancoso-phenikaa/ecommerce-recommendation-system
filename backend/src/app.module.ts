@@ -7,6 +7,7 @@ import { AdminModule } from './modules/admin/admin.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { CategoryModule } from './modules/category/category.module.js';
 import { CustomerModule } from './modules/customer/customer.module.js';
+import { ProductModule } from './modules/product/product.module.js';
 import { ShopModule } from './modules/shop/shop.module.js';
 import { UserModule } from './modules/user/user.module.js';
 
@@ -27,6 +28,7 @@ import { UserModule } from './modules/user/user.module.js';
     ShopModule,
     AdminModule,
     CategoryModule,
+    ProductModule,
   ],
   controllers: [],
   providers: [],
