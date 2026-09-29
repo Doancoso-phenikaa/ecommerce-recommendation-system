@@ -43,11 +43,102 @@ events ──> Kafka topic user-events ──> consumer ──> Parquet + Redis
                          FAIL exit 3: keep pointer + ALERT to retrain.log)
 ```
 
-Serving request flow: `recs:{user}:{context}:{filter}:{model_version}` cache
-lookup (`X-Cache: HIT`) → miss → `ranker.rank` (ALS + trending + content,
-business rules) → best-effort `cache_set` (`X-Cache: MISS`). Boot and every
-route degrade when Kafka/Redis are down: buffered / uncached / degraded —
-never a 500 for a valid request.
+Serving request flow: `recs:{user}:{context}:{filter}:{model_version}:{count}`
+cache lookup (`X-Cache: HIT`) → miss → `ranker.rank` (ALS + trending +
+content, business rules) → best-effort `cache_set` (`X-Cache: MISS`). Boot
+and every route degrade when Kafka/Redis are down: buffered / uncached /
+degraded — never a 500 for a valid request.
+
+## Caching and invalidation
+
+Two cache layers sit in the serving path. The **Redis** layer is the TTL
+table in "Cache TTLs" further down; this section is the **in-process**
+layer. Every in-process cache is a `functools.lru_cache`, so it is
+per-process, dies with the worker, and is never shared between workers —
+nothing here survives a restart.
+
+| Cached function (`lru_cache`, `maxsize=2` unless noted) | Cache key | Invalidate with |
+|---|---|---|
+| `ranker._load_items_df_cached`, `ranker._load_interactions_df_cached` | `(str(path), (st_mtime_ns, st_size))` of that module's parquet | `ranker.invalidate_frame_cache()` |
+| `baseline._load_items_cached`, `baseline._load_interactions_cached`, `baseline._tfidf_matrix_cached` | `(str(path), (st_mtime_ns, st_size))` of that module's parquet | `baseline._load_items.cache_clear()`, `baseline._load_interactions.cache_clear()`, `baseline._tfidf_matrix.cache_clear()` |
+| `train_als._load_model_cached` | `str(Path(model_dir).resolve())` — the resolved model **directory**, no file fingerprint | `train_als.invalidate_model_cache()` |
+
+All five frame caches are `maxsize=2`, and so is the model cache. The table
+names the *cached* functions because those are what carry the decorator; the
+functions you actually call — `ranker._load_items_df()`,
+`baseline._load_items()`, `train_als.load_model(dir)` — are plain wrappers
+that compute the key and delegate. `ranker._load_items_df.cache_clear` is
+rebound to the cached reader's own `cache_clear`, so clearing through the
+public name clears the real cache.
+
+Two of those three cells are values rather than names, so re-check them
+against the decorators before trusting the row: `maxsize` on the six
+`@lru_cache(...)` lines, and the key expression built by
+`ranker._frame_cache_key` / `ranker._parquet_fingerprint` and their
+`baseline` twins, plus the one `load_model` builds from
+`Path(model_dir).resolve()`. If you change any of them, change this table
+in the same commit.
+
+### What self-invalidates, and what does not
+
+The frame caches and the model cache self-invalidate for **different**
+reasons, and only one of the two does so unconditionally. Do not collapse
+them into one claim.
+
+**Frame caches: a normal retrain does self-invalidate.** The retrain's drain
+step rewrites `data/interactions.parquet` in place —
+`consumer.merge_batches` writes a temp file and `os.replace`s it over the
+original — so the path is unchanged but `st_mtime_ns` is (usually `st_size`
+too), so the key is, so the next request re-reads. `data/items.parquet` is
+not touched by `retrain.sh` at all; `scripts/seed.py` rewrites it at the same
+path, and the same reasoning applies. No manual step is needed for this
+path.
+
+**Model cache: a normal retrain self-invalidates too, but only because the
+trainer writes a new directory.** `train_als.train()` saves
+`models/als_<version>/` and *then* writes `models/current_version.txt`;
+`retrain.sh` passes `--no-pointer` and promotes the pointer itself only
+after the gate passes. So a new model is only ever served after
+`_current_model_dir()` resolves to a **different** directory, which is a
+different cache key, and the new model is loaded. The previous entry is
+evicted by `maxsize=2` on the rotation after that. The pointer is what
+selects the key, not the model's file contents.
+
+**Model cache: an in-place overwrite does NOT self-invalidate.** The key is
+the resolved directory path alone. Overwrite a model directory *in place* —
+same directory, new `model.npz` — and the key is unchanged, so the cache
+keeps serving the old deserialised model indefinitely, with no error and no
+warning. This was reproduced, not inferred: a model directory was replaced
+under a primed cache, the cache kept serving the pre-overwrite mappings,
+and `invalidate_model_cache()` returned the on-disk model. Nothing in the
+current code does this, which is exactly why it is a contract to remember
+rather than a bug to fix.
+
+### The fingerprint is a heuristic, not a guarantee
+
+The frame caches' `(st_mtime_ns, st_size)` fingerprint makes staleness
+*unlikely*, not impossible. A rewrite is invisible to it exactly when it
+lands in the same `st_mtime_ns` tick **and** produces the same byte size.
+That case is reachable, not theoretical: rewriting a catalog with
+same-length item ids and restoring the original `mtime_ns` with `os.utime`
+leaves the fingerprint unchanged, and the stale three-row frame is served
+while the file on disk holds one. `invalidate_frame_cache()` recovers it.
+
+`st_mtime_ns` is genuine nanosecond resolution on the filesystems this has
+run on — five rapid rewrites produced five distinct values — but that is a
+property of the filesystem and the clock, **not of the code**. A
+coarse-timestamp mount (older ext3, some FUSE and network filesystems) or an
+explicit `mtime` restore from a backup or `rsync -t` would defeat it.
+
+**So call the hooks. They are the correctness backstop; the fingerprint is
+an optimisation that makes staleness unlikely without one on the common
+path.** Practically: call `ranker.invalidate_frame_cache()` plus the
+`baseline` `cache_clear`s after anything that rewrites the parquet outside
+the normal consume-and-merge path, and call
+`train_als.invalidate_model_cache()` after any in-place model overwrite.
+`evaluate.evaluate()` does exactly this on every call, in
+`_drop_frame_caches`, which is what makes its freshness a property of the
+call rather than of process lifetime.
 
 ## Quickstart (repo root)
 
@@ -126,8 +217,8 @@ curl -s "http://localhost:8001/similar/ele-001?count=3" | \
 # { "n": 3, "strategy": "content", "model_version": "v1" }
 ```
 
-Cache key `similar:{item}` carries no model version (content neighbours are
-deterministic on the catalog).
+Cache key `similar:{item}:{count}` carries no model version (content
+neighbours are deterministic on the catalog).
 
 ### `POST /events` — ingest one interaction (202, never 500 when Kafka is down)
 
@@ -197,6 +288,10 @@ cached 5-item list must never satisfy a caller who asked for 50. Every
 segment is validated — `:` is rejected in `context`/`filter` so one
 request's segments cannot collide with another's.
 
+This table is the Redis layer only. The in-process parquet and ALS-model
+caches are a separate layer with a separate contract — see
+[Caching and invalidation](#caching-and-invalidation).
+
 Personalized keys embed the owning `user_id` — user A can never hit user B's
 entry. Invalidation of a user's entries uses `SCAN` (never blocking `KEYS`).
 
@@ -206,14 +301,15 @@ entry. Invalidation of a user's entries uses `SCAN` (never blocking `KEYS`).
 `app/baseline.py`) and falls back to `5` on a missing/unparsable value.
 "History size" below is **distinct consumed items, not event rows** — six
 views of one product is one signal — and the passive `impression`/`search`
-events are not consumption, so they cannot manufacture warmth. (The content
-*seed* set is event-type agnostic: it is every item the user has any event
-for, capped at the 20 most recent.)
+events are not consumption, so they cannot manufacture warmth. The content
+*seed* set is filtered the same way: suppression, the cold-start count, and
+the seed set are three reads of one slice (`ranker._consumed_rows`), so the
+seed set is the user's up-to-20 most recent *distinct consumed* items.
 
 | History size | Path | `cold_start` | `strategy` |
 |--------------|------|--------------|------------|
 | 0 (unknown user) | trending only (no content seed) | `true` | `trending` |
-| 1–4 distinct items | trending + content blend (`0.3·content + 0.2·pop`, ALS term 0.0), seeded by a TF-IDF centroid over the user's up-to-20 most recent distinct items; `content` iff a content source exists **and** top-1's unweighted content component is non-zero **and** its weighted content component strictly exceeds its weighted popularity component, else `trending` | `true` | `content` / `trending` |
+| 1–4 distinct items | trending + content blend (`0.3·content + 0.2·pop`, ALS term 0.0), seeded by a TF-IDF centroid over the user's up-to-20 most recent distinct **consumed** items; `content` iff a content source exists **and** top-1's unweighted content component is non-zero **and** its weighted content component strictly exceeds its weighted popularity component, else `trending` | `true` | `content` / `trending` |
 | ≥ 5 distinct items | full hybrid: `0.5·als + 0.3·content + 0.2·pop`, argmax reason, available-only, suppression of seen items (passed into `model.recommend` as a filter row, so seen items do not consume the `ALS_N` candidate budget), dedup, `CANDIDATE_CAP` = 200 truncated **by blended score** (not by lexicographic id), ≤2 same-category-adjacent | `false` | `als_hybrid` |
 
 The ALS term is the model's real dot-product min-max normalised over the

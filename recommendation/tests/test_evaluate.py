@@ -678,12 +678,15 @@ def test_unrecognised_als_override_degrades_instead_of_leaking(
 
 # --- freshness of the gate's input, and the holdout leak it must not reopen --
 #
-# `ranker._load_interactions_df` is `lru_cache`d and takes no arguments, so a
-# process that ran the gate once would re-serve that frame for its whole
-# lifetime -- scoring data that had since been rewritten, with no error.
-# `evaluate()` therefore invalidates before it reads its input. These three
-# tests pin both halves: that the invalidation happens, and that it never
-# re-opens the holdout leak while doing so.
+# `ranker._load_interactions_df` is `lru_cache`d, keyed on
+# `(str(path), (st_mtime_ns, st_size))` rather than on the path alone, so
+# the rewrite under it in `test_..._reads_fresh_frames_...` usually lands on
+# a new key by itself. That key is a heuristic -- a rewrite inside one
+# `st_mtime_ns` tick at the same `st_size` is invisible to it -- and a gate
+# must not rest on a heuristic, so `evaluate()` invalidates before it reads
+# its input on every call. These three tests pin both halves: that the
+# invalidation actually happens, and that it never re-opens the holdout
+# leak while doing so.
 
 
 def test_evaluate_reads_fresh_frames_after_the_parquet_changes(

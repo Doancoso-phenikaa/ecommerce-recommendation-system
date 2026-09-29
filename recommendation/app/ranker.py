@@ -22,12 +22,14 @@ score, so a strong candidate whose id sorts late is not dropped):
   failure) degrades to the popularity+content path, never raises.
 - ``content_top``: :func:`recommendation.app.baseline.content_similar_many`
   (``CONTENT_K`` rows), on both the warm and the cold path — seeded by the
-  user's up-to-20 most recent DISTINCT interacted items from the
+  user's up-to-20 most recent DISTINCT *consumed* items from the
   interactions parquet (max timestamp; ties broken by ``item_id`` asc) and
   scored as one similarity query against the TF-IDF centroid of those
   seeds (a single seed short-circuits to ``content_similar``); the seed set
-  is event-type agnostic, unlike the suppression set below; skipped when
-  the user has no history.
+  is filtered exactly like the suppression set below — both come from the
+  one :func:`_consumed_rows` slice, so the passive ``impression``/``search``
+  events are not consumption here either; skipped when the user has no
+  history.
 
 Scoring: the popularity and content terms are each normalised into
 [0, 1] by :func:`_maxnorm` independently (ceiling = that source's own
@@ -78,11 +80,16 @@ consumed items (imported from baseline; default 5, env-overridable via
 distinct items, not event rows — five views of one product are one
 signal — and, like the suppression set, it ignores the passive
 ``impression``/``search`` events that are not consumption. The content
-seed set is *not* filtered that way: it is every item the user has any
-event for, capped at the 20 most recent, scored as one TF-IDF-centroid
-query rather than one recent click. Strategy choice on that
-path is deterministic and documented here: ``"content"`` iff a content
-source was present AND the first emitted item's unweighted content
+seed set is filtered the same way: it shares the one
+:func:`_consumed_rows` slice with suppression and with this count, so it
+is every item the user *consumed*, capped at the 20 most recent, scored
+as one TF-IDF-centroid query rather than one recent click. (Until the
+single-pass refactor the seed set was the odd one out — it took any
+event, impressions included. The behaviour change is inert on the
+current corpus, which carries only ``view``/``click``/``cart``/
+``purchase``; see the NOTE on :func:`_consumed_rows`.) Strategy choice
+on that path is deterministic and documented here: ``"content"`` iff a
+content source was present AND the first emitted item's unweighted content
 component is non-zero AND its weighted content component strictly
 exceeds its weighted popularity component; otherwise ``"trending"`` (in
 particular, zero-history users with no content seed are always
@@ -105,8 +112,10 @@ available items — exhausted candidates fall back to popular
 that is empty (a user who has seen the whole catalog still gets
 recs).
 
-No Kafka/Redis I/O inside ``rank()`` — parquet + model files only
-(caching is todo 11's layer).
+No Kafka/Redis I/O inside ``rank()`` — parquet + model files only, read
+through this module's in-process ``lru_cache`` layer (the frame caches
+below, plus ``train_als``' model cache). That layer has no I/O of its
+own; see :func:`invalidate_frame_cache` for its contract.
 """
 
 from __future__ import annotations

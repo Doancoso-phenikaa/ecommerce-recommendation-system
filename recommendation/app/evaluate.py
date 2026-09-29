@@ -305,13 +305,17 @@ def user_metrics(ranked_ids: list[str], relevant: set[str], k: int = K) -> dict[
 def _drop_frame_caches() -> None:
     """Drop every cached parquet frame the gate reads.
 
-    The ranker and baseline loaders are ``lru_cache``d, and the ranker's
-    take no arguments -- one process-wide slot each, keyed on nothing. In
-    a long-lived process a second gate run would therefore re-serve the
-    frame the first one cached, reporting metrics for data that has since
-    been rewritten underneath it, with no error raised. Invalidate first
-    so freshness is a property of the call rather than of process
-    lifetime.
+    The ranker and baseline loaders are ``lru_cache``d and keyed on
+    ``(str(path), (st_mtime_ns, st_size))`` -- the file's fingerprint, not
+    the path alone -- so an in-place rewrite of the parquet normally lands
+    on a new key by itself. That key is a *heuristic*, not a guarantee: a
+    rewrite inside one ``st_mtime_ns`` tick at the same ``st_size`` is
+    invisible to it (see ``ranker._parquet_fingerprint``). This gate must
+    not rest on a heuristic. It re-reads its input on every call, and a
+    second run in the same long-lived process would otherwise be able to
+    report metrics for data that has since been rewritten underneath it,
+    with no error raised. Invalidate first so freshness is a property of
+    the call rather than of process lifetime.
 
     Placed here, at the top of :func:`evaluate`, rather than inside
     :func:`_train_only_context`: a caller that reads frames before
