@@ -10,21 +10,42 @@ Import path for todo 11 (stable)::
 
     from recommendation.app.ranker import rank
 
-Candidate sources (union capped at ``CANDIDATE_CAP`` = 200):
+Candidate sources (deduped union, available-only, suppression-filtered;
+the ``CANDIDATE_CAP`` = 200 cap is applied AFTER scoring, by blended
+score, so a strong candidate whose id sorts late is not dropped):
 
 - ``pop_top``: :func:`recommendation.app.baseline.trending` (``POP_N`` rows).
-- ``als_top``: :func:`recommendation.app.train_als.recommend` (``ALS_N``
-  rows), wrapped in try/except — a missing model file (or any load
+- ``als_top``: :func:`recommendation.app.train_als.recommend_with_scores`
+  (``ALS_N`` rows), warm users only, with the suppression set handed to the
+  model as a filter row so already-seen items never consume the candidate
+  budget; wrapped in try/except — a missing model file (or any load
   failure) degrades to the popularity+content path, never raises.
-- ``content_top``: :func:`recommendation.app.baseline.content_similar`
-  (``CONTENT_K`` rows) seeded by the user's most recent interacted item
-  from the interactions parquet (max timestamp; ties broken by
-  ``item_id`` asc); skipped when the user has no history.
+- ``content_top``: :func:`recommendation.app.baseline.content_similar_many`
+  (``CONTENT_K`` rows), on both the warm and the cold path — seeded by the
+  user's up-to-20 most recent DISTINCT interacted items from the
+  interactions parquet (max timestamp; ties broken by ``item_id`` asc) and
+  scored as one similarity query against the TF-IDF centroid of those
+  seeds (a single seed short-circuits to ``content_similar``); the seed set
+  is event-type agnostic, unlike the suppression set below; skipped when
+  the user has no history.
 
-Scoring: each source is max-normalised to [0, 1] (divide by the source
-max; all-zero source stays 0.0 — idempotent for the already-normalised
-trending/content scores, and maps the rank-based ALS scores into
-[0, 1]), then combined as::
+Scoring: the popularity and content terms are each normalised into
+[0, 1] by :func:`_maxnorm` independently (ceiling = that source's own
+best candidate; an all-zero source stays 0.0). Trending already arrives
+min-max normalised to a *global* max of 1.0, but its ceiling spans
+unavailable items too — when the top scorer is unavailable the best
+available row is below 1.0 and :func:`_maxnorm` rescales it. Content's raw
+cosine tops out below 1.0 because seed items are excluded from their own
+neighbours, so there the best candidate is what lands on 1.0. The ALS term
+is normalised
+separately, by min-max over the returned candidates inside
+:func:`_als_scores`: it scores the model's real dot-product rather than
+rank position, so a confident second choice outranks an uncertain first,
+and already-seen items are filtered inside the model call. The min-max
+range is ``[0, 1]`` — the best candidate maps to exactly 1.0 and the worst
+to exactly 0.0 (not ``(0, 1]``); the two degenerate guards return all-0.0
+when no score is positive and all-1.0 when every candidate ties. The
+three terms are then combined as::
 
     final = ALS_W * als + CONTENT_W * content + POP_W * pop
 
@@ -39,8 +60,10 @@ deterministic tie-break; no randomness anywhere.
 Business rules (v1):
 
 - available-only (from the items parquet);
-- suppression: every item id the user ever interacted with (all event
-  types, from the interactions parquet) is excluded;
+- suppression: every item id the user consumed is excluded; the passive
+  ``impression``/``search`` events are not consumption and do not suppress
+  (see :data:`_NON_CONSUMPTION_EVENTS`) — counting this service's own
+  impressions would suppress whatever it just served;
 - dedup (union is a dict keyed by item_id);
 - diversity: at most 2 same-category-adjacent — walking the ranked
   list, an item is skipped when the previous 2 emitted items share its
@@ -48,14 +71,22 @@ Business rules (v1):
 - NO price-band filter in v1 (the ``filter`` argument is accepted for
   API compatibility and ignored).
 
-Cold-start: users with fewer than ``cold_start_threshold()``
-interactions (imported from baseline) take the trending+content path
-with ``cold_start=True``. Strategy choice on that path is
-deterministic and documented here: ``"content"`` iff a content source
-was present AND the final top-1 item's weighted content component
-strictly exceeds its weighted popularity component; otherwise
-``"trending"`` (in particular, zero-history users with no content
-seed are always ``"trending"``).
+Cold-start: users with fewer than ``cold_start_threshold()`` DISTINCT
+consumed items (imported from baseline; default 5, env-overridable via
+``COLD_START_MAX_INTERACTIONS``) take the trending+content path with
+``cold_start=True`` and the ALS term at 0.0. The threshold counts
+distinct items, not event rows — five views of one product are one
+signal — and, like the suppression set, it ignores the passive
+``impression``/``search`` events that are not consumption. The content
+seed set is *not* filtered that way: it is every item the user has any
+event for, capped at the 20 most recent, scored as one TF-IDF-centroid
+query rather than one recent click. Strategy choice on that
+path is deterministic and documented here: ``"content"`` iff a content
+source was present AND the first emitted item's unweighted content
+component is non-zero AND its weighted content component strictly
+exceeds its weighted popularity component; otherwise ``"trending"`` (in
+particular, zero-history users with no content seed are always
+``"trending"``).
 
 ``model_version`` is read ONLY from
 ``recommendation/models/current_version.txt`` (resolved relative to

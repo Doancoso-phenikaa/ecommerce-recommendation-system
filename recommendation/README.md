@@ -200,13 +200,32 @@ request's segments cannot collide with another's.
 Personalized keys embed the owning `user_id` — user A can never hit user B's
 entry. Invalidation of a user's entries uses `SCAN` (never blocking `KEYS`).
 
-## Cold-start ladder (`cold_start_threshold()` = 5 interactions)
+## Cold-start ladder (`cold_start_threshold()` = 5 distinct consumed items)
+
+`cold_start_threshold()` reads `COLD_START_MAX_INTERACTIONS` (default `5`,
+`app/baseline.py`) and falls back to `5` on a missing/unparsable value.
+"History size" below is **distinct consumed items, not event rows** — six
+views of one product is one signal — and the passive `impression`/`search`
+events are not consumption, so they cannot manufacture warmth. (The content
+*seed* set is event-type agnostic: it is every item the user has any event
+for, capped at the 20 most recent.)
 
 | History size | Path | `cold_start` | `strategy` |
 |--------------|------|--------------|------------|
 | 0 (unknown user) | trending only (no content seed) | `true` | `trending` |
-| 1–4 | trending + content blend (seeded by most-recent item); `content` iff a content source exists **and** top-1's weighted content component strictly exceeds its popularity component, else `trending` | `true` | `content` / `trending` |
-| ≥ 5 | full hybrid: `0.5·als + 0.3·content + 0.2·pop`, argmax reason, available-only, suppression of seen items, dedup, ≤2 same-category-adjacent | `false` | `als_hybrid` |
+| 1–4 distinct items | trending + content blend (`0.3·content + 0.2·pop`, ALS term 0.0), seeded by a TF-IDF centroid over the user's up-to-20 most recent distinct items; `content` iff a content source exists **and** top-1's unweighted content component is non-zero **and** its weighted content component strictly exceeds its weighted popularity component, else `trending` | `true` | `content` / `trending` |
+| ≥ 5 distinct items | full hybrid: `0.5·als + 0.3·content + 0.2·pop`, argmax reason, available-only, suppression of seen items (passed into `model.recommend` as a filter row, so seen items do not consume the `ALS_N` candidate budget), dedup, `CANDIDATE_CAP` = 200 truncated **by blended score** (not by lexicographic id), ≤2 same-category-adjacent | `false` | `als_hybrid` |
+
+The ALS term is the model's real dot-product min-max normalised over the
+returned candidates into `[0, 1]` — best candidate exactly `1.0`, worst
+exactly `0.0` — so it carries model confidence, not rank position. The
+popularity and content terms are each max-normalised independently, the
+ceiling being that source's own best candidate. Trending is already
+min-max normalised to a *global* max of `1.0`, so this is usually a no-op
+for it — though its ceiling spans unavailable items too, so a top scorer
+that is unavailable leaves the best available row below `1.0` and the call
+rescales. Content does get rescaled: raw cosine tops out below `1.0`
+because seed items are excluded from their own neighbours.
 
 Missing/blank pointer file forces the degraded path (`strategy="degraded"`,
 `model_version="none"` — never raises). Verified live: `ghost-user-xyz` →
