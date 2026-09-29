@@ -674,3 +674,107 @@ def test_unrecognised_als_override_degrades_instead_of_leaking(
     assert result["strategy"] == Strategy.degraded
     assert result["recommendations"], "degraded still serves the popularity path"
 
+
+
+# --- freshness of the gate's input, and the holdout leak it must not reopen --
+#
+# `ranker._load_interactions_df` is `lru_cache`d and takes no arguments, so a
+# process that ran the gate once would re-serve that frame for its whole
+# lifetime -- scoring data that had since been rewritten, with no error.
+# `evaluate()` therefore invalidates before it reads its input. These three
+# tests pin both halves: that the invalidation happens, and that it never
+# re-opens the holdout leak while doing so.
+
+
+def test_evaluate_reads_fresh_frames_after_the_parquet_changes(
+    write_parquet: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A second `evaluate()` must not score the frame the first one cached.
+
+    The parquet is rewritten *underneath* the live process on purpose. Going
+    back through `write_parquet` would call `invalidate_frame_cache()` itself
+    and make this test pass for the wrong reason.
+    """
+    from recommendation.app import ranker as ranker_mod
+
+    _tmp_tracking_uri(tmp_path, monkeypatch)
+    data_dir = write_parquet(events=EVENTS_FRAME)
+    interactions = data_dir / "interactions.parquet"
+    assert ranker_mod._INTERACTIONS_PARQUET == interactions
+
+    first = evaluate.evaluate("v1", k=evaluate.K)
+    assert first["n_test_users"] >= 1
+
+    # Only user-001's events survive the rewrite.
+    survivors = EVENTS_FRAME[EVENTS_FRAME["user_id"] == "user-001"]
+    assert len(survivors) < len(EVENTS_FRAME)
+    survivors.to_parquet(interactions, index=False)
+    assert len(pd.read_parquet(interactions)) == len(survivors), (
+        "the rewrite must really land on disk, or this test proves nothing"
+    )
+
+    second = evaluate.evaluate("v1", k=evaluate.K)
+
+    # Expected counts are derived from the NEW frame, not hardcoded.
+    train_after, _ = evaluate.split_temporal_holdout(survivors)
+    assert second["n_train_events"] == len(train_after)
+    assert second["n_test_users"] == 1, "run 2 scored the pre-rewrite frame"
+    assert (second["n_test_users"], second["n_train_events"]) != (
+        first["n_test_users"],
+        first["n_train_events"],
+    )
+
+
+def test_evaluate_repeated_calls_without_a_rewrite_agree(
+    write_parquet: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Invalidating on every call must not make the gate non-deterministic.
+
+    Three back-to-back runs over unchanged data must be identical. An
+    over-eager clear that rebuilt the ALS refit or the TF-IDF matrix
+    differently each time would surface here.
+    """
+    _tmp_tracking_uri(tmp_path, monkeypatch)
+    write_parquet(events=EVENTS_FRAME)
+
+    first, second, third = (
+        evaluate.evaluate("v1", k=evaluate.K) for _ in range(3)
+    )
+
+    assert second == first, "two identical runs disagreed"
+    assert third == first, "three identical runs disagreed"
+
+
+def test_train_only_context_hides_the_holdout_from_rank(
+    write_parquet: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Inside the context, `rank()` resolves the train frame -- not the cache.
+
+    The ALS-*model* half of the leak is guarded by the three tests above;
+    this guards the *frame* half, which none of them touch. If the cached
+    loader were reached inside `_train_only_context`, every holdout item
+    would sit in the suppression set and the gate would measure the
+    suppression rule instead of ranking quality.
+    """
+    from recommendation.app import ranker as ranker_mod
+
+    _tmp_tracking_uri(tmp_path, monkeypatch)
+    write_parquet(events=EVENTS_FRAME)
+
+    full = ranker_mod._load_interactions_df()
+    train, holdout = evaluate.split_temporal_holdout(full)
+    assert holdout, "the fixture must produce a holdout for this to mean anything"
+    user = sorted(holdout)[0]
+    # Teeth: the full frame really would suppress this user's holdout items,
+    # so the assertion inside the context below is not vacuously true.
+    assert set(holdout[user]) & set(ranker_mod._user_item_ids(full, user))
+
+    original = ranker_mod._load_interactions_df
+    with evaluate._train_only_context(train):
+        seen = ranker_mod._load_interactions_df()
+        assert seen is train, "the loader global was not rebound to the train frame"
+        assert not (
+            set(holdout[user]) & set(ranker_mod._user_item_ids(seen, user))
+        ), "a holdout item leaked into the suppression set"
+
+    assert ranker_mod._load_interactions_df is original, "the global was not restored"

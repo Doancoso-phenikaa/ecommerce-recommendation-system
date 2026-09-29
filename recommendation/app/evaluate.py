@@ -302,6 +302,37 @@ def user_metrics(ranked_ids: list[str], relevant: set[str], k: int = K) -> dict[
     return {"precision": precision, "recall": recall, "ndcg": ndcg, "map": ap}
 
 
+def _drop_frame_caches() -> None:
+    """Drop every cached parquet frame the gate reads.
+
+    The ranker and baseline loaders are ``lru_cache``d, and the ranker's
+    take no arguments -- one process-wide slot each, keyed on nothing. In
+    a long-lived process a second gate run would therefore re-serve the
+    frame the first one cached, reporting metrics for data that has since
+    been rewritten underneath it, with no error raised. Invalidate first
+    so freshness is a property of the call rather than of process
+    lifetime.
+
+    Placed here, at the top of :func:`evaluate`, rather than inside
+    :func:`_train_only_context`: a caller that reads frames before
+    entering that context would still be exposed, and the guarantee the
+    gate needs to make is about its own input, not about the scoring
+    loop's view of it.
+    """
+    _ranker.invalidate_frame_cache()
+    for loader in (
+        _baseline._load_items,
+        _baseline._load_interactions,
+        _baseline._tfidf_matrix,
+    ):
+        clear = getattr(loader, "cache_clear", None)
+        if clear is not None:
+            try:
+                clear()
+            except Exception:
+                pass
+
+
 @contextmanager
 def _train_only_context(train_df: pd.DataFrame):
     """Serve ``train_df`` to ranker+baseline and a train-only ALS model.
@@ -383,7 +414,12 @@ def evaluate(
     (delta 0.0 — the comparison that must FAIL, proving the gate is
     fallible). Otherwise hybrid ``rank()`` (train-only context) is
     compared against train-only ``baseline.trending``.
+
+    Cached parquet frames are dropped first (see :func:`_drop_frame_caches`)
+    so this always measures the current on-disk state, however many times
+    it is called in one process.
     """
+    _drop_frame_caches()
     interactions = _ranker._load_interactions_df()
     train_df, holdout = split_temporal_holdout(interactions)
     # Novel-only relevance (TUNING ITERATION 1, see docstring): repeats are
