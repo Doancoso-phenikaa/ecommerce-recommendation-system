@@ -238,29 +238,75 @@ that process.
 
 ## Eval gate (`scripts/evaluate.py --version v1 [--baseline-only]`)
 
-Writes `models/eval_<version>.json`; PASS iff `NDCG_hybrid >
-NDCG_baseline + 0.02`, exit 0, else exit 3. `--baseline-only` forces delta
-0.0 / exit 3 (proves the gate can fail). Reference: `eval_v1.json` delta
-`+0.1999` (PASS).
+Writes `models/eval_<version>.json`; exit 0 on PASS, exit 3 on FAIL.
+`--baseline-only` forces the baseline-vs-baseline comparison (`delta` 0.0)
+and must exit 3 — that is how you prove the gate can fail.
 
-The JSON also records `k`, `margin`, `passed`, `n_test_users`,
-`n_cold_start`, `n_warm`, `ndcg_cold_start`, `ndcg_warm`,
-`strategy_counts`, and `n_rank_errors`. Read these before trusting `delta`:
+PASS requires **both**:
 
-- **`strategy_counts`** says which code path was actually scored. At seed
-  scale it is `{"als_hybrid": 22}` with `n_cold_start: 0` — every user clears
-  the cold-start threshold, so **the gate does not exercise the cold-start
-  ladder at all**. Cold-start quality is unmeasured until the data contains
-  users with fewer than 5 interactions.
-- **`n_rank_errors`** counts users where `rank()` raised. Those users fall
-  back to the popularity list; a non-zero value means `delta` is partly
-  measuring the baseline and is not interpretable as model quality.
+1. `NDCG_hybrid > NDCG_popularity + 0.02` (JSON key `ndcg_baseline`), and
+2. `n_cold_start > 0` — at least one test user scored through the
+   cold-start branch.
 
-Caveat on the headline number: `scripts/seed.py` gives each user 1–2
-affinity categories and draws 70% of events from them, across 6 balanced
-categories. That block structure is easy for a 16-factor ALS to recover, so
-`delta +0.1999` mostly measures the seed generator rather than ranking
-quality. Treat it as a regression guard, not a quality estimate.
+A run where every test user is warm fails the gate. That is deliberate: a
+model whose cold-start branch was never measured has not been validated for
+users with no history. `scripts/seed.py` therefore always emits 8 light
+users with 1–4 events each — below `cold_start_threshold()` = 5 — and
+`split_temporal_holdout` keeps all but a light user's *last* event in train
+and holds that event out, so those users are scored through the cold-start
+ladder instead of being routed to train and skipped.
+
+The console table prints `delta_NDCG`, `delta_vs_oracle` and
+`cold_start_coverage`; the JSON payload records `k`, `margin`, `passed`,
+`n_test_users`, `n_cold_start`, `n_warm`, `ndcg_cold_start`, `ndcg_warm`,
+`ndcg_category_oracle`, `delta_vs_oracle`, `strategy_counts` and
+`n_rank_errors`.
+
+### Reference run (`--version v2`, `seed=42`, `K=10`)
+
+618 seed events / 32 users → 29 test users (500 train events, 52 holdout
+items), `n_rank_errors` 0, gate **PASS**.
+
+| metric | value |
+|---|---|
+| `ndcg_hybrid` | 0.26804 |
+| `ndcg_baseline` (popularity) | 0.08543 |
+| `delta` | +0.18262 (margin 0.02) |
+| `ndcg_cold_start` / `n_cold_start` | 0.16506 / 8 |
+| `ndcg_warm` / `n_warm` | 0.30728 / 21 |
+| `ndcg_category_oracle` | 0.12275 |
+| `delta_vs_oracle` | +0.14529 |
+
+The cold/warm gap — 0.16506 vs 0.30728 — is the number the next
+optimisation plan targets: cold-start users are still scored roughly half
+as well as warm ones, even though the branch is now covered.
+
+### The category-oracle baseline
+
+`ndcg_category_oracle` is the ceiling reachable by a model that learns only
+which *top-level category* a user likes, with no per-item signal: take the
+categories of the items that user touched in the **train slice only**, then
+rank by train popularity. `scripts/seed.py` draws 70% of each user's events
+from 1–2 affinity categories, so this baseline is what separates "learned
+something" from "learned the seed generator". The hybrid clears it by
++0.14529 on the current seed.
+
+It is **reported, not a pass condition** — the gate arms only the two
+conditions above. The oracle comparison is deferred until model quality has
+been raised and the margin is known to hold.
+
+### Read these before trusting `delta`
+
+- **`strategy_counts`** says which code path was actually scored. On the
+  current seed it is `{"als_hybrid": 21, "content": 6, "trending": 2}`, so
+  the cold-start ladder is genuinely exercised rather than reported as
+  `n_cold_start: 0`. A `content`/`trending` share that collapses toward zero
+  drains `n_cold_start`, and at zero condition 2 fails the run — so a
+  coverage regression is loud, not silent.
+- **`n_rank_errors`** counts users where `rank()` raised; they are scored
+  as the popularity list and bucketed under `strategy_counts` as
+  `rank_error`. A non-zero value means `delta` is partly measuring the
+  baseline against itself and is not interpretable as model quality.
 
 ## Backend / frontend integration (HTTP contract, spec text)
 
