@@ -80,6 +80,7 @@ No Kafka/Redis I/O inside ``rank()`` — parquet + model files only
 
 from __future__ import annotations
 
+from functools import partial
 from pathlib import Path
 
 import pandas as pd
@@ -90,6 +91,7 @@ from recommendation.app.baseline import (
     trending,
 )
 from recommendation.app.schemas import RecResponse, Strategy
+from recommendation.app import train_als as _als_mod
 from recommendation.app.train_als import recommend as _als_recommend
 
 __all__ = [
@@ -213,13 +215,63 @@ def _seed_item(ev: pd.DataFrame, user_id: str) -> str | None:
     return sorted(cands.unique().tolist())[0]
 
 
-def _als_scores(user_id: str, n: int) -> dict[str, float]:
-    """ALS top-``n`` as rank-decayed scores in (0, 1] (may raise)."""
-    ids = _als_recommend(str(user_id), n=n)
-    total = len(ids)
-    if total == 0:
+def _als_model_dir() -> Path | str | None:
+    """The model dir an override installed on ``_als_recommend``, if any.
+
+    ``evaluate._train_only_context`` is the only sanctioned override point:
+    it rebinds ``ranker._als_recommend`` to
+    ``partial(train_als.recommend, model_dir=<refit>)`` so the gate scores
+    against a model trained on the train slice only. ``_als_scores`` needs
+    that same model but needs its *scores*, so it reads the dir back off
+    that one global and forwards it.
+
+    ``None`` means no override is installed, i.e. the live pointer — the
+    serving behaviour. Any other shape is refused rather than resolved to
+    the pointer: falling back would silently score the gate against a model
+    that has seen the holdout, which is a data leak no metric assertion
+    would catch. The caller turns the refusal into ``Strategy.degraded``.
+    """
+    target = _als_recommend
+    if target is _als_mod.recommend:
+        return None
+    if isinstance(target, partial) and target.func is _als_mod.recommend:
+        return target.keywords.get("model_dir")
+    raise RuntimeError(
+        f"unrecognised _als_recommend override {target!r}; refusing to resolve "
+        "the live pointer model"
+    )
+
+
+def _als_scores(
+    user_id: str, n: int, seen: set[str] | None = None
+) -> dict[str, float]:
+    """ALS candidates min-max normalised into [0, 1]; best candidate = 1.0.
+
+    Normalises the model's real dot-product rather than rank position, so
+    a confident second choice outranks an uncertain first. ``seen`` is
+    filtered inside the model call so it does not consume the budget.
+    Returns ``{}`` for an unknown user or an exhausted candidate list
+    (the ranker degrades).
+    """
+    try:
+        pairs = _als_mod.recommend_with_scores(
+            str(user_id),
+            n=n,
+            model_dir=_als_model_dir(),
+            seen_item_ids=seen or None,
+        )
+    except KeyError:
         return {}
-    return {str(iid): float(total - rank) / float(total) for rank, iid in enumerate(ids)}
+    if not pairs:
+        return {}
+    raw = {iid: float(score) for iid, score in pairs}
+    lo = min(raw.values())
+    hi = max(raw.values())
+    if hi <= 0:
+        return {iid: 0.0 for iid in raw}
+    if hi <= lo:
+        return {iid: 1.0 for iid in raw}
+    return {iid: (value - lo) / (hi - lo) for iid, value in raw.items()}
 
 
 def _apply_diversity(
@@ -328,7 +380,7 @@ def rank(
         strategy = Strategy.trending  # refined to content below if dominated
     else:
         try:
-            als_scores = _maxnorm(_als_scores(str(user_id), ALS_N))
+            als_scores = _als_scores(str(user_id), ALS_N, seen=suppressed)
             strategy = Strategy.als_hybrid
         except Exception:
             als_scores = {}

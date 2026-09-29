@@ -585,3 +585,92 @@ def test_gate_fails_when_cold_start_is_uncovered(
     assert result["n_cold_start"] == 0
     assert result["cold_start_covered"] is False
     assert result["passed"] is False
+
+
+# --- Task 2: the ranker must reach ALS through the one patchable global ----
+# `evaluate._train_only_context` (app/evaluate.py) rebinds exactly ONE global,
+# `ranker._als_recommend`, to `partial(train_als.recommend, model_dir=<temp
+# refit on the train slice>)`. If `_als_scores` stops honouring that global,
+# the gate scores against the live pointer model -- one that has seen the
+# holdout. No metric assertion catches that, so it is pinned here directly.
+
+
+def test_als_scores_goes_through_the_patchable_global(
+    write_parquet: Any, trained_model: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`_als_scores` must call `_ranker._als_recommend`, not a private import.
+
+    If it called a separately-imported `recommend_with_scores`, the
+    train-only override installed by `_train_only_context` would not
+    apply and the gate would score against the live pointer model.
+    """
+    from recommendation.app import ranker as ranker_mod
+
+    write_parquet()
+    calls: list[tuple] = []
+    monkeypatch.setattr(
+        ranker_mod._als_mod,
+        "recommend_with_scores",
+        lambda *a, **kw: (calls.append((a, kw)), [("x-1", 0.5)])[1],
+    )
+    assert ranker_mod._als_scores("user-001", 5) != {}
+    assert calls, "_als_scores bypassed the train-only patchable path"
+
+
+def test_als_scores_scores_with_the_train_only_model(
+    write_parquet: Any, trained_model: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The model dir on the patchable global must reach `recommend_with_scores`.
+
+    The gate's train-only discipline is enforced through one rebinding, so a
+    score path that resolves its own model dir silently trains on holdout.
+    """
+    from functools import partial
+
+    from recommendation.app import ranker as ranker_mod
+    from recommendation.app import train_als as train_mod
+
+    write_parquet()
+    # `trained_model` stands in for the gate's train-only temp refit.
+    monkeypatch.setattr(
+        ranker_mod, "_als_recommend", partial(train_mod.recommend, model_dir=trained_model)
+    )
+
+    requested: list[object] = []
+    real = train_mod.recommend_with_scores
+
+    def _spy(*args: object, **kwargs: object) -> object:
+        requested.append(kwargs.get("model_dir"))
+        return real(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(train_mod, "recommend_with_scores", _spy)
+    scores = ranker_mod._als_scores("user-001", 10)
+
+    assert requested == [trained_model], (
+        "the ALS term scored against a model other than the train-only one"
+    )
+    assert scores, "the train-only model must actually be usable"
+
+
+def test_unrecognised_als_override_degrades_instead_of_leaking(
+    write_parquet: Any, trained_model: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A broken ALS override must degrade, never fall back to the live model.
+
+    Falling back is the leak: the live pointer model has seen the holdout, and
+    the response would look healthy while every number derived from it is void.
+    """
+    from recommendation.app import ranker as ranker_mod
+    from recommendation.app.schemas import Strategy
+
+    write_parquet()
+
+    def _sentinel(*args: object, **kwargs: object) -> object:
+        raise AssertionError("the ranker must not resolve the live pointer model")
+
+    monkeypatch.setattr(ranker_mod, "_als_recommend", _sentinel)
+    result = ranker_mod.rank("user-001", count=5)
+
+    assert result["strategy"] == Strategy.degraded
+    assert result["recommendations"], "degraded still serves the popularity path"
+

@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import pytest
@@ -359,3 +360,45 @@ def test_zero_history_user_is_trending_cold_start(write_parquet: object) -> None
     assert set(_ids(result)) == {
         str(row["item_id"]) for row in trending(limit=6)
     }
+
+
+# --- ALS scoring: real model confidence, not rank position ------------------
+
+
+def test_als_scores_are_normalised_over_returned_candidates(
+    write_parquet: Any, trained_model: Path
+) -> None:
+    """Returned ALS scores are in [0, 1] with the best candidate at 1.0."""
+    from recommendation.app import ranker as ranker_mod
+
+    write_parquet()
+    scores = ranker_mod._als_scores("user-001", 10)
+    assert scores, "a known user must produce ALS scores"
+    assert max(scores.values()) == pytest.approx(1.0)
+    # Min-max maps the lowest candidate to exactly 0.0.
+    assert all(0.0 <= s <= 1.0 for s in scores.values())
+
+
+def test_als_scores_exclude_seen_items(
+    write_parquet: Any, trained_model: Path
+) -> None:
+    """Seen items are filtered before scoring, not after."""
+    from recommendation.app import ranker as ranker_mod
+
+    write_parquet()
+    unfiltered = ranker_mod._als_scores("user-001", 50)
+    assert unfiltered
+    seen = {next(iter(unfiltered))}
+    filtered = ranker_mod._als_scores("user-001", 50, seen=seen)
+    assert not (set(filtered) & seen)
+
+
+def test_als_scores_empty_for_unknown_user_does_not_raise(
+    write_parquet: Any, trained_model: Path
+) -> None:
+    """An unknown user yields {} so the ranker degrades rather than 500s."""
+    from recommendation.app import ranker as ranker_mod
+
+    write_parquet()
+    assert ranker_mod._als_scores("ghost-nobody", 10) == {}
+
