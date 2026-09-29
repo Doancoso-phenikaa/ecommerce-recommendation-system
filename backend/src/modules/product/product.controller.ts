@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
@@ -13,17 +15,28 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { CreateProductDto } from './dto/create-product.dto.js';
 import { ProductIdParamDto } from './dto/product-id-param.dto.js';
+import { ProductQueryDto } from './dto/product-query.dto.js';
 import { UpdateInventoryDto } from './dto/update-inventory.dto.js';
 import { UpdateProductDto } from './dto/update-product.dto.js';
 import { ProductService } from './product.service.js';
 
 @Controller('products')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.SELLER)
 export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
+  @Get()
+  getProducts(@Query() productQueryDto: ProductQueryDto) {
+    return this.productService.getProducts(productQueryDto);
+  }
+
+  @Get(':productId')
+  getProductDetail(@Param() params: ProductIdParamDto) {
+    return this.productService.getProductDetail(params.productId);
+  }
+
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SELLER)
   createProduct(
     @CurrentUser('userId') userId: string,
     @Body() createProductDto: CreateProductDto,
@@ -32,6 +45,8 @@ export class ProductController {
   }
 
   @Patch(':productId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SELLER)
   updateProduct(
     @CurrentUser('userId') userId: string,
     @Param() params: ProductIdParamDto,
@@ -45,6 +60,8 @@ export class ProductController {
   }
 
   @Patch(':productId/inventory')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SELLER)
   updateInventory(
     @CurrentUser('userId') userId: string,
     @Param() params: ProductIdParamDto,
@@ -58,13 +75,12 @@ export class ProductController {
   }
 
   @Post(':productId/resubmit')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SELLER)
   resubmitProduct(
     @CurrentUser('userId') userId: string,
     @Param() params: ProductIdParamDto,
   ) {
-    return this.productService.resubmitProduct(
-      userId,
-      params.productId,
-    );
+    return this.productService.resubmitProduct(userId, params.productId);
   }
 }
