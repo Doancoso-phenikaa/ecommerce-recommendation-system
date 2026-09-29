@@ -732,3 +732,71 @@ def test_rank_still_works_with_caching(
         else:
             assert not (set(ids) & suppressed), f"{user}: served a suppressed id"
 
+
+
+# --- Task 2: single-pass user slice ------------------------------------------
+
+
+def test_consumed_rows_excludes_passive_events() -> None:
+    """The shared slice drops impression/search, like _user_item_ids did."""
+    import pandas as pd
+
+    from recommendation.app import ranker as ranker_mod
+
+    frame = pd.DataFrame(
+        [
+            {"user_id": "u", "item_id": "a", "event_type": "view",
+             "timestamp": "2026-03-01T00:00:00+00:00"},
+            {"user_id": "u", "item_id": "b", "event_type": "impression",
+             "timestamp": "2026-03-02T00:00:00+00:00"},
+            {"user_id": "u", "item_id": "c", "event_type": "purchase",
+             "timestamp": "2026-03-03T00:00:00+00:00"},
+        ]
+    )
+    rows = ranker_mod._consumed_rows(frame, "u")
+    assert sorted(rows["item_id"].tolist()) == ["a", "c"]
+
+
+def test_consumed_rows_orders_most_recent_first() -> None:
+    """Ordering is stable and newest-first, ties broken by item_id."""
+    import pandas as pd
+
+    from recommendation.app import ranker as ranker_mod
+
+    frame = pd.DataFrame(
+        [
+            {"user_id": "u", "item_id": "old", "event_type": "view",
+             "timestamp": "2026-03-01T00:00:00+00:00"},
+            {"user_id": "u", "item_id": "b-new", "event_type": "view",
+             "timestamp": "2026-03-05T00:00:00+00:00"},
+            {"user_id": "u", "item_id": "a-new", "event_type": "view",
+             "timestamp": "2026-03-05T00:00:00+00:00"},
+        ]
+    )
+    rows = ranker_mod._consumed_rows(frame, "u")
+    assert rows["item_id"].tolist() == ["a-new", "b-new", "old"]
+
+
+def test_consumed_rows_covers_exactly_the_interacted_items() -> None:
+    """The shared slice is the whole contract: every consumer reads it."""
+    import pandas as pd
+
+    from recommendation.app import ranker as ranker_mod
+
+    frame = pd.DataFrame(
+        [
+            {"user_id": "u", "item_id": "a", "event_type": "view",
+             "timestamp": "2026-03-01T00:00:00+00:00"},
+            {"user_id": "u", "item_id": "b", "event_type": "impression",
+             "timestamp": "2026-03-02T00:00:00+00:00"},
+            {"user_id": "other", "item_id": "z", "event_type": "view",
+             "timestamp": "2026-03-03T00:00:00+00:00"},
+        ]
+    )
+    consumed = ranker_mod._consumed_rows(frame, "u")
+    # Both consumers must agree with the slice, not re-derive it.
+    assert ranker_mod._user_item_ids_from_rows(consumed) == ["a"]
+    assert ranker_mod._seed_items_from_rows(consumed) == ["a"]
+    # And the frame-taking wrappers must produce the same answer.
+    assert ranker_mod._user_item_ids(frame, "u") == ["a"]
+    assert ranker_mod._seed_items(frame, "u") == ["a"]

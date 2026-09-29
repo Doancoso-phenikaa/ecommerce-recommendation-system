@@ -227,22 +227,65 @@ def _top_category(value: object) -> str:
 _NON_CONSUMPTION_EVENTS = frozenset({"impression", "search"})
 
 
+def _consumed_rows(ev: pd.DataFrame, user_id: str) -> pd.DataFrame:
+    """One slice of ``user_id``'s consumption rows, newest first.
+
+    Replaces three separate full-column ``astype(str)`` scans per
+    request. Passive events are dropped here, which is why
+    ``_user_item_ids`` and ``_seed_items`` must both go through it.
+    Ordering is timestamp desc then item_id asc, so seeding is
+    deterministic.
+
+    NOTE: this filters ``_NON_CONSUMPTION_EVENTS``, and it keeps
+    unparseable timestamps (sorted last) where the previous
+    ``_seed_items`` dropped them. Both are behaviour changes to the
+    cold-start seed set for users with passive events or malformed
+    timestamps; they are inert on the current corpus, which has only
+    ``view``/``click``/``cart``/``purchase`` events and no unparseable
+    timestamps. See the module docstring for the cold-start contract.
+    """
+    if ev.empty or "user_id" not in ev.columns:
+        return ev.iloc[0:0]
+    rows = ev[ev["user_id"].astype(str) == str(user_id)]
+    if rows.empty:
+        return rows
+    if "event_type" in rows.columns:
+        rows = rows[~rows["event_type"].astype(str).isin(_NON_CONSUMPTION_EVENTS)]
+    if rows.empty or "timestamp" not in rows.columns:
+        return rows
+    stamps = pd.to_datetime(rows["timestamp"], utc=True, errors="coerce")
+    out = rows.assign(_ts=stamps).sort_values(
+        ["_ts", "item_id"], ascending=[False, True], na_position="last"
+    )
+    return out.drop(columns=["_ts"])
+
+
+def _user_item_ids_from_rows(rows: pd.DataFrame) -> list[str]:
+    """Suppression set from an already-sliced frame (no second scan)."""
+    if rows is None or rows.empty or "item_id" not in rows.columns:
+        return []
+    return sorted({str(i) for i in rows["item_id"].tolist()})
+
+
+def _seed_items_from_rows(rows: pd.DataFrame, limit: int = 20) -> list[str]:
+    """Cold-start seed from an already-sliced frame (no second scan)."""
+    if rows is None or rows.empty or "item_id" not in rows.columns:
+        return []
+    seen: list[str] = []
+    for iid in rows["item_id"].astype(str).tolist():
+        if iid not in seen:
+            seen.append(iid)
+        if len(seen) >= limit:
+            break
+    return seen
+
+
 def _user_item_ids(ev: pd.DataFrame, user_id: str) -> list[str]:
     """Item ids the user genuinely consumed (suppression set source).
 
     Excludes passive events — see :data:`_NON_CONSUMPTION_EVENTS`.
     """
-    if ev.empty or "user_id" not in ev.columns:
-        return []
-    rows = ev[ev["user_id"].astype(str) == str(user_id)]
-    if rows.empty:
-        return []
-    if "event_type" in rows.columns:
-        keep = ~rows["event_type"].astype(str).isin(_NON_CONSUMPTION_EVENTS)
-        rows = rows[keep]
-        if rows.empty:
-            return []
-    return sorted({str(i) for i in rows["item_id"].tolist()})
+    return _user_item_ids_from_rows(_consumed_rows(ev, user_id))
 
 
 def _distinct_interactions(ev: pd.DataFrame, user_id: str) -> int:
@@ -273,26 +316,11 @@ def _seed_items(ev: pd.DataFrame, user_id: str, limit: int = 20) -> list[str]:
     recent item threw away the rest of a light user's signal. The single-item
     case is :func:`_seed_item`; both share this one ordering rule so they
     cannot drift apart.
+
+    Reads the shared :func:`_consumed_rows` slice, so this now also drops
+    passive events (see :func:`_consumed_rows`).
     """
-    if ev.empty or not {"user_id", "timestamp"} <= set(ev.columns):
-        return []
-    rows = ev[ev["user_id"].astype(str) == str(user_id)]
-    if rows.empty:
-        return []
-    stamps = pd.to_datetime(rows["timestamp"], utc=True, errors="coerce")
-    valid = rows[stamps.notna()]
-    if valid.empty:
-        return []
-    ordered = valid.assign(_ts=stamps[stamps.notna()]).sort_values(
-        ["_ts", "item_id"], ascending=[False, True]
-    )
-    seen: list[str] = []
-    for iid in ordered["item_id"].astype(str).tolist():
-        if iid not in seen:
-            seen.append(iid)
-        if len(seen) >= limit:
-            break
-    return seen
+    return _seed_items_from_rows(_consumed_rows(ev, user_id), limit=limit)
 
 
 def _seed_item(ev: pd.DataFrame, user_id: str) -> str | None:
@@ -435,15 +463,19 @@ def rank(
         for _, row in available.iterrows()
     }
     avail_set = set(avail_ids)
-    suppressed = set(_user_item_ids(ev, str(user_id)))
-    n_interactions = _distinct_interactions(ev, str(user_id))
+    # One slice feeds suppression, the cold-start count, and content seeding.
+    consumed = _consumed_rows(ev, str(user_id))
+    suppressed = set(_user_item_ids_from_rows(consumed))
+    n_interactions = (
+        int(consumed["item_id"].astype(str).nunique()) if not consumed.empty else 0
+    )
     cold = bool(n_interactions < cold_start_threshold())
 
     # --- candidate sources (parquet + model files only) ---
     pop_rows = trending(limit=POP_N)
     pop_scores = _maxnorm({r["item_id"]: float(r["score"]) for r in pop_rows})
 
-    seed_ids = _seed_items(ev, str(user_id))
+    seed_ids = _seed_items_from_rows(consumed)
     content_scores: dict[str, float] = {}
     if seed_ids:
         try:
