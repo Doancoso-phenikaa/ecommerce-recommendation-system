@@ -24,6 +24,7 @@ import pandas as pd
 import pytest
 
 from recommendation.app import evaluate
+from recommendation.app import oracle as oracle_mod
 
 
 def _load_conftest() -> Any:
@@ -265,6 +266,7 @@ def test_evaluate_hybrid_result_shape(
         "map_baseline", "n_cold_start", "n_warm", "ndcg_cold_start",
         "ndcg_warm", "strategy_counts", "n_rank_errors", "passed",
         "baseline_only",
+        "ndcg_category_oracle", "delta_vs_oracle",
     }
     assert set(result) == expected_keys
     assert result["version"] == "v1"
@@ -364,3 +366,79 @@ def test_mlflow_tracking_uri_points_at_models_mlruns() -> None:
     finally:
         os.chdir(cwd)
     assert evaluate.MLFLOW_EXPERIMENT == "recsys"
+
+
+# --------------------------------------------------------------------------
+# category oracle
+# --------------------------------------------------------------------------
+
+
+def test_category_oracle_prefers_the_users_own_categories() -> None:
+    """The oracle ranks the user's own categories first, by popularity.
+
+    The user's own train items are excluded (relevance is novel-holdout
+    only), so a-1 is the *category signal* and a-2 is the expected
+    recommendation. b-1 is far more popular overall, but u1 never touched
+    "beta", so it must not outrank the alpha neighbour.
+    """
+    items = pd.DataFrame(
+        [
+            {"item_id": "a-1", "category_path": ["alpha"], "available": True},
+            {"item_id": "a-2", "category_path": ["alpha"], "available": True},
+            {"item_id": "b-1", "category_path": ["beta"], "available": True},
+        ]
+    )
+    train = pd.DataFrame(
+        [
+            # u1's only touch is a-1 -> wanted category is "alpha".
+            {"user_id": "u1", "item_id": "a-1",
+             "timestamp": "2026-01-01T00:00:00+00:00"},
+            # b-1 is far more popular overall, but u1 never touched "beta".
+            {"user_id": "u2", "item_id": "b-1",
+             "timestamp": "2026-01-01T00:00:00+00:00"},
+            {"user_id": "u2", "item_id": "b-1",
+             "timestamp": "2026-01-02T00:00:00+00:00"},
+            {"user_id": "u2", "item_id": "b-1",
+             "timestamp": "2026-01-03T00:00:00+00:00"},
+        ]
+    )
+    top = oracle_mod.category_oracle_topk(train, items, "u1", k=2)
+    assert top == ["a-2"]
+
+
+def test_category_oracle_falls_back_to_popularity_when_no_categories() -> None:
+    """No usable train item -> global popularity, never empty, never raising."""
+    items = pd.DataFrame(
+        [{"item_id": "b-1", "category_path": ["beta"], "available": True}]
+    )
+    train = pd.DataFrame(
+        [{"user_id": "u1", "item_id": "missing-item", "timestamp": "2026-01-01T00:00:00+00:00"}]
+    )
+    top = oracle_mod.category_oracle_topk(train, items, "u1", k=3)
+    assert isinstance(top, list)
+    assert top == ["b-1"]
+
+
+def test_category_oracle_never_returns_duplicates_and_respects_k() -> None:
+    """A short candidate pool returns fewer than k, not padded duplicates.
+
+    The catalog must be larger than the user's own train items, otherwise
+    the own-item exclusion empties the pool and the test asserts nothing
+    meaningful.
+    """
+    items = pd.DataFrame(
+        [
+            {"item_id": "a-1", "category_path": ["alpha"], "available": True},
+            {"item_id": "a-2", "category_path": ["alpha"], "available": True},
+            {"item_id": "a-3", "category_path": ["alpha"], "available": True},
+        ]
+    )
+    train = pd.DataFrame(
+        [
+            {"user_id": "u1", "item_id": "a-1",
+             "timestamp": "2026-01-01T00:00:00+00:00"},
+        ]
+    )
+    top = oracle_mod.category_oracle_topk(train, items, "u1", k=25)
+    assert len(top) == len(set(top)) == 2
+    assert "a-1" not in top

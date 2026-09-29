@@ -91,6 +91,7 @@ from typing import Any
 import pandas as pd
 
 from recommendation.app import baseline as _baseline
+from recommendation.app import oracle as _oracle
 from recommendation.app import ranker as _ranker
 from recommendation.app import train_als as _als
 
@@ -373,11 +374,13 @@ def evaluate(
     with _train_only_context(train_df):
         hybrid_rows: list[dict[str, float]] = []
         baseline_rows: list[dict[str, float]] = []
+        oracle_rows: list[dict[str, float]] = []
         cold_rows: list[dict[str, float]] = []
         warm_rows: list[dict[str, float]] = []
         strategy_counts: dict[str, int] = {}
         n_rank_errors = 0
         base_top10 = [r["item_id"] for r in _baseline.trending(limit=k)]
+        items_df = _ranker._load_items_df()
         for user_id in test_users:
             relevant = set(holdout[user_id])
             is_cold = True
@@ -401,11 +404,20 @@ def evaluate(
             hybrid_rows.append(row)
             baseline_rows.append(user_metrics(list(base_top10), relevant, k))
             (cold_rows if is_cold else warm_rows).append(row)
+            oracle_rows.append(
+                user_metrics(
+                    _oracle.category_oracle_topk(train_df, items_df, user_id, k),
+                    relevant,
+                    k,
+                )
+            )
     hybrid = _macro(hybrid_rows)
     baseline_m = _macro(baseline_rows)
     cold_m = _macro(cold_rows)
     warm_m = _macro(warm_rows)
+    oracle_m = _macro(oracle_rows)
     delta = hybrid["ndcg"] - baseline_m["ndcg"]
+    delta_vs_oracle = hybrid["ndcg"] - oracle_m["ndcg"]
     passed = bool(delta > MARGIN)
     try:
         n_train_users = int(train_df["user_id"].nunique()) if not train_df.empty else 0
@@ -424,7 +436,9 @@ def evaluate(
         "n_holdout_events": int(sum(len(v) for v in holdout.values())),
         "ndcg_hybrid": hybrid["ndcg"],
         "ndcg_baseline": baseline_m["ndcg"],
+        "ndcg_category_oracle": oracle_m["ndcg"],
         "delta": delta,
+        "delta_vs_oracle": delta_vs_oracle,
         "margin": MARGIN,
         "precision": hybrid["precision"],
         "recall": hybrid["recall"],

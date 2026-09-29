@@ -79,6 +79,8 @@ def main(argv: list[str] | None = None) -> int:
         "n_warm": res["n_warm"],
         "ndcg_cold_start": res["ndcg_cold_start"],
         "ndcg_warm": res["ndcg_warm"],
+        "ndcg_category_oracle": res["ndcg_category_oracle"],
+        "delta_vs_oracle": res["delta_vs_oracle"],
         "strategy_counts": res["strategy_counts"],
         "n_rank_errors": res["n_rank_errors"],
     }
