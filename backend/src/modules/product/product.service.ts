@@ -14,6 +14,7 @@ import { Seller } from '../seller/entities/seller.entity.js';
 import { Shop } from '../shop/entities/shop.entity.js';
 import { ShopStatus } from '../shop/enums/shop-status.enum.js';
 import { CreateProductDto } from './dto/create-product.dto.js';
+import { ProductQueryDto } from './dto/product-query.dto.js';
 import { UpdateInventoryDto } from './dto/update-inventory.dto.js';
 import { UpdateProductDto } from './dto/update-product.dto.js';
 import { Product } from './entities/product.entity.js';
@@ -35,11 +36,98 @@ export class ProductService {
     private readonly dataSource: DataSource,
   ) {}
 
+  async getProducts(productQueryDto: ProductQueryDto) {
+    const { search, categoryId, shopId, minPrice, maxPrice, page, limit } =
+      productQueryDto;
+
+    if (
+      minPrice !== undefined &&
+      maxPrice !== undefined &&
+      this.decimalToCents(minPrice) > this.decimalToCents(maxPrice)
+    ) {
+      throw new BadRequestException(
+        'minPrice must be less than or equal to maxPrice',
+      );
+    }
+
+    const queryBuilder = this.productRepository
+      .createQueryBuilder('product')
+      .innerJoinAndSelect('product.shop', 'shop')
+      .innerJoinAndSelect('product.inventory', 'inventory')
+      .where('product.status = :productStatus', {
+        productStatus: ProductStatus.APPROVED,
+      })
+      .andWhere('shop.status = :shopStatus', {
+        shopStatus: ShopStatus.ACTIVE,
+      });
+
+    if (search) {
+      queryBuilder.andWhere('product.name ILIKE :search', {
+        search: `%${search}%`,
+      });
+    }
+
+    if (categoryId !== undefined) {
+      queryBuilder.andWhere('product.categoryId = :categoryId', {
+        categoryId,
+      });
+    }
+
+    if (shopId !== undefined) {
+      queryBuilder.andWhere('product.shopId = :shopId', { shopId });
+    }
+
+    if (minPrice !== undefined) {
+      queryBuilder.andWhere('product.price >= :minPrice', { minPrice });
+    }
+
+    if (maxPrice !== undefined) {
+      queryBuilder.andWhere('product.price <= :maxPrice', { maxPrice });
+    }
+
+    queryBuilder
+      .orderBy('product.createdAt', 'DESC')
+      .addOrderBy('product.productId', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    const [products, totalItems] = await queryBuilder.getManyAndCount();
+
+    return {
+      data: products.map((product) => this.buildPublicProductResponse(product)),
+      pagination: {
+        page,
+        limit,
+        totalItems,
+        totalPages: Math.ceil(totalItems / limit),
+      },
+    };
+  }
+
+  async getProductDetail(productId: string) {
+    const product = await this.productRepository
+      .createQueryBuilder('product')
+      .innerJoinAndSelect('product.shop', 'shop')
+      .innerJoinAndSelect('product.inventory', 'inventory')
+      .where('product.productId = :productId', { productId })
+      .andWhere('product.status = :productStatus', {
+        productStatus: ProductStatus.APPROVED,
+      })
+      .andWhere('shop.status = :shopStatus', {
+        shopStatus: ShopStatus.ACTIVE,
+      })
+      .getOne();
+
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    return this.buildPublicProductResponse(product);
+  }
+
   async createProduct(userId: string, createProductDto: CreateProductDto) {
     const shop = await this.findActiveSellerShop(userId);
-    const category = await this.findActiveCategory(
-      createProductDto.categoryId,
-    );
+    const category = await this.findActiveCategory(createProductDto.categoryId);
 
     return this.dataSource.transaction(async (manager) => {
       const productRepository = manager.getRepository(Product);
@@ -316,5 +404,36 @@ export class ProductService {
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
     };
+  }
+
+  private buildPublicProductResponse(product: Product) {
+    const inventory = product.inventory;
+
+    if (!inventory) {
+      throw new NotFoundException('Inventory not found');
+    }
+
+    return {
+      productId: product.productId,
+      shopId: product.shopId,
+      categoryId: product.categoryId,
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      imageUrl: product.imageUrl,
+      approvedAt: product.approvedAt,
+      inventory: {
+        quantity: inventory.quantity,
+        reservedQuantity: inventory.reservedQuantity,
+        availableQuantity: inventory.quantity - inventory.reservedQuantity,
+      },
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt,
+    };
+  }
+
+  private decimalToCents(value: string): bigint {
+    const [wholePart, fractionPart = ''] = value.split('.');
+    return BigInt(wholePart) * 100n + BigInt(fractionPart.padEnd(2, '0'));
   }
 }
