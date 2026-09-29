@@ -152,29 +152,6 @@ def _maxnorm(scores: dict[str, float]) -> dict[str, float]:
     return {k: float(v) / float(ceiling) for k, v in scores.items()}
 
 
-def _calibrated(scores: dict[str, float]) -> dict[str, float]:
-    """Content scores that respect absolute similarity, not just rank.
-
-    Pure max-normalisation gives the best content match the full weight
-    even when that match is near-zero cosine, so a weak seed item buys an
-    unqualified boost. Blending the rank-decayed score with the absolute
-    cosine keeps some reward for position while making a 0.05 match worth
-    proportionally little.
-
-    Ties on score are broken by ``item_id`` so the result is deterministic
-    regardless of dict insertion order.
-    """
-    if not scores:
-        return {}
-    total = len(scores)
-    order = sorted(scores.items(), key=lambda t: (-t[1], t[0]))
-    out: dict[str, float] = {}
-    for rank, (iid, absolute) in enumerate(order):
-        decay = float(total - rank) / float(total)
-        out[iid] = 0.5 * decay + 0.5 * float(absolute)
-    return out
-
-
 def _top_category(value: object) -> str:
     """Return the top-level category token for a catalog category_path cell."""
     if isinstance(value, (list, tuple)):
@@ -406,7 +383,7 @@ def rank(
             content_rows = content_similar_many(seed_ids, k=CONTENT_K)
         except Exception:
             content_rows = []
-        content_scores = _calibrated(
+        content_scores = _maxnorm(
             {
                 r["item_id"]: float(r["score"])
                 for r in content_rows

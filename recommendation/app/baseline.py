@@ -271,8 +271,15 @@ def content_similar_many(seed_ids: list[str], k: int = 10) -> list[dict]:
     A cold-start user's whole history is a better signal than their single
     most recent click, so every item they touched contributes to one
     centroid query. A single seed is equivalent to
-    :func:`content_similar` for that item. Unknown/empty seeds fall back
-    to :func:`trending` so the result is never empty.
+    :func:`content_similar` for that item. Seeds that are unknown or absent
+    are dropped; if that leaves no *known* seed, the result is
+    :func:`trending` output, as it is for ``k <= 0``.
+
+    May still return an empty list when every known seed already covers the
+    whole available catalog, since the seed items are excluded from their
+    own neighbours and nothing is left to rank. Callers must not assume a
+    non-empty result: :func:`recommendation.app.ranker.rank` has its own
+    never-empty guarantee downstream.
     """
     item_ids, matrix, _ = _tfidf_matrix()
     known = [i for i in seed_ids if i in item_ids]

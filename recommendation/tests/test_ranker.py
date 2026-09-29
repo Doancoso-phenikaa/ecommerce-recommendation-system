@@ -433,30 +433,6 @@ def test_seed_items_aggregates_every_item_most_recent_first(
     assert ranker_mod._seed_items(events_frame, GHOST_USER) == []
 
 
-def test_calibrated_breaks_ties_by_item_id_in_insertion_order_independent_way() -> None:
-    """Equal scores rank by item_id, and the result never depends on dict order."""
-    from recommendation.app import ranker as ranker_mod
-
-    forward = {"zz-003": 0.4, "mm-002": 0.4, "aa-001": 0.4}
-    reverse = {"aa-001": 0.4, "mm-002": 0.4, "zz-003": 0.4}
-    assert list(forward) != list(reverse), "the fixture must differ in insertion order"
-
-    # dict equality is insertion-order-insensitive, so compare the key order —
-    # that is the property rank() depends on when it walks the dict.
-    assert list(ranker_mod._calibrated(forward)) == list(ranker_mod._calibrated(reverse))
-    assert list(ranker_mod._calibrated(forward)) == ["aa-001", "mm-002", "zz-003"]
-
-    # The tie-break is real, not cosmetic: the tied inputs come back as a
-    # strictly decreasing score ladder in that same item_id order.
-    out = ranker_mod._calibrated(forward)
-    assert out["aa-001"] > out["mm-002"] > out["zz-003"]
-    assert ranker_mod._calibrated(forward) == ranker_mod._calibrated(reverse)
-
-    # An empty source is an empty result, and scores stay bounded in [0, 1].
-    assert ranker_mod._calibrated({}) == {}
-    assert all(0.0 <= v <= 1.0 for v in ranker_mod._calibrated(forward).values())
-
-
 def test_rank_hands_content_similar_many_every_interacted_item(
     write_parquet: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
