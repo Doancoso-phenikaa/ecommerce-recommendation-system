@@ -616,3 +616,29 @@ def test_routes_survive_metrics_hook_failures(
 
     assert response.status_code == 200
     assert response.json()
+
+
+def test_recommendations_ignore_the_live_model_pointer(
+    client: Any,
+    write_parquet: Any,
+    version_pointer: Path,
+    fake_redis: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The served pointer comes from the redirected models dir, not the live one.
+
+    A stale ``main._VERSION_FILE`` module constant made these tests read the real
+    ``models/current_version.txt``, so any ``train.py --version`` turned the suite
+    red. ``_VERSION_FILE`` is pointed at a nonexistent path here, so any code
+    still reading it gets ``"none"`` and the assertions below fail.
+    """
+    write_parquet(version="v-test")
+    assert version_pointer.read_text(encoding="utf-8").strip() == "v-test"
+
+    monkeypatch.setattr(main, "_VERSION_FILE", version_pointer / "does-not-exist")
+
+    assert main.current_model_version() == "v-test"
+
+    client.get("/recommendations/user-001?count=2")
+    assert any(key.endswith("::v-test:2") for key in _rec_keys(fake_redis))
+    assert all("::none:" not in key for key in _rec_keys(fake_redis))

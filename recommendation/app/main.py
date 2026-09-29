@@ -85,6 +85,8 @@ setup_logging()
 logger = get_logger("recommendation.app.main")
 
 _MODELS_DIR = Path(__file__).resolve().parents[1] / "models"
+#: Kept only as a monkeypatch target; ``current_model_version`` resolves the
+#: pointer from ``_MODELS_DIR`` at call time, as ``ranker`` does.
 _VERSION_FILE = _MODELS_DIR / "current_version.txt"
 
 # Todo 15: /metrics router (see recommendation/app/metrics.py).
@@ -116,7 +118,7 @@ def current_model_version() -> str:
     CWD works. Never raises.
     """
     try:
-        text = _VERSION_FILE.read_text(encoding="utf-8").strip()
+        text = (_MODELS_DIR / "current_version.txt").read_text(encoding="utf-8").strip()
     except OSError:
         return "none"
     return text or "none"
