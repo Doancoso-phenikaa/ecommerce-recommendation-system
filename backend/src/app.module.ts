@@ -5,6 +5,7 @@ import type { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import databaseConfig from './configs/database.config.js';
 import { AdminModule } from './modules/admin/admin.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
+import { CartModule } from './modules/cart/cart.module.js';
 import { CategoryModule } from './modules/category/category.module.js';
 import { CustomerModule } from './modules/customer/customer.module.js';
 import { ProductModule } from './modules/product/product.module.js';
@@ -31,6 +32,7 @@ import { WishlistModule } from './modules/wishlist/wishlist.module.js';
     CategoryModule,
     ProductModule,
     WishlistModule,
+    CartModule,
   ],
   controllers: [],
   providers: [],
