@@ -111,6 +111,7 @@ No Kafka/Redis I/O inside ``rank()`` — parquet + model files only
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache, partial
 from pathlib import Path
 
@@ -156,29 +157,96 @@ _INTERACTIONS_PARQUET = _DATA_DIR / "interactions.parquet"
 _MODELS_DIR = Path(__file__).resolve().parents[1] / "models"
 
 
-@lru_cache(maxsize=1)
+def _parquet_fingerprint(path: Path) -> tuple[int, int] | None:
+    """``(st_mtime_ns, st_size)`` for *path*, or None when it does not exist.
+
+    Part of every frame cache key, because a retrain replaces the file in
+    place (``consumer.merge_batches`` writes a temp file then ``os.replace``)
+    — the path alone cannot tell "same file" from "rewritten file".
+
+    This is an OPTIMISATION that makes staleness *unlikely*, not impossible:
+    a rewrite landing inside the same ``st_mtime_ns`` tick at the same
+    ``st_size`` is invisible to it. ``invalidate_frame_cache()`` is therefore
+    the correctness backstop, not a convenience.
+    """
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    return (st.st_mtime_ns, st.st_size)
+
+
+def _frame_cache_key(path: Path) -> tuple[str, tuple[int, int] | None]:
+    """Cache key for *path*: the path itself plus the file's fingerprint.
+
+    The path is in the key as well as the fingerprint so that redirecting a
+    module global can never alias a frame that belongs to a different file,
+    and so the cached body reads the file its key names rather than re-reading
+    a global that could have moved between the stat and the read.
+    """
+    return (str(path), _parquet_fingerprint(path))
+
+
+@lru_cache(maxsize=2)
+def _load_items_df_cached(key: tuple[str, tuple[int, int] | None]) -> pd.DataFrame:
+    """Read the catalog named by *key* (see :func:`_frame_cache_key`).
+
+    ``maxsize=2`` so the current and the previous fingerprint coexist: with
+    ``maxsize=1`` a rewrite evicts the entry an in-flight reader is about to
+    ask for, so two rewrites in quick succession turn every read into a
+    parquet load.
+    """
+    path, _fingerprint = key
+    return pd.read_parquet(path)
+
+
+@lru_cache(maxsize=2)
+def _load_interactions_df_cached(
+    key: tuple[str, tuple[int, int] | None],
+) -> pd.DataFrame:
+    """Read the interactions log named by *key* (see :func:`_frame_cache_key`)."""
+    path, _fingerprint = key
+    return pd.read_parquet(path)
+
+
 def _load_items_df() -> pd.DataFrame:
-    """Load the items catalog (cached; call ``invalidate_frame_cache()``)."""
-    return pd.read_parquet(_ITEMS_PARQUET)
+    """Load the items catalog, keyed on the file's identity.
+
+    A plain wrapper that fingerprints the path and delegates to the cached
+    reader, so every zero-argument call site keeps working while an in-place
+    retrain rewrite of the parquet becomes a different cache key instead of a
+    permanent stale entry. ``cache_clear``/``cache_info`` are the cached
+    reader's own, so :func:`evaluate`'s ``_drop_frame_caches`` and this
+    module's :func:`invalidate_frame_cache` both reach the real cache.
+    """
+    return _load_items_df_cached(_frame_cache_key(_ITEMS_PARQUET))
 
 
-@lru_cache(maxsize=1)
 def _load_interactions_df() -> pd.DataFrame:
-    """Load the interactions log (cached; call ``invalidate_frame_cache()``)."""
-    return pd.read_parquet(_INTERACTIONS_PARQUET)
+    """Load the interactions log, keyed on the file's identity.
+
+    Same shape and same reason as :func:`_load_items_df`.
+    """
+    return _load_interactions_df_cached(_frame_cache_key(_INTERACTIONS_PARQUET))
+
+
+_load_items_df.cache_clear = _load_items_df_cached.cache_clear  # type: ignore[attr-defined]
+_load_items_df.cache_info = _load_items_df_cached.cache_info  # type: ignore[attr-defined]
+_load_interactions_df.cache_clear = _load_interactions_df_cached.cache_clear  # type: ignore[attr-defined]
+_load_interactions_df.cache_info = _load_interactions_df_cached.cache_info  # type: ignore[attr-defined]
 
 
 def invalidate_frame_cache() -> None:
     """Drop the cached catalog and interaction frames.
 
-    Required whenever the underlying parquet changes — a retrain that
-    rewrites the data, a catalog update, or a test that redirects the
-    path globals. Caching without calling this serves stale data
-    indefinitely.
+    The fingerprint already evicts a frame whose file has been rewritten;
+    this hook covers what a fingerprint cannot see — a rewrite within one
+    ``st_mtime_ns`` tick at the same ``st_size`` — and the path globals being
+    redirected by a caller that does not want to pay for a re-read.
 
-    Both loaders take no arguments, so each cache is ONE process-wide
-    slot keyed on nothing: the path global is not part of the key, and
-    redirecting it does not swap the cached frame.
+    It clears the inner cached readers through the public loaders' own
+    ``cache_clear``, which is the same attribute ``evaluate`` and the test
+    fixtures reach for.
     """
     _load_items_df.cache_clear()
     _load_interactions_df.cache_clear()

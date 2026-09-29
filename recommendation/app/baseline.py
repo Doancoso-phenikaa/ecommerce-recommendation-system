@@ -128,16 +128,82 @@ def _as_now(now: datetime | str | None, fallback: datetime) -> datetime:
     return parsed if parsed is not None else fallback
 
 
-@lru_cache(maxsize=1)
+def _parquet_fingerprint(path: Path) -> tuple[int, int] | None:
+    """``(st_mtime_ns, st_size)`` for *path*, or None when it does not exist.
+
+    Part of every frame cache key, because a retrain replaces the file in
+    place (``consumer.merge_batches`` writes a temp file then ``os.replace``)
+    — the path alone cannot tell "same file" from "rewritten file".
+
+    This is an OPTIMISATION that makes staleness *unlikely*, not impossible:
+    a rewrite landing inside the same ``st_mtime_ns`` tick at the same
+    ``st_size`` is invisible to it, so ``cache_clear`` on the loaders stays
+    the correctness backstop rather than a convenience.
+    """
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    return (st.st_mtime_ns, st.st_size)
+
+
+def _frame_cache_key(path: Path) -> tuple[str, tuple[int, int] | None]:
+    """Cache key for *path*: the path itself plus the file's fingerprint.
+
+    The path is in the key as well as the fingerprint so that redirecting a
+    module global can never alias a frame that belongs to a different file,
+    and so the cached bodies read the file their key names rather than
+    re-reading a global that could have moved between the stat and the read.
+    """
+    return (str(path), _parquet_fingerprint(path))
+
+
+@lru_cache(maxsize=2)
+def _load_items_cached(key: tuple[str, tuple[int, int] | None]) -> pd.DataFrame:
+    """Read the catalog named by *key* (see :func:`_frame_cache_key`).
+
+    ``maxsize=2`` so the current and the previous fingerprint coexist: with
+    ``maxsize=1`` a rewrite evicts the entry an in-flight reader is about to
+    ask for, so two rewrites in quick succession turn every read into a
+    parquet load.
+    """
+    path, _fingerprint = key
+    return pd.read_parquet(path)
+
+
+@lru_cache(maxsize=2)
+def _load_interactions_cached(
+    key: tuple[str, tuple[int, int] | None],
+) -> pd.DataFrame:
+    """Read the interactions log named by *key* (see :func:`_frame_cache_key`)."""
+    path, _fingerprint = key
+    return pd.read_parquet(path)
+
+
 def _load_items() -> pd.DataFrame:
-    """Load the items catalog (cached; call ``_load_items.cache_clear()``)."""
-    return pd.read_parquet(_ITEMS_PARQUET)
+    """Load the items catalog, keyed on the file's identity.
+
+    A plain wrapper that fingerprints the path and delegates to the cached
+    reader, so every zero-argument call site keeps working while an in-place
+    retrain rewrite becomes a different cache key instead of a permanent
+    stale entry. ``cache_clear``/``cache_info`` are the cached reader's own,
+    which is what ``conftest`` and ``evaluate._drop_frame_caches`` call.
+    """
+    return _load_items_cached(_frame_cache_key(_ITEMS_PARQUET))
 
 
-@lru_cache(maxsize=1)
 def _load_interactions() -> pd.DataFrame:
-    """Load the interactions log (cached; ``_load_interactions.cache_clear()``)."""
-    return pd.read_parquet(_INTERACTIONS_PARQUET)
+    """Load the interactions log, keyed on the file's identity.
+
+    Same shape and same reason as :func:`_load_items`.
+    """
+    return _load_interactions_cached(_frame_cache_key(_INTERACTIONS_PARQUET))
+
+
+_load_items.cache_clear = _load_items_cached.cache_clear  # type: ignore[attr-defined]
+_load_items.cache_info = _load_items_cached.cache_info  # type: ignore[attr-defined]
+_load_interactions.cache_clear = _load_interactions_cached.cache_clear  # type: ignore[attr-defined]
+_load_interactions.cache_info = _load_interactions_cached.cache_info  # type: ignore[attr-defined]
 
 
 def _available_items(items: pd.DataFrame | None = None) -> pd.DataFrame:
@@ -231,14 +297,38 @@ def _item_doc(row: pd.Series) -> str:
     return f"{title} {cat_text} {brand}".strip()
 
 
-@lru_cache(maxsize=1)
-def _tfidf_matrix() -> tuple[list[str], object, TfidfVectorizer]:
-    """Fit TF-IDF over available items; return (item_ids, matrix, vectorizer)."""
-    avail = _available_items()
+@lru_cache(maxsize=2)
+def _tfidf_matrix_cached(
+    key: tuple[str, tuple[int, int] | None],
+) -> tuple[list[str], object, TfidfVectorizer]:
+    """Fit TF-IDF over the available items of the catalog named by *key*.
+
+    Keyed like the frame readers so a catalog rewrite refits the matrix
+    instead of leaving a stale vocabulary in the serving path. It reads
+    ``key`` rather than calling ``_load_items()`` so the matrix and the frame
+    it was fitted from are guaranteed to be the same snapshot, and so a
+    rewrite costs one read rather than two. Every rebuild builds a new
+    tuple, so a matrix another request is still holding is never mutated.
+    """
+    avail = _available_items(_load_items_cached(key))
     docs = [_item_doc(row) for _, row in avail.iterrows()]
     vectorizer = TfidfVectorizer()
     matrix = vectorizer.fit_transform(docs)
     return avail["item_id"].tolist(), matrix, vectorizer
+
+
+def _tfidf_matrix() -> tuple[list[str], object, TfidfVectorizer]:
+    """Return (item_ids, matrix, vectorizer) for the current catalog.
+
+    A plain wrapper that fingerprints the catalog path and delegates to the
+    cached fitter, keeping the zero-argument signature every call site uses.
+    ``cache_clear``/``cache_info`` are the cached fitter's own.
+    """
+    return _tfidf_matrix_cached(_frame_cache_key(_ITEMS_PARQUET))
+
+
+_tfidf_matrix.cache_clear = _tfidf_matrix_cached.cache_clear  # type: ignore[attr-defined]
+_tfidf_matrix.cache_info = _tfidf_matrix_cached.cache_info  # type: ignore[attr-defined]
 
 
 def content_similar(item_id: str, k: int = 10) -> list[dict]:

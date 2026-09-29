@@ -30,6 +30,7 @@ Run from the repo root::
 
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -626,35 +627,44 @@ def test_frame_cache_serves_the_second_read(write_parquet: Any) -> None:
 def test_invalidate_frame_cache_forces_a_reload(
     write_parquet: Any, data_dir: Path
 ) -> None:
-    """After invalidation the frame is re-read, so new rows are visible."""
-    import pandas as pd
+    """The hook still forces a fresh read even when the cache key has not moved.
 
+    That is its whole job after Task 3b: it is the explicit backstop for a
+    rewrite the file fingerprint cannot see. The tests below also pin the
+    new half of the contract -- an ordinary in-place rewrite IS now visible
+    without the hook.
+    """
     from recommendation.app import ranker as ranker_mod
 
     write_parquet()
-    before = ranker_mod._load_items_df()
-    assert not before.empty
+    first = ranker_mod._load_items_df()
+    assert not first.empty
 
-    pd.DataFrame(
-        [{"item_id": "new-001", "category_path": ["books"],
-          "price_cents": 1, "available": True}]
-    ).to_parquet(data_dir / "items.parquet", index=False)
-
-    # Stale until the hook is called: the in-place rewrite is invisible.
-    assert len(ranker_mod._load_items_df()) == len(before)
     ranker_mod.invalidate_frame_cache()
-    assert len(ranker_mod._load_items_df()) == 1
+    second = ranker_mod._load_items_df()
+    assert second is not first, "invalidate_frame_cache() did not drop the entry"
+    assert len(second) == len(first)
+
+    _rewrite_in_place(
+        data_dir / "items.parquet",
+        pd.DataFrame(
+            [{"item_id": "new-001", "category_path": ["books"],
+              "price_cents": 1, "available": True}]
+        ),
+    )
+    assert ranker_mod._load_items_df()["item_id"].astype(str).tolist() == ["new-001"]
 
 
-def test_frame_cache_follows_a_path_redirect_only_after_invalidation(
+def test_frame_cache_follows_a_path_redirect(
     write_parquet: Any, data_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Redirecting the path global alone does NOT swap the cached frame.
+    """Redirecting the path global swaps the frame -- the path is in the key.
 
-    This is the staleness Review Focus item 3 is about: the loader takes no
-    arguments, so the cache key is not the path -- a redirect to a different
-    parquet (parquet B) keeps serving parquet A until the hook runs. Both
-    halves of that contract are asserted, so neither can drift.
+    Task 1 pinned the opposite contract (a redirect kept serving the old
+    frame until the hook ran) because the key was the empty tuple. The
+    hazard that motivated it -- serving a catalog that no longer exists --
+    is exactly what Task 3b removes, so the assertion is inverted and the
+    hook is still exercised as the explicit reload.
     """
     from recommendation.app import ranker as ranker_mod
 
@@ -670,15 +680,14 @@ def test_frame_cache_follows_a_path_redirect_only_after_invalidation(
     ).to_parquet(other, index=False)
     monkeypatch.setattr(ranker_mod, "_ITEMS_PARQUET", other)
 
-    # WITHOUT the hook: still parquet A. The path global is not the cache key.
-    assert ranker_mod._load_items_df() is first
-    assert "new-001" not in ranker_mod._load_items_df()["item_id"].astype(str).tolist()
-
-    # WITH the hook: now parquet B is served, from the redirected path.
-    ranker_mod.invalidate_frame_cache()
     after = ranker_mod._load_items_df()
     assert after is not first
     assert after["item_id"].astype(str).tolist() == ["new-001"]
+
+    ranker_mod.invalidate_frame_cache()
+    assert ranker_mod._load_items_df() is not after, (
+        "invalidate_frame_cache() no longer forces a reload"
+    )
 
 
 def test_rank_still_works_with_caching(
@@ -800,3 +809,223 @@ def test_consumed_rows_covers_exactly_the_interacted_items() -> None:
     # And the frame-taking wrappers must produce the same answer.
     assert ranker_mod._user_item_ids(frame, "u") == ["a"]
     assert ranker_mod._seed_items(frame, "u") == ["a"]
+
+
+# --- Task 3b: the frame caches are self-invalidating ------------------------
+#
+# Task 1 shipped `lru_cache(maxsize=1)` on arity-0 loaders, so the cache key
+# was the empty tuple. `consumer.merge_batches` replaces the parquet IN PLACE
+# (temp file + `os.replace`), so the path never changed, the key never
+# changed, and nothing ever evicted the entry: a long-lived server pinned the
+# catalog and the suppression sets at whatever the parquet held at first
+# request, with no error and no warning.
+#
+# The loaders now fingerprint the file and key on that, so an ordinary
+# rewrite is visible. The fingerprint is an OPTIMISATION that makes staleness
+# unlikely, not impossible -- a rewrite landing inside the same
+# `st_mtime_ns` tick at the same `st_size` is invisible to it, which is why
+# `invalidate_frame_cache()` remains the correctness backstop.
+
+
+def _rewrite_in_place(path: Path, frame: pd.DataFrame) -> None:
+    """Replace *path* the way ``consumer.merge_batches`` does: tmp + replace."""
+    tmp = path.with_suffix(".tmp")
+    frame.to_parquet(tmp, index=False)
+    os.replace(tmp, path)
+
+
+def test_frame_cache_reloads_when_the_parquet_is_rewritten(
+    write_parquet: Any, data_dir: Path
+) -> None:
+    """An in-place retrain rewrite must be visible WITHOUT the explicit hook.
+
+    The hazard this pins: the loader took no arguments, so the key was the
+    empty tuple and nothing could ever evict the entry.
+    """
+    from recommendation.app import ranker as ranker_mod
+
+    write_parquet()
+    before = ranker_mod._load_items_df()
+    assert len(before) == 6
+
+    _rewrite_in_place(
+        data_dir / "items.parquet",
+        pd.DataFrame(
+            [{"item_id": "new-001", "category_path": ["books"],
+              "price_cents": 1, "available": True}]
+        ),
+    )
+
+    after = ranker_mod._load_items_df()
+    assert len(after) == 1, "the frame cache served a catalog that no longer exists"
+    assert after is not before
+    assert after["item_id"].astype(str).tolist() == ["new-001"]
+
+
+def test_interactions_frame_cache_reloads_when_the_parquet_is_rewritten(
+    write_parquet: Any, data_dir: Path
+) -> None:
+    """The suppression-set source has the same exposure and the same fix."""
+    from recommendation.app import ranker as ranker_mod
+
+    write_parquet()
+    before = ranker_mod._load_interactions_df()
+    assert len(before) == 10
+
+    _rewrite_in_place(
+        data_dir / "interactions.parquet",
+        pd.DataFrame(
+            [{"request_id": "r1", "user_id": "user-001", "item_id": "ele-001",
+              "event_type": "view", "timestamp": "2026-03-01T00:00:00+00:00"}]
+        ),
+    )
+
+    after = ranker_mod._load_interactions_df()
+    assert len(after) == 1, "the frame cache served an event log that no longer exists"
+    assert after is not before
+    assert ranker_mod._user_item_ids(after, "user-001") == ["ele-001"]
+
+
+def test_frame_cache_notices_a_rewrite_that_keeps_the_row_count(
+    write_parquet: Any, data_dir: Path
+) -> None:
+    """Row count is not the signal; the file's identity is.
+
+    A retrain that reorders or re-labels the catalog keeps the row count, so
+    an implementation that only compared lengths would still serve stale rows.
+    """
+    from recommendation.app import ranker as ranker_mod
+
+    write_parquet()
+    catalog = pd.DataFrame(ITEMS)
+    before = ranker_mod._load_items_df()
+    assert len(before) == len(catalog)
+
+    renamed = catalog.assign(
+        item_id=catalog["item_id"].str.replace("ele", "ela").str.replace("boo", "bax")
+    )
+    _rewrite_in_place(data_dir / "items.parquet", renamed)
+
+    after = ranker_mod._load_items_df()
+    assert len(after) == len(before), "row count is meant to be unchanged"
+    assert after["item_id"].astype(str).tolist() == renamed["item_id"].tolist()
+
+
+def test_frame_loaders_still_expose_a_working_cache_clear() -> None:
+    """``evaluate._drop_frame_caches`` calls ``loader.cache_clear()``.
+
+    It fetches the attribute with ``getattr(..., None)`` and skips anything
+    that returns None, so if this regressed the gate would silently stop
+    invalidating and re-serve a stale frame -- no exception, no test failure
+    elsewhere. ``evaluate.py`` is out of scope for this change, so the
+    contract is pinned from this side instead.
+    """
+    from recommendation.app import ranker as ranker_mod
+
+    for loader in (ranker_mod._load_items_df, ranker_mod._load_interactions_df):
+        clear = getattr(loader, "cache_clear", None)
+        assert callable(clear), f"{loader.__name__} lost its cache_clear()"
+        assert clear() is None, f"{loader.__name__}.cache_clear() must return None"
+
+
+def test_cache_clear_on_the_public_loaders_really_drops_the_entry(
+    write_parquet: Any
+) -> None:
+    """Not just present -- calling it must evict, which is what callers rely on."""
+    from recommendation.app import ranker as ranker_mod
+
+    write_parquet()
+    first_items = ranker_mod._load_items_df()
+    first_events = ranker_mod._load_interactions_df()
+
+    ranker_mod.invalidate_frame_cache()
+
+    assert ranker_mod._load_items_df() is not first_items
+    assert ranker_mod._load_interactions_df() is not first_events
+
+
+def test_frame_cache_keeps_the_current_and_previous_fingerprint(
+    write_parquet: Any, data_dir: Path
+) -> None:
+    """``maxsize=2`` -- a read straddling a rewrite must not thrash.
+
+    With ``maxsize=1`` the rewrite evicts the entry the in-flight reader is
+    about to ask for, so two rewrites in quick succession turn every read
+    into a parquet load.
+    """
+    from recommendation.app import ranker as ranker_mod
+
+    write_parquet()
+    first = ranker_mod._load_items_df()
+    _rewrite_in_place(
+        data_dir / "items.parquet",
+        pd.DataFrame(ITEMS).assign(
+            item_id=lambda f: f["item_id"].str.replace("ele", "ela")
+        ),
+    )
+    second = ranker_mod._load_items_df()
+    assert second is not first
+    assert ranker_mod._load_items_df() is second, "the current key must be cached"
+
+    info = ranker_mod._load_items_df_cached.cache_info()
+    assert info.currsize == 2, f"expected current + previous, got {info}"
+    assert info.maxsize == 2
+
+
+def test_parquet_fingerprint_is_none_for_a_missing_path(tmp_path: Path) -> None:
+    """A path that does not exist must fingerprint to None, not raise.
+
+    The loader then raises from ``read_parquet`` exactly as it did before,
+    which is what keeps the failure mode of a missing file unchanged.
+    """
+    from recommendation.app import ranker as ranker_mod
+
+    assert ranker_mod._parquet_fingerprint(tmp_path / "absent.parquet") is None
+    assert ranker_mod._parquet_fingerprint(tmp_path / "no" / "such" / "x.parquet") is None
+
+
+def test_invalidate_frame_cache_is_the_backstop_the_fingerprint_cannot_be(
+    write_parquet: Any, data_dir: Path
+) -> None:
+    """The documented residual, pinned: same ``st_mtime_ns`` AND same ``st_size``.
+
+    ``consumer``'s rewrite discipline plus a restored mtime reproduces a
+    rewrite the fingerprint genuinely cannot see, and the assertion is that
+    ``invalidate_frame_cache()`` still recovers from it. This is the honest
+    boundary of the design: the fingerprint makes staleness unlikely, the
+    hook makes it recoverable.
+    """
+    from recommendation.app import ranker as ranker_mod
+
+    write_parquet()
+    catalog_path = data_dir / "items.parquet"
+    before = ranker_mod._load_items_df()
+
+    st = os.stat(catalog_path)
+    renamed = pd.DataFrame(ITEMS).assign(
+        item_id=lambda f: f["item_id"].str.replace("ele", "ela").str.replace("boo", "bax")
+    )
+    _rewrite_in_place(catalog_path, renamed)
+    os.utime(catalog_path, ns=(st.st_atime_ns, st.st_mtime_ns))
+
+    assert os.stat(catalog_path).st_size == st.st_size, "fixture lost its teeth"
+    assert ranker_mod._parquet_fingerprint(catalog_path) == (
+        st.st_mtime_ns,
+        st.st_size,
+    )
+    assert ranker_mod._load_items_df() is before, (
+        "an unchanged fingerprint is served from cache -- that is the residual"
+    )
+
+    ranker_mod.invalidate_frame_cache()
+    recovered = ranker_mod._load_items_df()
+    assert recovered is not before
+    assert recovered["item_id"].astype(str).tolist() == renamed["item_id"].tolist()
+
+
+def test_invalidate_frame_cache_before_any_load_is_a_no_op() -> None:
+    """The hook must be safe on a cold process -- conftest calls it autouse."""
+    from recommendation.app import ranker as ranker_mod
+
+    assert ranker_mod.invalidate_frame_cache() is None
+    assert ranker_mod.invalidate_frame_cache() is None

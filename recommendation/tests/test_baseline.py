@@ -26,8 +26,11 @@ read or written.
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from typing import Any
 
+import pandas as pd
 import pytest
 
 from recommendation.app import baseline
@@ -220,3 +223,140 @@ def test_content_similar_many_empty_seeds_falls_back_to_trending(
     rows = bl.content_similar_many([], k=3)
     assert rows
     assert all(r["reason"] == "trending" for r in rows)
+
+
+# --------------------------------------------------------------------------
+# Task 3b: the three baseline frame caches are self-invalidating
+# --------------------------------------------------------------------------
+#
+# All three loaders were `lru_cache(maxsize=1)` on arity-0 functions, so their
+# key was the empty tuple and an in-place retrain rewrite of the parquet could
+# never evict the entry. They now key on the file's fingerprint. Two contracts
+# are pinned below: the rewrite is now visible on its own, AND the public
+# loaders keep a working `.cache_clear()`, because `conftest.py` calls it
+# directly and `evaluate._drop_frame_caches` fetches it with `getattr(...,
+# None)` and silently skips a loader that does not have it.
+def _rewrite_in_place(path: Path, frame: pd.DataFrame) -> None:
+    """Replace *path* the way ``consumer.merge_batches`` does: tmp + replace."""
+    tmp = path.with_suffix(".tmp")
+    frame.to_parquet(tmp, index=False)
+    os.replace(tmp, path)
+
+
+def test_items_cache_reloads_when_the_parquet_is_rewritten(
+    write_parquet: Any, data_dir: Path
+) -> None:
+    """An in-place rewrite must be visible without an explicit ``cache_clear``."""
+    write_parquet()
+    before = baseline._load_items()  # noqa: SLF001
+    assert len(before) == 6
+
+    _rewrite_in_place(
+        data_dir / "items.parquet",
+        pd.DataFrame(
+            [
+                {"item_id": "new-001", "title": "New One", "brand_id": "New",
+                 "category_path": ["books"], "price_cents": 1, "available": True},
+                {"item_id": "new-002", "title": "New Two", "brand_id": "New",
+                 "category_path": ["books"], "price_cents": 2, "available": True},
+            ]
+        ),
+    )
+
+    after = baseline._load_items()  # noqa: SLF001
+    assert after["item_id"].tolist() == ["new-001", "new-002"]
+    assert after is not before
+
+
+def test_interactions_cache_reloads_when_the_parquet_is_rewritten(
+    write_parquet: Any, data_dir: Path
+) -> None:
+    """The trending/decay source has the same exposure and the same fix."""
+    write_parquet()
+    before = baseline._load_interactions()  # noqa: SLF001
+    assert len(before) == 10
+
+    _rewrite_in_place(
+        data_dir / "interactions.parquet",
+        pd.DataFrame(
+            [
+                {"request_id": "r1", "user_id": "user-001", "item_id": "ele-001",
+                 "event_type": "view", "timestamp": "2026-03-01T00:00:00+00:00"},
+                {"request_id": "r2", "user_id": "user-001", "item_id": "ele-002",
+                 "event_type": "view", "timestamp": "2026-03-02T00:00:00+00:00"},
+            ]
+        ),
+    )
+
+    after = baseline._load_interactions()  # noqa: SLF001
+    assert after["request_id"].tolist() == ["r1", "r2"]
+    assert after is not before
+
+
+def test_tfidf_cache_is_rebuilt_when_the_catalog_is_rewritten(
+    write_parquet: Any, data_dir: Path
+) -> None:
+    """The fitted matrix must follow the catalog, and must be a fresh object.
+
+    ``_tfidf_matrix`` returns a tuple, not a frame, so the same fingerprint
+    key drives it -- but the sparse matrix is mutable, so a rebuild has to
+    produce a NEW matrix rather than mutate the cached one in place.
+    """
+    write_parquet()
+    ids_before, matrix_before, _ = baseline._tfidf_matrix()  # noqa: SLF001
+    assert len(ids_before) == 6
+    assert matrix_before.shape[0] == 6
+
+    _rewrite_in_place(
+        data_dir / "items.parquet",
+        pd.DataFrame(
+            [
+                {"item_id": "new-001", "title": "New One", "brand_id": "New",
+                 "category_path": ["books"], "price_cents": 1, "available": True},
+                {"item_id": "new-002", "title": "New Two", "brand_id": "New",
+                 "category_path": ["books"], "price_cents": 2, "available": True},
+            ]
+        ),
+    )
+
+    ids_after, matrix_after, _ = baseline._tfidf_matrix()  # noqa: SLF001
+    assert ids_after == ["new-001", "new-002"]
+    assert matrix_after is not matrix_before
+    assert matrix_after.shape[0] == 2
+    assert matrix_before.shape[0] == 6, "the cached matrix must not be mutated"
+
+
+def test_baseline_loaders_still_expose_a_working_cache_clear() -> None:
+    """``conftest`` calls all three directly; ``evaluate`` uses ``getattr``.
+
+    If a loader lost ``cache_clear``, the ``getattr`` guard in
+    ``evaluate._drop_frame_caches`` would skip it with no error, and the gate
+    would quietly serve a stale frame -- so this asserts presence from the
+    side that cannot be edited.
+    """
+    for loader in (
+        baseline._load_items,  # noqa: SLF001
+        baseline._load_interactions,  # noqa: SLF001
+        baseline._tfidf_matrix,  # noqa: SLF001
+    ):
+        clear = getattr(loader, "cache_clear", None)
+        assert callable(clear), f"{loader.__name__} lost its cache_clear()"
+        assert clear() is None, f"{loader.__name__}.cache_clear() must return None"
+
+
+def test_baseline_cache_clear_really_drops_the_entries(
+    write_parquet: Any,
+) -> None:
+    """Not just present -- calling it must evict, which is what callers rely on."""
+    write_parquet()
+    first_items = baseline._load_items()  # noqa: SLF001
+    first_events = baseline._load_interactions()  # noqa: SLF001
+    first_tfidf = baseline._tfidf_matrix()  # noqa: SLF001
+
+    baseline._load_items.cache_clear()  # noqa: SLF001
+    baseline._load_interactions.cache_clear()  # noqa: SLF001
+    baseline._tfidf_matrix.cache_clear()  # noqa: SLF001
+
+    assert baseline._load_items() is not first_items  # noqa: SLF001
+    assert baseline._load_interactions() is not first_events  # noqa: SLF001
+    assert baseline._tfidf_matrix() is not first_tfidf  # noqa: SLF001
