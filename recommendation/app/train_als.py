@@ -96,23 +96,28 @@ MODELS_DIR = Path("recommendation") / "models"
 MLFLOW_EXPERIMENT = "recsys"
 
 
-def _mlflow_tracking_uri(models_dir: Path = MODELS_DIR) -> str:
+def _resolve_models_dir(models_dir: Path | str | None = None) -> Path:
+    """Resolve the model root, anchoring a relative path at the repo root.
+
+    ``MODELS_DIR`` is repo-root-relative, so a bare relative default would
+    otherwise resolve against the caller's CWD and silently fail to load a
+    model the serving layer can see.
+    """
+    base = Path(models_dir) if models_dir is not None else MODELS_DIR
+    if base.is_absolute():
+        return base
+    return Path(__file__).resolve().parents[2] / base
+
+
+def _mlflow_tracking_uri(models_dir: Path | None = None) -> str:
     """Return a CWD-robust ``file:`` tracking URI for ``models_dir/mlruns``.
 
-    ``MODELS_DIR`` is a bare relative path (correct only under repo-root
-    CWD). Resolve it against the repo root derived from this file's
-    location so MLflow works regardless of the caller's CWD: relative
-    ``models_dir`` values are interpreted as repo-root-relative, absolute
-    ones are used as-is.
+    Relative ``models_dir`` values are interpreted as repo-root-relative,
+    absolute ones are used as-is.
     """
     try:
-        base = Path(models_dir)
-        if not base.is_absolute():
-            repo_root = Path(__file__).resolve().parents[2]
-            base = repo_root / base
-        mlruns = base.resolve() / "mlruns"
+        mlruns = _resolve_models_dir(models_dir).resolve() / "mlruns"
     except Exception:
-        # Last-resort fallback: absolute-ize against the real CWD.
         mlruns = (Path.cwd() / Path(models_dir) / "mlruns").resolve()
     return "file:" + mlruns.as_posix()
 
@@ -145,14 +150,16 @@ def _row_to_event(row: dict[str, Any]) -> EventIn:
     trained on.
     """
     event_type_raw = row.get("event_type")
-    if not isinstance(event_type_raw, str) or event_type_raw not in EventType:
+    # `in EventType` raises TypeError on Python <= 3.11; the caller's
+    # blanket `except` turns that into a silent "no training data".
+    if not isinstance(event_type_raw, str) or event_type_raw not in EventType.__members__:
         raise ValueError(f"unknown event_type: {event_type_raw!r}")
     value = EventValue(
-        rating=None,
+        rating=_clean(row.get("rating")),
         quantity=_clean(row.get("quantity")),
         unit_price_cents=_clean(row.get("unit_price_cents")),
         currency=_clean(row.get("currency")),
-        query=None,
+        query=_clean(row.get("query")),
     )
     # Drop empty value payloads so EventIn sees value=None.
     payload: dict[str, Any] = {
@@ -350,13 +357,16 @@ def recommend(
     return [item_ids[int(i)] for i in ids[:n]]
 
 
-def _current_model_dir(
-    models_dir: Path = MODELS_DIR,
-) -> Path:
-    """Resolve the ``current_version.txt`` pointer to its ``als_*`` dir."""
-    pointer = models_dir / "current_version.txt"
+def _current_model_dir(models_dir: Path | None = None) -> Path:
+    """Resolve the ``current_version.txt`` pointer to its ``als_*`` dir.
+
+    ``None`` means "use :data:`MODELS_DIR`", read at call time so tests and
+    callers can redirect it.
+    """
+    base = _resolve_models_dir(models_dir)
+    pointer = base / "current_version.txt"
     version = pointer.read_text(encoding="utf-8").strip()
-    return models_dir / f"als_{version}"
+    return base / f"als_{version}"
 
 
 def log_mlflow_best_effort(
@@ -364,7 +374,7 @@ def log_mlflow_best_effort(
     metrics: dict[str, Any],
     model_dir: Path | str | None = None,
     run_name: str | None = None,
-    models_dir: Path = MODELS_DIR,
+    models_dir: Path | None = None,
 ) -> None:
     """Log ``params``/``metrics`` (+ ``mappings.json``) to MLflow; warn, never crash.
 
@@ -393,7 +403,9 @@ def log_mlflow_best_effort(
         print(f"warning: mlflow logging skipped ({exc})", file=sys.stderr)
 
 
-def train(version: str, models_dir: Path = MODELS_DIR) -> dict[str, Any]:
+def train(
+    version: str, models_dir: Path | None = None, *, update_pointer: bool = True
+) -> dict[str, Any]:
     """Run the full pipeline for ``version``; return a stats dict.
 
     Snapshots via :func:`snapshot_for_training` into
@@ -403,7 +415,13 @@ def train(version: str, models_dir: Path = MODELS_DIR) -> dict[str, Any]:
     dir. Raises :class:`NoTrainingDataError` on empty snapshots (the CLI
     maps it to exit 2). The snapshot dir is also removed on the
     no-data path so no snapshot dirs are ever left behind.
+
+    ``update_pointer=False`` skips the pointer write so a caller that
+    gates the model afterwards (see ``scripts/retrain.sh``) can promote it
+    only once the gate passes. Writing it here would expose the ungated
+    model to live traffic in the window between train and verdict.
     """
+    models_dir = _resolve_models_dir(models_dir)
     snapshot_dir = models_dir / f"snapshot_{version}"
     model_dir = models_dir / f"als_{version}"
     snapshot_for_training(snapshot_dir)
@@ -426,9 +444,10 @@ def train(version: str, models_dir: Path = MODELS_DIR) -> dict[str, Any]:
         seed=SEED,
         n_interactions=n_interactions,
     )
-    (models_dir / "current_version.txt").write_text(
-        f"{version}\n", encoding="utf-8"
-    )
+    if update_pointer:
+        (models_dir / "current_version.txt").write_text(
+            f"{version}\n", encoding="utf-8"
+        )
     stats = {
         "version": version,
         "factors": factors,

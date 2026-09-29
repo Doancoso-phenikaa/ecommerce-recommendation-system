@@ -169,12 +169,28 @@ def _top_category(value: object) -> str:
     return parts[0] if parts else ""
 
 
+#: Passive events that must not count as consumption. ``impression`` is
+#: emitted by this service's own serving layer, so counting it would make
+#: the ranker suppress whatever it just served.
+_NON_CONSUMPTION_EVENTS = frozenset({"impression", "search"})
+
+
 def _user_item_ids(ev: pd.DataFrame, user_id: str) -> list[str]:
-    """All item ids a user ever interacted with (suppression set source)."""
+    """Item ids the user genuinely consumed (suppression set source).
+
+    Excludes passive events — see :data:`_NON_CONSUMPTION_EVENTS`.
+    """
     if ev.empty or "user_id" not in ev.columns:
         return []
-    seen = ev.loc[ev["user_id"].astype(str) == str(user_id), "item_id"]
-    return sorted({str(i) for i in seen.tolist()})
+    rows = ev[ev["user_id"].astype(str) == str(user_id)]
+    if rows.empty:
+        return []
+    if "event_type" in rows.columns:
+        keep = ~rows["event_type"].astype(str).isin(_NON_CONSUMPTION_EVENTS)
+        rows = rows[keep]
+        if rows.empty:
+            return []
+    return sorted({str(i) for i in rows["item_id"].tolist()})
 
 
 def _seed_item(ev: pd.DataFrame, user_id: str) -> str | None:

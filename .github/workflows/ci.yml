@@ -1,0 +1,65 @@
+name: recsys
+
+on:
+  push:
+    branches: [main, develop, recommandation]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: recommendation/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r recommendation/requirements.txt
+
+      # `in EventType` raised TypeError on 3.11 and silently emptied the
+      # training set, so the suite pins the minor version.
+      - name: Unit tests
+        env:
+          MLFLOW_DISABLE_AGENT_HINT: "1"
+          REDIS_URL: redis://localhost:6379/0
+          MODEL_DIR: ${{ github.workspace }}/recommendation/models
+        run: PYTHONPATH=. python -m pytest recommendation/tests -q -m "not integration"
+
+      - name: Pipeline smoke (seed -> train -> eval gate)
+        env:
+          MLFLOW_DISABLE_AGENT_HINT: "1"
+        run: |
+          export PYTHONPATH=.
+          python recommendation/scripts/seed.py
+          python recommendation/scripts/train.py --version ci --no-pointer
+          python recommendation/scripts/evaluate.py --version ci
+
+      - name: Verify the gate can fail
+        # A gate that cannot fail is not a gate.
+        env:
+          MLFLOW_DISABLE_AGENT_HINT: "1"
+        run: |
+          export PYTHONPATH=.
+          set +e
+          python recommendation/scripts/evaluate.py --version ci --baseline-only
+          rc=$?
+          set -e
+          if [ "$rc" -ne 3 ]; then
+            echo "expected exit 3 from --baseline-only, got $rc"
+            exit 1
+          fi

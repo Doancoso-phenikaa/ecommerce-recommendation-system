@@ -1,0 +1,33 @@
+# Build artifacts
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Secrets — keep ignored, but scoped explicitly.
+# (A bare `.*` pattern is NOT used: it would also hide .github/ and
+#  .gitignore itself, silently making CI uncommittable.)
+.env
+.env.*
+!.env.example
+
+# Generated data — rebuildable from scripts/seed.py
+data/*.parquet
+data/incoming/
+data/.merge.lock
+*.csv
+
+# Runtime event logs — contain user_id PII, never commit.
+data/impressions.jsonl
+data/local_buffer.jsonl
+data/local_buffer.tmp
+
+# MLflow local tracking + retrain logs
+models/mlruns/
+models/retrain.log
+models/snapshot_*/

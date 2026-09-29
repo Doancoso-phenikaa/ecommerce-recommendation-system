@@ -107,8 +107,17 @@ def _event_type(rng: random.Random) -> str:
     return EVENT_MIX[-1][0]
 
 
-def generate(rng: random.Random, n_events: int = N_EVENTS) -> tuple[list[dict], list[dict], list[dict]]:
-    """Generate (users, items, events) dicts with embedded affinity structure."""
+def generate(
+    rng: random.Random,
+    n_events: int = N_EVENTS,
+    as_of: datetime | None = None,
+) -> tuple[list[dict], list[dict], list[dict]]:
+    """Generate (users, items, events) dicts with embedded affinity structure.
+
+    Output is fully determined by ``rng`` and ``as_of``; ``as_of`` defaults to
+    today at UTC midnight so a given ``--seed`` reproduces byte-for-byte
+    within a day.
+    """
     items: list[dict] = []
     items_by_category: dict[str, list[dict]] = {c: [] for c in CATEGORIES}
     for category in CATEGORIES:
@@ -140,7 +149,11 @@ def generate(rng: random.Random, n_events: int = N_EVENTS) -> tuple[list[dict], 
             }
         )
 
-    now = datetime.now(timezone.utc)
+    if as_of is None:
+        as_of = datetime.now(timezone.utc).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+    now = as_of
     request_ids: set[str] = set()
     events: list[dict] = []
     for _ in range(n_events):
@@ -152,7 +165,9 @@ def generate(rng: random.Random, n_events: int = N_EVENTS) -> tuple[list[dict], 
             pool = items
         item = rng.choice(pool)
         event_type = _event_type(rng)
-        request_id = uuid.uuid4().hex
+        # Derived from the seeded RNG, not uuid4, so `--seed` actually makes
+        # the dataset reproducible (the consumer dedups on this id).
+        request_id = uuid.UUID(int=rng.getrandbits(128), version=4).hex
         assert request_id not in request_ids  # uniqueness: consumer dedups on request_id (todo 6)
         request_ids.add(request_id)
         event: dict = {
@@ -276,11 +291,25 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--n-events", type=int, default=N_EVENTS)
     parser.add_argument("--check-only", action="store_true", help="validate existing seeds + rebuild parquet")
     parser.add_argument("--verify-affinity", action="store_true", help="print affinity-structure report")
+    parser.add_argument(
+        "--as-of",
+        default=None,
+        help=(
+            "UTC timestamp the event window is anchored to "
+            "(default: today 00:00 UTC). Fix it to reproduce a dataset exactly."
+        ),
+    )
     args = parser.parse_args(argv)
+
+    as_of: datetime | None = None
+    if args.as_of:
+        as_of = datetime.fromisoformat(args.as_of)
+        if as_of.tzinfo is None:
+            as_of = as_of.replace(tzinfo=timezone.utc)
 
     if not args.check_only:
         rng = random.Random(args.seed)
-        users, items, events = generate(rng, args.n_events)
+        users, items, events = generate(rng, args.n_events, as_of=as_of)
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         USERS_FILE.write_text(json.dumps(users, indent=2) + "\n")
         ITEMS_FILE.write_text(json.dumps(items, indent=2) + "\n")

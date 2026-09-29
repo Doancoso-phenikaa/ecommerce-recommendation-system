@@ -109,26 +109,50 @@ def _require_plain(value: str, name: str) -> str:
     return value
 
 
+def _require_segment(value: str, name: str) -> str:
+    """Validate an optional key segment that may be empty.
+
+    Same rules as :func:`_require_plain` but empty is allowed (callers pass
+    ``""`` for "no context"/"no filter"). A ``:`` is still rejected so a
+    segment can never shift the meaning of the segments after it.
+    """
+    if any(ch in value for ch in ("*", "?", "[", "]", "\\", "\n", "\r", ":")):
+        raise ValueError(f"{name} contains a forbidden character: {value!r}")
+    return value
+
+
 def recs_key(
-    user_id: str, context: str = "", filter: str = "", model_version: str = ""
+    user_id: str,
+    context: str = "",
+    filter: str = "",
+    model_version: str = "",
+    count: int = 20,
 ) -> str:
-    """Build a personalized key ``recs:{user_id}:{context}:{filter}:{model_version}``.
+    """Build a personalized key
+    ``recs:{user_id}:{context}:{filter}:{model_version}:{count}``.
 
     ``user_id`` is mandatory — a personalized entry cannot exist without its
     owner, so it can never be served to another user.
+
+    ``count`` is part of the key because it changes the payload: a cached
+    5-item list must never be served to a caller who asked for 50.
+    ``context`` and ``filter`` are validated too — an unvalidated ``:``
+    would let one request's segments collide with another's.
     """
     _require_plain(user_id, "user_id")
-    return f"recs:{user_id}:{context}:{filter}:{model_version}"
+    _require_segment(context, "context")
+    _require_segment(filter, "filter")
+    return f"recs:{user_id}:{context}:{filter}:{model_version}:{int(count)}"
 
 
-def similar_key(item_id: str) -> str:
-    """Build a ``similar:{item_id}`` key.
+def similar_key(item_id: str, count: int = 10) -> str:
+    """Build a ``similar:{item_id}:{count}`` key.
 
-    No ``model_version`` segment: content-similar neighbours are
+    No model_version segment: content-similar neighbours are
     deterministic on the catalog, so versioning would only fragment hits.
     """
     _require_plain(item_id, "item_id")
-    return f"similar:{item_id}"
+    return f"similar:{item_id}:{int(count)}"
 
 
 def popular_key(page: str | int = 1) -> str:

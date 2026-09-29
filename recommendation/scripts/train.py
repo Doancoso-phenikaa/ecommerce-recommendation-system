@@ -5,8 +5,8 @@ Usage (repo-root CWD)::
     python recommendation/scripts/train.py --version v1
 
 Snapshots via the SHARED-lock helper (never reads live parquet), fits ALS,
-writes ``recommendation/models/als_{version}/`` + the
-``current_version.txt`` pointer, then deletes the snapshot dir. Empty
+writes ``recommendation/models/als_{version}/`` and (unless ``--no-pointer``)
+the ``current_version.txt`` pointer, then deletes the snapshot dir. Empty
 snapshot / no usable interactions -> ``"no training data"`` on stderr,
 exit 2. MLflow failures warn but never fail training.
 """
@@ -39,6 +39,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=str(MODELS_DIR),
         help="Model output root (default: recommendation/models)",
     )
+    parser.add_argument(
+        "--no-pointer",
+        action="store_true",
+        help=(
+            "Train and save the model but do not update "
+            "models/current_version.txt. Use when a quality gate decides "
+            "promotion (see scripts/retrain.sh); otherwise the ungated "
+            "model becomes live immediately."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -46,7 +56,11 @@ def main(argv: list[str] | None = None) -> int:
     """Run training; return the process exit code."""
     args = parse_args(argv)
     try:
-        stats = train(args.version, models_dir=Path(args.models_dir))
+        stats = train(
+            args.version,
+            models_dir=Path(args.models_dir),
+            update_pointer=not args.no_pointer,
+        )
     except NoTrainingDataError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

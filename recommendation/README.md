@@ -5,6 +5,23 @@ layer over an implicit-ALS hybrid ranker, fed by a Kafka event pipeline and
 refreshed by a nightly retrain gate. All commands below run from the **repo
 root**. Python: `recommendation/.venv/bin/python` (venv) with `PYTHONPATH=.`.
 
+> **Integrating the NestJS backend?** Read
+> [`docs/BACKEND-CONTRACT.md`](docs/BACKEND-CONTRACT.md) first — the backend
+> on `develop` and this service on `recommandation` currently disagree on
+> method, path, request shape, response shape, and item-id format, and the
+> branches have never been merged.
+
+## Setup
+
+```bash
+# Python 3.11 is required: the `implicit`/`pandas`/`pyarrow` pins have no
+# 3.14 wheels, and 3.12+ changed Enum.__contains__ semantics the trainer
+# depends on.
+uv venv --python 3.11 recommendation/.venv
+uv pip install --python recommendation/.venv/bin/python -r recommendation/requirements.txt
+PYTHONPATH=. recommendation/.venv/bin/python recommendation/scripts/seed.py
+```
+
 ## Architecture
 
 ```
@@ -170,10 +187,15 @@ trailing 30-day window, min-max normalised to [0, 1].
 
 | Key pattern | Content                  | TTL (s)          |
 |-------------|--------------------------|------------------|
-| `recs:{user}:{context}:{filter}:{model_version}` | personalized recs | 120 default, clamped to [60, 300] |
-| `similar:{item}` | content neighbours    | 21600 (6 h)      |
+| `recs:{user}:{context}:{filter}:{model_version}:{count}` | personalized recs | 120 default, clamped to [60, 300] |
+| `similar:{item}:{count}` | content neighbours    | 21600 (6 h)      |
 | `popular:{page}` | global trending page  | 300              |
 | `session:{id}`   | per-session hash      | 1800 (30 min)    |
+
+`count` is part of both personalized keys: it changes the payload, so a
+cached 5-item list must never satisfy a caller who asked for 50. Every
+segment is validated — `:` is rejected in `context`/`filter` so one
+request's segments cannot collide with another's.
 
 Personalized keys embed the owning `user_id` — user A can never hit user B's
 entry. Invalidation of a user's entries uses `SCAN` (never blocking `KEYS`).
@@ -200,20 +222,45 @@ bash recommendation/scripts/retrain.sh             # real run (repo-root CWD)
 
 Ordered steps: stop consumer (`pkill -f`, best-effort) → drain
 (`consume.py --max-batches 100`, SKIP-with-warning when broker absent) →
-`train.py --version <date>` → `evaluate.py --version <date>` gate → read
-`models/eval_<date>.json` delta: **PASS** (exit 0) updates
-`current_version.txt` + invalidates `popular:*` (best-effort `python -c`
-with try/except); **FAIL** (exit 3) restores the old pointer (train.py
-rewrites it on success) + appends an `ALERT` line to `retrain.log`. Ends
-with a restart-the-consumer NOTE — the script never backgrounds processes.
+`train.py --version <stamp> --no-pointer` → `evaluate.py --version <stamp>`
+gate → **PASS**: promote the pointer + invalidate `popular:*`; **FAIL**
+(exit 3) or any error: pointer never moved + ALERT to `retrain.log` → the
+consumer is restarted on every exit path.
+
+The stamp is `date -u +%Y%m%d-%H%M%S`, so two runs on the same day cannot
+clobber each other's model dir.
+
+`--no-pointer` is load-bearing: the trainer normally writes
+`current_version.txt` itself, which would make the ungated model live for
+the duration of the eval. With the flag, `retrain.sh` is the only writer and
+promotes on PASS alone. Pass `--no-consumer-restart` when a supervisor owns
+that process.
 
 ## Eval gate (`scripts/evaluate.py --version v1 [--baseline-only]`)
 
-Writes `models/eval_<version>.json`
-`{ndcg_hybrid, ndcg_baseline, delta, precision, recall, map, version, seed}`;
-PASS iff `NDCG_hybrid > NDCG_baseline + 0.02`, exit 0, else exit 3.
-`--baseline-only` forces delta 0.0 / exit 3 (proves the gate can fail).
-Reference: `eval_v1.json` delta `+0.1999` (PASS).
+Writes `models/eval_<version>.json`; PASS iff `NDCG_hybrid >
+NDCG_baseline + 0.02`, exit 0, else exit 3. `--baseline-only` forces delta
+0.0 / exit 3 (proves the gate can fail). Reference: `eval_v1.json` delta
+`+0.1999` (PASS).
+
+The JSON also records `k`, `margin`, `passed`, `n_test_users`,
+`n_cold_start`, `n_warm`, `ndcg_cold_start`, `ndcg_warm`,
+`strategy_counts`, and `n_rank_errors`. Read these before trusting `delta`:
+
+- **`strategy_counts`** says which code path was actually scored. At seed
+  scale it is `{"als_hybrid": 22}` with `n_cold_start: 0` — every user clears
+  the cold-start threshold, so **the gate does not exercise the cold-start
+  ladder at all**. Cold-start quality is unmeasured until the data contains
+  users with fewer than 5 interactions.
+- **`n_rank_errors`** counts users where `rank()` raised. Those users fall
+  back to the popularity list; a non-zero value means `delta` is partly
+  measuring the baseline and is not interpretable as model quality.
+
+Caveat on the headline number: `scripts/seed.py` gives each user 1–2
+affinity categories and draws 70% of events from them, across 6 balanced
+categories. That block structure is easy for a 16-factor ALS to recover, so
+`delta +0.1999` mostly measures the seed generator rather than ranking
+quality. Treat it as a regression guard, not a quality estimate.
 
 ## Backend / frontend integration (HTTP contract, spec text)
 

@@ -130,7 +130,12 @@ def user_key(user_id: str) -> str:
 
 
 def event_to_row(event: EventIn) -> dict[str, Any]:
-    """Flatten ``event`` to the seed-compatible parquet row dict."""
+    """Flatten ``event`` to the seed-compatible parquet row dict.
+
+    ``rating`` must be persisted: :func:`recommendation.app.bus.event_weight`
+    reads it to weight rating events, so omitting it would pin every
+    rating to the default confidence.
+    """
     value = event.value
     return {
         "request_id": event.request_id,
@@ -142,6 +147,8 @@ def event_to_row(event: EventIn) -> dict[str, Any]:
         "quantity": value.quantity if value else None,
         "unit_price_cents": value.unit_price_cents if value else None,
         "currency": value.currency if value else None,
+        "rating": value.rating if value else None,
+        "query": value.query if value else None,
     }
 
 

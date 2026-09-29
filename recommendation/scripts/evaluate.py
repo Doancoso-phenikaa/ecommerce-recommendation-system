@@ -58,7 +58,10 @@ def main(argv: list[str] | None = None) -> int:
     res = evaluate(version=args.version, baseline_only=args.baseline_only)
     print(_table(res), flush=True)
 
-    out_path = _REPO_ROOT / "recommendation" / "models" / f"eval_{args.version}.json"
+    suffix = ".baseline-only" if args.baseline_only else ""
+    out_path = (
+        _REPO_ROOT / "recommendation" / "models" / f"eval_{args.version}{suffix}.json"
+    )
     payload = {
         "ndcg_hybrid": res["ndcg_hybrid"],
         "ndcg_baseline": res["ndcg_baseline"],
@@ -68,6 +71,16 @@ def main(argv: list[str] | None = None) -> int:
         "map": res["map"],
         "version": res["version"],
         "seed": res["seed"],
+        "k": res["k"],
+        "margin": res["margin"],
+        "passed": res["passed"],
+        "n_test_users": res["n_test_users"],
+        "n_cold_start": res["n_cold_start"],
+        "n_warm": res["n_warm"],
+        "ndcg_cold_start": res["ndcg_cold_start"],
+        "ndcg_warm": res["ndcg_warm"],
+        "strategy_counts": res["strategy_counts"],
+        "n_rank_errors": res["n_rank_errors"],
     }
     out_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print(f"wrote {out_path}", flush=True)

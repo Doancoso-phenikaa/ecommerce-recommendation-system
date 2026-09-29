@@ -373,21 +373,38 @@ def evaluate(
     with _train_only_context(train_df):
         hybrid_rows: list[dict[str, float]] = []
         baseline_rows: list[dict[str, float]] = []
+        cold_rows: list[dict[str, float]] = []
+        warm_rows: list[dict[str, float]] = []
+        strategy_counts: dict[str, int] = {}
+        n_rank_errors = 0
         base_top10 = [r["item_id"] for r in _baseline.trending(limit=k)]
         for user_id in test_users:
             relevant = set(holdout[user_id])
+            is_cold = True
             if baseline_only:
                 hybrid_ids = list(base_top10)
+                strategy = "baseline_only"
             else:
                 try:
                     resp = _ranker.rank(user_id, count=k)
                     hybrid_ids = [r["item_id"] for r in resp["recommendations"]]
+                    strategy = str(resp.get("strategy", "unknown"))
+                    is_cold = bool(resp.get("cold_start", False))
                 except Exception:
+                    # Scoring a crashed ranker as the baseline would
+                    # inflate the hybrid toward its own comparator.
                     hybrid_ids = list(base_top10)
-            hybrid_rows.append(user_metrics(hybrid_ids, relevant, k))
+                    strategy = "rank_error"
+                    n_rank_errors += 1
+            strategy_counts[strategy] = strategy_counts.get(strategy, 0) + 1
+            row = user_metrics(hybrid_ids, relevant, k)
+            hybrid_rows.append(row)
             baseline_rows.append(user_metrics(list(base_top10), relevant, k))
+            (cold_rows if is_cold else warm_rows).append(row)
     hybrid = _macro(hybrid_rows)
     baseline_m = _macro(baseline_rows)
+    cold_m = _macro(cold_rows)
+    warm_m = _macro(warm_rows)
     delta = hybrid["ndcg"] - baseline_m["ndcg"]
     passed = bool(delta > MARGIN)
     try:
@@ -415,6 +432,12 @@ def evaluate(
         "precision_baseline": baseline_m["precision"],
         "recall_baseline": baseline_m["recall"],
         "map_baseline": baseline_m["map"],
+        "n_cold_start": len(cold_rows),
+        "n_warm": len(warm_rows),
+        "ndcg_cold_start": cold_m["ndcg"],
+        "ndcg_warm": warm_m["ndcg"],
+        "strategy_counts": strategy_counts,
+        "n_rank_errors": n_rank_errors,
         "passed": passed,
         "baseline_only": baseline_only,
     }

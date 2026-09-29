@@ -20,7 +20,7 @@ Routes:
   a 500 for a valid event when Kafka is down.
 - ``GET /recommendations/{user_id}?count=20&context=homepage`` —
   cache key via ``store.recs_key(user_id, context, filter,
-  model_version)`` (``model_version`` read from the
+  model_version, count=count)`` (``model_version`` read from the
   ``models/current_version.txt`` pointer, ``"none"`` when missing, so
   a user-A key can never serve user-B). ``store.cache_get`` hit →
   cached ``RecResponse`` + ``X-Cache: HIT``; miss or
@@ -29,8 +29,8 @@ Routes:
   best-effort ``store.cache_set`` (``CacheUnavailable`` swallowed) →
   ``X-Cache: MISS``.
 - ``GET /similar/{item_id}?count=10`` — shareable cache via
-  ``store.similar_key`` (no model version: content neighbours are
-  deterministic on the catalog), content via
+  ``store.similar_key(item_id, count=count)`` (no model version:
+  content neighbours are deterministic on the catalog), content via
   ``baseline.content_similar`` wrapped as ``SimilarResponse`` with the
   file-pointer ``model_version`` and ``strategy="content"``.
 - ``GET /health`` — ``{status, kafka, redis, model_version}``: Kafka
@@ -194,7 +194,7 @@ def get_recommendations(
     start = time.perf_counter()
     model_version = current_model_version()
     try:
-        key = store.recs_key(user_id, context, filter, model_version)
+        key = store.recs_key(user_id, context, filter, model_version, count=count)
     except ValueError as exc:
         # Hostile ids (":", SCAN glob chars) can never build a safe key —
         # 422, never an unhandled 500 (todo 13 hardening).
@@ -263,7 +263,7 @@ def get_similar(
     start = time.perf_counter()
     model_version = current_model_version()
     try:
-        key = store.similar_key(item_id)
+        key = store.similar_key(item_id, count=count)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
