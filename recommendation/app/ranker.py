@@ -111,7 +111,7 @@ No Kafka/Redis I/O inside ``rank()`` — parquet + model files only
 
 from __future__ import annotations
 
-from functools import partial
+from functools import lru_cache, partial
 from pathlib import Path
 
 import pandas as pd
@@ -134,6 +134,7 @@ __all__ = [
     "ALS_N",
     "CONTENT_K",
     "rank",
+    "invalidate_frame_cache",
 ]
 
 #: Blend weights for the hybrid score (tunable module constants).
@@ -155,14 +156,32 @@ _INTERACTIONS_PARQUET = _DATA_DIR / "interactions.parquet"
 _MODELS_DIR = Path(__file__).resolve().parents[1] / "models"
 
 
+@lru_cache(maxsize=1)
 def _load_items_df() -> pd.DataFrame:
-    """Load the items catalog (module-global for test monkeypatching)."""
+    """Load the items catalog (cached; call ``invalidate_frame_cache()``)."""
     return pd.read_parquet(_ITEMS_PARQUET)
 
 
+@lru_cache(maxsize=1)
 def _load_interactions_df() -> pd.DataFrame:
-    """Load the interactions log (module-global for test monkeypatching)."""
+    """Load the interactions log (cached; call ``invalidate_frame_cache()``)."""
     return pd.read_parquet(_INTERACTIONS_PARQUET)
+
+
+def invalidate_frame_cache() -> None:
+    """Drop the cached catalog and interaction frames.
+
+    Required whenever the underlying parquet changes — a retrain that
+    rewrites the data, a catalog update, or a test that redirects the
+    path globals. Caching without calling this serves stale data
+    indefinitely.
+
+    Both loaders take no arguments, so each cache is ONE process-wide
+    slot keyed on nothing: the path global is not part of the key, and
+    redirecting it does not swap the cached frame.
+    """
+    _load_items_df.cache_clear()
+    _load_interactions_df.cache_clear()
 
 
 def _read_model_version() -> str | None:

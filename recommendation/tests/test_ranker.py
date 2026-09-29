@@ -537,3 +537,198 @@ def test_candidate_cap_keeps_the_top_scoring_item(
     capped = ranker_mod.rank("u", count=10)
     assert [r["item_id"] for r in capped["recommendations"]] == [expected_top]
 
+
+# --- Task 1: the cached frame loaders, and the invalidation hook ----------
+#
+# The loaders take no arguments, so `lru_cache(maxsize=1)` is ONE global slot
+# per loader for the whole process. Three things therefore have to hold, and
+# each gets its own test below:
+#
+#   * a second read is served from cache (no second parquet read);
+#   * the frame is NOT silently refreshed when the parquet behind it changes
+#     (in place, or because the path global was redirected) -- that is the
+#     cost of caching, and it is why `invalidate_frame_cache()` exists;
+#   * calling the hook really does drop the cached frame, and `rank()` still
+#     produces byte-identical output with the cache in place.
+#
+# `conftest.write_parquet` and the autouse `_reset_globals` both call the hook,
+# otherwise a cached frame from one test leaks into the next.
+
+#: Golden ordering captured from a PRE-CHANGE run of this file at commit
+#: a83bdcf (before any `lru_cache` landed), via a throwaway probe that called
+#: `ranker.rank(user, count=5)` under the unmodified fixture world. It is NOT
+#: whatever the cached code returns -- these values were recorded first, and
+#: the implementation then had to match them.
+#:
+#: Each entry is ``(item_ids, strategy, cold_start, scores)``:
+#:
+#: * ``user-001`` has interacted with every one of the 6 catalog items, so
+#:   suppression empties the candidate union and the documented fallback fills
+#:   the response with a single trending row. It pins "count=5 does not pad"
+#:   and the fallback's first-match order. (Degraded: the fixture models dir
+#:   has a ``v1`` pointer but no ``als_v1`` artifacts behind it.)
+#: * ``user-002`` (3 events) and ``user-003`` (1 event) are cold-start, so
+#:   they exercise the content+trending blend and the diversity reorder.
+#: * ``ghost-user-xyz`` has no history, so it is pure trending -- the
+#:   unsuppressed, unsorted-by-score baseline ordering.
+#:
+#: Scores are deterministic across calendar days: `baseline.trending` derives
+#: its reference time from the newest event in the frame
+#: (`baseline.trending` -> `_as_now(now, latest)`), not from wall clock.
+GOLDEN_RANK_OUTPUT: dict[str, tuple[list[str], str, bool, list[float]]] = {
+    "user-001": (["boo-003"], "degraded", False, [0.2]),
+    "user-002": (
+        ["ele-001", "ele-002"],
+        "content",
+        True,
+        [0.33990862857953197, 0.3111316180044972],
+    ),
+    "user-003": (
+        ["ele-002", "boo-003", "boo-001", "ele-003", "boo-002"],
+        "content",
+        True,
+        [
+            0.3111316180044972,
+            0.2,
+            0.1390244169775452,
+            0.1374294007985954,
+            0.04151021000275242,
+        ],
+    ),
+    "ghost-user-xyz": (
+        ["boo-003", "boo-001", "ele-001", "ele-003", "boo-002"],
+        "trending",
+        True,
+        [
+            0.2,
+            0.09523620308901062,
+            0.039908628579531986,
+            0.025682089733064125,
+            0.04151021000275242,
+        ],
+    ),
+}
+
+
+def test_frame_cache_serves_the_second_read(write_parquet: Any) -> None:
+    """Two loads return the same cached object -- no second parquet read."""
+    from recommendation.app import ranker as ranker_mod
+
+    write_parquet()
+    first = ranker_mod._load_items_df()
+    second = ranker_mod._load_items_df()
+    assert first is second
+
+    first_ev = ranker_mod._load_interactions_df()
+    assert first_ev is ranker_mod._load_interactions_df()
+
+
+def test_invalidate_frame_cache_forces_a_reload(
+    write_parquet: Any, data_dir: Path
+) -> None:
+    """After invalidation the frame is re-read, so new rows are visible."""
+    import pandas as pd
+
+    from recommendation.app import ranker as ranker_mod
+
+    write_parquet()
+    before = ranker_mod._load_items_df()
+    assert not before.empty
+
+    pd.DataFrame(
+        [{"item_id": "new-001", "category_path": ["books"],
+          "price_cents": 1, "available": True}]
+    ).to_parquet(data_dir / "items.parquet", index=False)
+
+    # Stale until the hook is called: the in-place rewrite is invisible.
+    assert len(ranker_mod._load_items_df()) == len(before)
+    ranker_mod.invalidate_frame_cache()
+    assert len(ranker_mod._load_items_df()) == 1
+
+
+def test_frame_cache_follows_a_path_redirect_only_after_invalidation(
+    write_parquet: Any, data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Redirecting the path global alone does NOT swap the cached frame.
+
+    This is the staleness Review Focus item 3 is about: the loader takes no
+    arguments, so the cache key is not the path -- a redirect to a different
+    parquet (parquet B) keeps serving parquet A until the hook runs. Both
+    halves of that contract are asserted, so neither can drift.
+    """
+    from recommendation.app import ranker as ranker_mod
+
+    write_parquet()
+    first = ranker_mod._load_items_df()
+    assert "new-001" not in first["item_id"].astype(str).tolist()
+
+    # Parquet B: a different file, at a different path, with a different row.
+    other = data_dir / "items_other.parquet"
+    pd.DataFrame(
+        [{"item_id": "new-001", "category_path": ["books"],
+          "price_cents": 1, "available": True}]
+    ).to_parquet(other, index=False)
+    monkeypatch.setattr(ranker_mod, "_ITEMS_PARQUET", other)
+
+    # WITHOUT the hook: still parquet A. The path global is not the cache key.
+    assert ranker_mod._load_items_df() is first
+    assert "new-001" not in ranker_mod._load_items_df()["item_id"].astype(str).tolist()
+
+    # WITH the hook: now parquet B is served, from the redirected path.
+    ranker_mod.invalidate_frame_cache()
+    after = ranker_mod._load_items_df()
+    assert after is not first
+    assert after["item_id"].astype(str).tolist() == ["new-001"]
+
+
+def test_rank_still_works_with_caching(
+    write_parquet: Any, models_dir: Path
+) -> None:
+    """Caching must not change the served result, checked against a golden.
+
+    Comparing `rank()` to itself would pass with or without caching, so the
+    expected ordering is pinned as the literal in :data:`GOLDEN_RANK_OUTPUT`,
+    captured from a pre-change run of this file at commit ``a83bdcf`` before
+    any cache existed. The invariants below are kept only as a second net --
+    on their own they hold with or without caching and prove nothing.
+    """
+    from recommendation.app import ranker as ranker_mod
+
+    write_parquet()
+    catalog_ids = set(
+        ranker_mod._load_items_df()["item_id"].astype(str).tolist()
+    )
+    interactions = ranker_mod._load_interactions_df()
+
+    for user, (want_ids, want_strategy, want_cold, want_scores) in (
+        GOLDEN_RANK_OUTPUT.items()
+    ):
+        resp = ranker_mod.rank(user, count=5)
+        ids = [r["item_id"] for r in resp["recommendations"]]
+        scores = [r["score"] for r in resp["recommendations"]]
+
+        assert ids == want_ids, f"{user}: served ordering moved"
+        assert resp["strategy"] == want_strategy, f"{user}: strategy moved"
+        assert resp["cold_start"] is want_cold, f"{user}: cold_start flag moved"
+        assert scores == pytest.approx(want_scores, rel=1e-12), (
+            f"{user}: served scores moved"
+        )
+
+        # Second net: the invariants, which hold with or without caching.
+        assert len(ids) == len(set(ids)) <= 5
+        assert all(i in catalog_ids for i in ids)
+
+        # Suppression, with its one documented exception. ``rank()`` falls
+        # back to the popularity list *ignoring* suppression when a user has
+        # consumed the whole catalog (``user-001`` has: 6 of 6), so the
+        # non-suppression invariant is asserted only where it can hold, and
+        # the exception's precondition is asserted to be the real one.
+        suppressed = set(ranker_mod._user_item_ids(interactions, user))
+        if suppressed >= catalog_ids:
+            assert suppressed == catalog_ids, (
+                f"{user}: ignore-suppression fallback claimed, but the user "
+                "has not consumed the whole catalog"
+            )
+        else:
+            assert not (set(ids) & suppressed), f"{user}: served a suppressed id"
+
