@@ -7,6 +7,7 @@ import { AdminModule } from './modules/admin/admin.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { CartModule } from './modules/cart/cart.module.js';
 import { CategoryModule } from './modules/category/category.module.js';
+import { CheckoutModule } from './modules/checkout/checkout.module.js';
 import { CustomerModule } from './modules/customer/customer.module.js';
 import { DiscountModule } from './modules/discount/discount.module.js';
 import { ProductModule } from './modules/product/product.module.js';
@@ -35,6 +36,7 @@ import { WishlistModule } from './modules/wishlist/wishlist.module.js';
     WishlistModule,
     CartModule,
     DiscountModule,
+    CheckoutModule,
   ],
   controllers: [],
   providers: [],
