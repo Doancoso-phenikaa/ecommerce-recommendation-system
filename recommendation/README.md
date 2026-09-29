@@ -281,24 +281,27 @@ The console table prints `delta_NDCG`, `delta_vs_oracle` and
 `ndcg_category_oracle`, `delta_vs_oracle`, `strategy_counts` and
 `n_rank_errors`.
 
-### Reference run (`--version v2`, `seed=42`, `K=10`)
+### Reference run (`--version v3`, `seed=42`, `K=10`)
 
 618 seed events / 32 users → 29 test users (500 train events, 52 holdout
 items), `n_rank_errors` 0, gate **PASS**.
 
-| metric | value |
-|---|---|
-| `ndcg_hybrid` | 0.26804 |
-| `ndcg_baseline` (popularity) | 0.08543 |
-| `delta` | +0.18262 (margin 0.02) |
-| `ndcg_cold_start` / `n_cold_start` | 0.16506 / 8 |
-| `ndcg_warm` / `n_warm` | 0.30728 / 21 |
-| `ndcg_category_oracle` | 0.12275 |
-| `delta_vs_oracle` | +0.14529 |
+| metric | value | vs v2 |
+|---|---|---|
+| `ndcg_hybrid` | 0.32120 | +0.05315 |
+| `ndcg_baseline` (popularity) | 0.08543 | unchanged |
+| `delta` | +0.23577 (margin 0.02) | +0.05315 |
+| `ndcg_cold_start` / `n_cold_start` | 0.16506 / 8 | **unchanged** |
+| `ndcg_warm` / `n_warm` | 0.38068 / 21 | +0.07340 |
+| `ndcg_category_oracle` | 0.12275 | unchanged |
+| `delta_vs_oracle` | +0.19844 | +0.05315 |
 
-The cold/warm gap — 0.16506 vs 0.30728 — is the number the next
-optimisation plan targets: cold-start users are still scored roughly half
-as well as warm ones, even though the branch is now covered.
+**`ndcg_cold_start` did not move** — it is bit-identical to v2 at 0.16506.
+The centroid change that produced v3 was aimed at cold start, and it was
+falsified: 6 of the 8 cold users already have ≥2 distinct items and popularity
+dominates before content similarity matters, so the centroid's entire measured
+value lands on warm users. The cold/warm gap widened, 0.16506 vs 0.38068;
+closing it is a genuinely open problem, not a carried-over target.
 
 ### The category-oracle baseline
 
@@ -308,7 +311,7 @@ categories of the items that user touched in the **train slice only**, then
 rank by train popularity. `scripts/seed.py` draws 70% of each user's events
 from 1–2 affinity categories, so this baseline is what separates "learned
 something" from "learned the seed generator". The hybrid clears it by
-+0.14529 on the current seed.
++0.19844 on the current seed.
 
 It is **reported, not a pass condition** — the gate arms only the two
 conditions above. The oracle comparison is deferred until model quality has
