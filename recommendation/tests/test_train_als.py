@@ -486,4 +486,71 @@ def test_train_no_data_raises_and_cleans_snapshot(
     assert not list(models_dir.glob("snapshot_*"))
 
 
+# --------------------------------------------------------------------------
+# recommend_with_scores (plan 2, task 1)
+# --------------------------------------------------------------------------
+
+
+def test_recommend_with_scores_returns_scores_descending(
+    trained_model: Path,
+) -> None:
+    """Scores are returned and ordered highest-first."""
+    from recommendation.app.train_als import recommend_with_scores
+
+    pairs = recommend_with_scores("user-001", n=5, model_dir=trained_model)
+    assert len(pairs) <= 5
+    assert all(isinstance(i, str) and isinstance(s, float) for i, s in pairs)
+    scores = [s for _, s in pairs]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_recommend_with_scores_raises_for_unknown_user(
+    trained_model: Path,
+) -> None:
+    """Unknown user raises KeyError, exactly like recommend()."""
+    import pytest
+
+    from recommendation.app.train_als import recommend_with_scores
+
+    with pytest.raises(KeyError):
+        recommend_with_scores("nobody-here", n=5, model_dir=trained_model)
+
+
+def test_recommend_with_scores_clamps_to_catalog_size(
+    trained_model: Path,
+) -> None:
+    """n larger than the catalog returns every item once, no duplicates."""
+    from recommendation.app.train_als import recommend_with_scores
+
+    pairs = recommend_with_scores("user-001", n=10_000, model_dir=trained_model)
+    ids = [i for i, _ in pairs]
+    assert len(ids) == len(set(ids))
+
+
+def test_recommend_ids_match_recommend_with_scores_ids(
+    trained_model: Path,
+) -> None:
+    """The two functions agree on ordering — recommend() is a wrapper."""
+    from recommendation.app.train_als import recommend, recommend_with_scores
+
+    assert recommend("user-001", n=5, model_dir=trained_model) == [
+        i for i, _ in recommend_with_scores("user-001", n=5, model_dir=trained_model)
+    ]
+
+
+def test_seen_items_are_excluded_when_filter_is_supplied(
+    trained_model: Path,
+) -> None:
+    """A seen item never appears in the result when filtering is requested."""
+    from recommendation.app.train_als import recommend_with_scores
+
+    unfiltered = recommend_with_scores("user-001", n=50, model_dir=trained_model)
+    seen = {i for i, _ in unfiltered[:2]}
+    filtered = recommend_with_scores(
+        "user-001", n=50, model_dir=trained_model, seen_item_ids=seen
+    )
+    filtered_ids = {i for i, _ in filtered}
+    assert filtered_ids.isdisjoint(seen)
+
+
 

@@ -68,6 +68,7 @@ __all__ = [
     "save_model",
     "load_model",
     "recommend",
+    "recommend_with_scores",
     "train",
 ]
 
@@ -334,15 +335,22 @@ def load_model(model_dir: Path) -> tuple[Any, dict[str, Any]]:
     return model, mappings
 
 
-def recommend(
-    user_id: str, n: int = 10, model_dir: Path | str | None = None
-) -> list[str]:
-    """Return up to ``n`` item ids for ``user_id`` (todo 10 ranker hook).
+def recommend_with_scores(
+    user_id: str,
+    n: int = 10,
+    model_dir: Path | str | None = None,
+    seen_item_ids: set[str] | None = None,
+) -> list[tuple[str, float]]:
+    """Return up to ``n`` ``(item_id, score)`` pairs, highest score first.
 
-    Import path: ``from recommendation.app.train_als import recommend``.
-    Loads ``models/als_{version}/`` (``model_dir`` explicit, else the
-    ``current_version.txt`` pointer). Raises ``KeyError`` for unknown users
-    (cold start is the caller's job).
+    The raw ALS dot-product is returned: the ranker needs model
+    confidence, not rank position. ``seen_item_ids`` is passed to
+    ``model.recommend`` as a filter row so already-consumed items never
+    consume the candidate budget. ``None`` disables filtering (the
+    previous behaviour, in which the caller filtered afterwards).
+
+    Raises :class:`KeyError` for a user absent from the model's
+    ``mappings["user_ids"]`` — cold start is the caller's job.
     """
     base = Path(model_dir) if model_dir is not None else _current_model_dir()
     model, mappings = load_model(base)
@@ -352,9 +360,42 @@ def recommend(
         raise KeyError(f"unknown user_id: {user_id!r}")
     internal = user_ids.index(user_id)
     n_items = len(item_ids)
-    empty_row = csr_matrix((1, n_items), dtype=np.float32)
-    ids, _scores = model.recommend(internal, empty_row, N=min(n, n_items))
-    return [item_ids[int(i)] for i in ids[:n]]
+
+    if seen_item_ids:
+        # 1.0 marks "do not recommend"; implicit treats non-zero as filtered.
+        filtered = [iid for iid in seen_item_ids if iid in item_ids]
+        row = np.zeros((1, n_items), dtype=np.float32)
+        for iid in filtered:
+            row[0, item_ids.index(iid)] = 1.0
+        filter_row = csr_matrix(row)
+    else:
+        filtered = []
+        filter_row = csr_matrix((1, n_items), dtype=np.float32)
+
+    # implicit emits -inf for any filtered item it is *forced* to return, so N
+    # must not exceed the unfiltered count or seen ids leak back with a
+    # sentinel score. N <= 0 crashes implicit's topk, hence the empty return:
+    # a user who consumed everything is the caller's never-empty case.
+    want = min(int(n), n_items - len(filtered))
+    if want <= 0:
+        return []
+    ids, scores = model.recommend(internal, filter_row, N=want)
+    pairs = [(item_ids[int(i)], float(scores[j])) for j, i in enumerate(ids)]
+    pairs.sort(key=lambda t: (-t[1], t[0]))
+    return pairs[:want]
+
+
+def recommend(
+    user_id: str, n: int = 10, model_dir: Path | str | None = None
+) -> list[str]:
+    """Return up to ``n`` item ids for ``user_id``.
+
+    Import path: ``from recommendation.app.train_als import recommend``.
+    Contract unchanged: ids only, no seen-item filtering, ``KeyError``
+    for an unknown user. Thin wrapper over
+    :func:`recommend_with_scores`.
+    """
+    return [i for i, _ in recommend_with_scores(user_id, n=n, model_dir=model_dir)]
 
 
 def _current_model_dir(models_dir: Path | None = None) -> Path:
