@@ -195,6 +195,27 @@ def _user_item_ids(ev: pd.DataFrame, user_id: str) -> list[str]:
     return sorted({str(i) for i in rows["item_id"].tolist()})
 
 
+def _distinct_interactions(ev: pd.DataFrame, user_id: str) -> int:
+    """Count DISTINCT items ``user_id`` consumed.
+
+    Row count overstates signal: five views of one product teach the
+    model nothing about variety, so a user with one item and five rows
+    is still a cold-start user. Applies the same non-consumption filter
+    as :func:`_user_item_ids`, so an impression cannot manufacture
+    warmth out of nothing.
+    """
+    if ev.empty or "user_id" not in ev.columns:
+        return 0
+    rows = ev[ev["user_id"].astype(str) == str(user_id)]
+    if rows.empty:
+        return 0
+    if "event_type" in rows.columns:
+        rows = rows[
+            ~rows["event_type"].astype(str).isin(_NON_CONSUMPTION_EVENTS)
+        ]
+    return int(rows["item_id"].astype(str).nunique())
+
+
 def _seed_items(ev: pd.DataFrame, user_id: str, limit: int = 20) -> list[str]:
     """Every item ``user_id`` consumed, most recent first (cold-start seed).
 
@@ -365,11 +386,7 @@ def rank(
     }
     avail_set = set(avail_ids)
     suppressed = set(_user_item_ids(ev, str(user_id)))
-    n_interactions = (
-        int((ev["user_id"].astype(str) == str(user_id)).sum())
-        if not ev.empty and "user_id" in ev.columns
-        else 0
-    )
+    n_interactions = _distinct_interactions(ev, str(user_id))
     cold = bool(n_interactions < cold_start_threshold())
 
     # --- candidate sources (parquet + model files only) ---
@@ -405,9 +422,14 @@ def rank(
             als_scores = {}
             strategy = Strategy.degraded
 
-    # --- union (deduped, available-only, capped) ---
-    union = [i for i in sorted(set(pop_scores) | set(als_scores) | set(content_scores)) if i in avail_set]
-    union = [i for i in union if i not in suppressed][:CANDIDATE_CAP]
+    # --- union (deduped, available-only, suppression-filtered) ---
+    # The cap is applied after scoring, by blended score, not here by
+    # lexicographic id -- see the `keep` block below.
+    union = [
+        i
+        for i in sorted(set(pop_scores) | set(als_scores) | set(content_scores))
+        if i in avail_set and i not in suppressed
+    ]
 
     scored: list[tuple[float, str]] = []
     comp: dict[str, tuple[float, float, float]] = {}
@@ -419,6 +441,11 @@ def rank(
         scored.append((ALS_W * a + CONTENT_W * c + POP_W * p, item_id))
     scored.sort(key=lambda t: (-t[0], t[1]))
     ordered = [item_id for _, item_id in scored]
+    if len(ordered) > CANDIDATE_CAP:
+        # Truncate by blended score, not lexicographic id: a strong
+        # candidate whose id sorts late must not be dropped.
+        keep = set(ordered[:CANDIDATE_CAP])
+        ordered = [i for i in ordered if i in keep]
 
     emitted, skipped = _apply_diversity(ordered, category_of, limit)
     # Top-up pass: skipped items (diversity overflow) get a second chance

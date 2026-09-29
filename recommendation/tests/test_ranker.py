@@ -37,7 +37,7 @@ from typing import Any
 import pandas as pd
 import pytest
 
-from conftest import EVENT_SPECS, make_event
+from conftest import EVENT_SPECS, ITEMS, make_event
 from recommendation.app import ranker, train_als
 from recommendation.app.baseline import cold_start_threshold, trending
 from recommendation.app.consumer import event_to_row
@@ -113,16 +113,22 @@ def _ids(result: dict) -> list[str]:
 def _sweep_frame(n_interactions: int) -> pd.DataFrame:
     """Fixture events plus ``n_interactions`` extra events for SWEEP_USER.
 
-    The extra events cycle over three items, so the interaction *count*
-    grows while the distinct-item set stays small (the ranker counts rows,
-    not pairs).
+    One DISTINCT item per event, drawn from the whole fixture catalog, so
+    the ranker's distinct-item count tracks ``n`` instead of saturating at
+    three. The catalog holds 6 items, so the count is ``min(n, 6)``; that
+    is still the honest way to pin the boundary, because 6 sits above the
+    threshold of 5 while 4 sits below it. (It used to cycle 3 items, which
+    made ``min(n, 3)`` distinct -- so n=5 and n=20 both read as cold.)
     """
+    catalog = [str(item["item_id"]) for item in ITEMS]
     rows = [
         event_to_row(make_event(user, item, kind, days_ago=days))
         for user, item, kind, days in EVENT_SPECS
     ]
     rows += [
-        event_to_row(make_event(SWEEP_USER, f"ele-{(k % 3) + 1:03d}", days_ago=k + 1))
+        event_to_row(
+            make_event(SWEEP_USER, catalog[k % len(catalog)], days_ago=k + 1)
+        )
         for k in range(n_interactions)
     ]
     return pd.DataFrame(rows)
@@ -456,4 +462,78 @@ def test_rank_hands_content_similar_many_every_interacted_item(
     assert sorted(recorded[0]) == ["boo-001", "boo-002", "boo-003"]
     assert recorded[0] == ["boo-003", "boo-002", "boo-001"], "most recent first"
     assert result["recommendations"], "the refactored cold path still serves"
+
+
+# --- distinct-item cold threshold, and a score-ordered candidate cap --------
+
+
+def test_cold_start_threshold_counts_distinct_items(
+    write_parquet: Any, models_dir: Path
+) -> None:
+    """Six events over one item is ONE signal, so the user is cold."""
+    import pandas as pd
+
+    from recommendation.app import ranker as ranker_mod
+    from recommendation.app.consumer import event_to_row
+    from recommendation.app.schemas import EventIn, EventType
+    from datetime import datetime, timedelta, timezone
+
+    base = datetime(2026, 3, 1, tzinfo=timezone.utc)
+    rows = [
+        event_to_row(
+            EventIn(
+                request_id=f"r-{i}",
+                user_id="user-repeat",
+                item_id="ele-001",
+                event_type=EventType.view,
+                timestamp=base + timedelta(days=i),
+            )
+        )
+        for i in range(6)
+    ]
+    write_parquet(events=pd.DataFrame(rows))
+    assert ranker_mod._distinct_interactions(pd.DataFrame(rows), "user-repeat") == 1
+    assert ranker_mod.rank("user-repeat", count=5)["cold_start"] is True
+
+
+def test_candidate_cap_keeps_the_top_scoring_item(
+    write_parquet: Any, models_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CANDIDATE_CAP=1 must keep rank()'s own top-1, not a lexicographic id."""
+    import pandas as pd
+
+    from recommendation.app import ranker as ranker_mod
+
+    # The cap is only observable when the score order DISAGREES with
+    # `sorted()`, so this fixture puts all the trending mass on ``ele-003``
+    # -- the last id lexicographically. "u" buys ``zz-001``, an item outside
+    # the catalog: it contributes no popularity score (so the other five
+    # candidates tie at 0.0) and no content seed (zz-001 has no TF-IDF row).
+    # Every ordering decision is therefore carried by ele-003's score alone,
+    # and removing the two hot rows silently turns this into a no-op.
+    frame = pd.DataFrame(
+        [
+            {"user_id": "u", "item_id": "zz-001", "event_type": "purchase",
+             "timestamp": "2026-03-01T00:00:00+00:00"},
+            {"user_id": "hot-1", "item_id": "ele-003", "event_type": "purchase",
+             "timestamp": "2026-03-10T00:00:00+00:00"},
+            {"user_id": "hot-2", "item_id": "ele-003", "event_type": "purchase",
+             "timestamp": "2026-03-11T00:00:00+00:00"},
+        ]
+    )
+    write_parquet(events=frame)
+
+    uncapped = ranker_mod.rank("u", count=10)
+    expected_top = uncapped["recommendations"][0]["item_id"]
+    # Negative control: the best candidate must NOT be the one the
+    # pre-scoring cap would have kept, so a pass cannot be a tie-break
+    # coincidence.
+    assert expected_top == "ele-003", (
+        f"fixture lost its teeth: top-scoring item is {expected_top!r}, "
+        "which is also the lexicographic first candidate"
+    )
+
+    monkeypatch.setattr(ranker_mod, "CANDIDATE_CAP", 1)
+    capped = ranker_mod.rank("u", count=10)
+    assert [r["item_id"] for r in capped["recommendations"]] == [expected_top]
 
