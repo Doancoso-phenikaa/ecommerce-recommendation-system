@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { CheckoutService } from './checkout.service.js';
 import { CheckoutPreviewDto } from './dto/checkout-preview.dto.js';
+import { ConfirmCheckoutDto } from './dto/confirm-checkout.dto.js';
 
 @Controller('checkout')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -19,5 +20,13 @@ export class CheckoutController {
     @Body() checkoutPreviewDto?: CheckoutPreviewDto,
   ) {
     return this.checkoutService.previewCheckout(userId, checkoutPreviewDto);
+  }
+
+  @Post()
+  confirmCheckout(
+    @CurrentUser('userId') userId: string,
+    @Body() confirmCheckoutDto: ConfirmCheckoutDto,
+  ) {
+    return this.checkoutService.confirmCheckout(userId, confirmCheckoutDto);
   }
 }
