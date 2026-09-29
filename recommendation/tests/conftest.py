@@ -167,6 +167,7 @@ def write_parquet(data_dir: Path, models_dir: Path) -> Any:
         main_mod._MODELS_DIR = models_dir
         metrics_mod.IMPRESSIONS_PATH = data_dir / "impressions.jsonl"
         train_mod.MODELS_DIR = models_dir
+        train_mod.invalidate_model_cache()
 
         if version is not None:
             (models_dir / "current_version.txt").write_text(
@@ -206,6 +207,7 @@ def _reset_globals() -> Iterator[None]:
     bus.reset_bus_publish_failures_for_tests()
     store.reset_client()
     ranker.invalidate_frame_cache()
+    train_mod.invalidate_model_cache()
     yield
 
     baseline._ITEMS_PARQUET = saved["baseline_items"]
@@ -217,6 +219,7 @@ def _reset_globals() -> Iterator[None]:
     ranker._INTERACTIONS_PARQUET = saved["ranker_inter"]
     ranker._MODELS_DIR = saved["ranker_models"]
     ranker.invalidate_frame_cache()
+    train_mod.invalidate_model_cache()
     consumer.DATA_DIR = saved["consumer_data"]
     consumer.INCOMING_DIR = saved["consumer_incoming"]
     consumer.INTERACTIONS_PATH = saved["consumer_inter"]

@@ -553,4 +553,44 @@ def test_seen_items_are_excluded_when_filter_is_supplied(
     assert filtered_ids.isdisjoint(seen)
 
 
+# --------------------------------------------------------------------------
+# load_model caching (plan 3, task 3)
+# --------------------------------------------------------------------------
+
+
+def test_load_model_is_cached_per_dir(trained_model: Path) -> None:
+    """Two loads of the same dir return the same in-memory model."""
+    from recommendation.app import train_als
+
+    first_model, first_maps = train_als.load_model(trained_model)
+    second_model, second_maps = train_als.load_model(trained_model)
+    assert first_model is second_model
+    assert first_maps is second_maps
+
+
+def test_invalidate_model_cache_forces_reload(trained_model: Path) -> None:
+    """After invalidation a *different* model object is returned."""
+    from recommendation.app import train_als
+
+    first, _ = train_als.load_model(trained_model)
+    train_als.invalidate_model_cache()
+    second, _ = train_als.load_model(trained_model)
+    assert first is not second
+
+
+def test_pointer_rotation_loads_the_new_model(
+    trained_model: Path, models_dir: Path
+) -> None:
+    """A different model dir is a different cache key — no stale model."""
+    import shutil
+
+    from recommendation.app import train_als
+
+    other = models_dir / "als_other"
+    shutil.copytree(trained_model, other)
+    a, _ = train_als.load_model(trained_model)
+    b, _ = train_als.load_model(other)
+    assert a is not b
+
+
 

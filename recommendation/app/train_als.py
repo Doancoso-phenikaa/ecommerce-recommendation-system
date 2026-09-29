@@ -42,6 +42,7 @@ import os
 import random
 import shutil
 import sys
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -67,6 +68,7 @@ __all__ = [
     "train_model",
     "save_model",
     "load_model",
+    "invalidate_model_cache",
     "recommend",
     "recommend_with_scores",
     "train",
@@ -322,17 +324,36 @@ def save_model(
     return model_dir
 
 
-def load_model(model_dir: Path) -> tuple[Any, dict[str, Any]]:
-    """Load ``(model, mappings)`` from a ``models/als_{version}/`` dir."""
-    # Load via the concrete CPU class: implicit.als.AlternatingLeastSquares
-    # is a factory function (no .load attribute); the fitted model is an
-    # implicit.cpu.als instance, whose .load classmethod reloads model.npz.
+@lru_cache(maxsize=2)
+def _load_model_cached(model_dir: str) -> tuple[Any, dict[str, Any]]:
     from implicit.cpu.als import AlternatingLeastSquares
 
     model = AlternatingLeastSquares.load(str(Path(model_dir) / "model.npz"))
     with open(Path(model_dir) / "mappings.json", encoding="utf-8") as fh:
         mappings = json.load(fh)
     return model, mappings
+
+
+def load_model(model_dir: Path | str) -> tuple[Any, dict[str, Any]]:
+    """Load the ALS model + mappings, cached on the resolved directory.
+
+    Deserialising ``model.npz`` per request dominated serving cost. The
+    cache key is the resolved model directory, so a retrain that rotates
+    ``current_version.txt`` resolves to a new directory and loads the new
+    model -- the stale entry is evicted by ``maxsize=2``. Call
+    :func:`invalidate_model_cache` when a model directory is overwritten
+    in place.
+
+    The import is deliberately function-local: ``implicit.als`` exposes a
+    factory while ``implicit.cpu.als`` exposes the concrete class, and
+    only the latter has the ``.load`` classmethod.
+    """
+    return _load_model_cached(str(Path(model_dir).resolve()))
+
+
+def invalidate_model_cache() -> None:
+    """Drop cached ALS models (call after overwriting a model dir in place)."""
+    _load_model_cached.cache_clear()
 
 
 def recommend_with_scores(
