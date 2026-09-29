@@ -241,7 +241,17 @@ def split_temporal_holdout(
     for user_id, group in work.groupby("user_id", sort=True):
         rows = group.drop(columns=["_ts"])
         if len(rows) < min_events:
-            train_parts.append(rows)
+            # A user with 1-4 rows is a cold-start user. Hold out their
+            # last event so the cold-start branch is actually measured;
+            # their remaining rows stay in train, which is what keeps
+            # their train slice below the cold-start threshold.
+            if 1 <= len(rows) and len(rows) < min_events:
+                train_parts.append(rows.iloc[:-1])
+                held = sorted({str(i) for i in rows.iloc[-1:]["item_id"].tolist()})
+                if held:
+                    holdout[str(user_id)] = held
+            else:
+                train_parts.append(rows)
             continue
         n_hold = max(1, int(len(rows) * holdout_frac))
         train_parts.append(rows.iloc[:-n_hold])

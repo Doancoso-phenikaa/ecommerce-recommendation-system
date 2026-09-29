@@ -65,18 +65,19 @@ def _tmp_tracking_uri(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def test_split_holdout_is_last_by_timestamp(events_frame: pd.DataFrame) -> None:
     train, holdout = evaluate.split_temporal_holdout(events_frame)
-    # user-001 has 6 events -> int(6 * 0.2) = 1 holdout row; the other two
-    # users are below MIN_EVENTS and stay fully in train.
-    assert set(holdout) == {"user-001"}
+    # user-001 has 6 events -> int(6 * 0.2) = 1 holdout row.
+    # user-002 (3) and user-003 (1) are below MIN_EVENTS: they now
+    # contribute all-but-one event to train and their last event to holdout.
+    assert set(holdout) == {"user-001", "user-002", "user-003"}
     assert holdout["user-001"] == ["boo-003"]  # 10 days ago = the latest event
-    assert len(train) == 9
+    assert len(train) == 7
     assert "user-001" in set(train["user_id"])
     assert "boo-003" not in set(
         train.loc[train["user_id"] == "user-001", "item_id"]
     )
-    # Users below MIN_EVENTS are never test users.
-    assert "user-002" not in holdout
-    assert "user-003" not in holdout
+    # Cold-start users each keep all but their last event in train.
+    assert len(train.loc[train["user_id"] == "user-002"]) == 2
+    assert len(train.loc[train["user_id"] == "user-003"]) == 0
 
     # Ties on timestamp break on item_id asc, so the split stays deterministic.
     _, again = evaluate.split_temporal_holdout(events_frame.sample(frac=1.0, random_state=3))
@@ -103,22 +104,25 @@ def test_split_sizes_and_train_only_users() -> None:
 
     assert evaluate.MIN_EVENTS == 5
     assert evaluate.HOLDOUT_FRAC == 0.2
-    # max(1, int(n * 0.2)): 10 -> 2, 5 -> 1, 4 -> below MIN_EVENTS, skipped.
+    # max(1, int(n * 0.2)): 10 -> 2, 5 -> 1, 4 -> cold user, holds out 1.
     assert len(holdout["u-big"]) == 2
     assert len(holdout["u-edge"]) == 1
-    assert "u-small" not in holdout
+    assert holdout["u-small"] == ["u-small-i03"]  # last by timestamp
     assert holdout["u-big"] == ["u-big-i08", "u-big-i09"]
     assert holdout["u-edge"] == ["u-edge-i04"]
-    assert len(train) == 16
+    assert len(train) == 15
     per_user = train.groupby("user_id").size().to_dict()
-    assert per_user == {"u-big": 8, "u-edge": 4, "u-small": 4}
+    assert per_user == {"u-big": 8, "u-edge": 4, "u-small": 3}
 
     # A larger holdout fraction moves the cut, still keeping >= 1 row.
     _, wide = evaluate.split_temporal_holdout(frame, holdout_frac=0.5)
     assert len(wide["u-big"]) == 5
-    # A stricter min_events drops the 5-event user from the test set.
+    # A stricter min_events promotes BOTH the 5-event and the 4-event user
+    # to the cold-start branch; each holds out its single last event.
     _, strict = evaluate.split_temporal_holdout(frame, min_events=6)
-    assert set(strict) == {"u-big"}
+    assert set(strict) == {"u-big", "u-edge", "u-small"}
+    assert strict["u-edge"] == ["u-edge-i04"]
+    assert strict["u-small"] == ["u-small-i03"]
 
 
 # --------------------------------------------------------------------------
@@ -505,3 +509,43 @@ def test_light_user_events_are_valid() -> None:
         assert ev["request_id"]
         assert isinstance(ev["item_id"], str)
         assert ev["timestamp"].endswith("+00:00")
+
+
+# --- Task 3: a light user's last event is held out, so cold start is scored --
+
+
+def test_split_holds_out_the_last_event_of_a_light_user() -> None:
+    """A 1-event user becomes a test user with that event in holdout."""
+    import pandas as pd
+
+    frame = pd.DataFrame(
+        [
+            {
+                "user_id": "user-light-001",
+                "item_id": "a-1",
+                "timestamp": "2026-02-01T00:00:00+00:00",
+            }
+        ]
+    )
+    train, holdout = evaluate.split_temporal_holdout(frame)
+    assert holdout == {"user-light-001": ["a-1"]}
+    assert train.empty
+
+
+def test_split_light_user_with_four_events_holds_out_one() -> None:
+    """A 4-event user holds out exactly 1 (int(4*0.2)==0 -> max(1, .))."""
+    import pandas as pd
+
+    frame = pd.DataFrame(
+        [
+            {
+                "user_id": "u",
+                "item_id": f"i-{i}",
+                "timestamp": f"2026-02-0{i}T00:00:00+00:00",
+            }
+            for i in range(1, 5)
+        ]
+    )
+    train, holdout = evaluate.split_temporal_holdout(frame)
+    assert holdout == {"u": ["i-4"]}
+    assert len(train) == 3
