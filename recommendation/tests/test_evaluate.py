@@ -442,3 +442,66 @@ def test_category_oracle_never_returns_duplicates_and_respects_k() -> None:
     top = oracle_mod.category_oracle_topk(train, items, "u1", k=25)
     assert len(top) == len(set(top)) == 2
     assert "a-1" not in top
+
+
+# --- Task 2: light users in the seed so the cold-start path is scored -------
+# `scripts/seed.py` is a script, not an importable package module, so it is
+# loaded by path at module scope.
+
+import importlib.util
+import pathlib
+
+from recommendation.app.baseline import cold_start_threshold
+
+_seed_spec = importlib.util.spec_from_file_location(
+    "seed_under_test",
+    pathlib.Path(__file__).resolve().parents[1] / "scripts" / "seed.py",
+)
+assert _seed_spec is not None and _seed_spec.loader is not None
+seed_mod = importlib.util.module_from_spec(_seed_spec)
+_seed_spec.loader.exec_module(seed_mod)
+
+
+def test_generate_emits_users_below_the_cold_start_threshold() -> None:
+    """Light users exist and are strictly below the cold-start threshold."""
+    import random
+
+    users, items, events = seed_mod.generate(
+        random.Random(seed_mod.SEED), seed_mod.N_EVENTS, as_of=seed_mod.NOW_ANCHOR
+    )
+    per_user: dict[str, int] = {}
+    for ev in events:
+        per_user[ev["user_id"]] = per_user.get(ev["user_id"], 0) + 1
+
+    threshold = cold_start_threshold()
+    light = [u for u, n in per_user.items() if n < threshold]
+    assert light, "seed must produce at least one cold-start user"
+
+    known = {u["user_id"] for u in users}
+    for uid in light:
+        assert 1 <= per_user[uid] < threshold
+        assert uid in known
+
+
+def test_light_user_events_are_valid() -> None:
+    """Every light-user row still passes EventIn validation."""
+    import random
+
+    _, _, events = seed_mod.generate(
+        random.Random(seed_mod.SEED), seed_mod.N_EVENTS, as_of=seed_mod.NOW_ANCHOR
+    )
+    per_user: dict[str, int] = {}
+    for ev in events:
+        per_user[ev["user_id"]] = per_user.get(ev["user_id"], 0) + 1
+    threshold = cold_start_threshold()
+    light_rows = [
+        ev for ev in events if per_user[ev["user_id"]] < threshold
+    ]
+    assert light_rows
+    for ev in light_rows:
+        # seed.generate() already validates via EventIn; this asserts the
+        # generated payloads are the validated shape (request_id present,
+        # one item per event, aware timestamp).
+        assert ev["request_id"]
+        assert isinstance(ev["item_id"], str)
+        assert ev["timestamp"].endswith("+00:00")

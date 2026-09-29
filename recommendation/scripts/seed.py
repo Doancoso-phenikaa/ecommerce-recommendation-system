@@ -65,6 +65,19 @@ N_USERS = 24
 N_EVENTS = 600
 AFFINITY_PROB = 0.70  # P(event item drawn from the user's affinity categories)
 
+#: Users generated with 1-4 events so the cold-start path is scored by
+#: the eval gate. Without these every test user clears the cold-start
+#: threshold and the trending+content branch is never measured.
+LIGHT_USERS = 8
+
+#: Inclusive event range for a light user; upper bound must stay below
+#: ``baseline.cold_start_threshold()`` (5) or the user is not cold.
+LIGHT_MIN_EVENTS = 1
+LIGHT_MAX_EVENTS = 4
+
+#: Deterministic anchor for the tests; ``main`` uses --as-of or today.
+NOW_ANCHOR = datetime(2026, 9, 20, tzinfo=timezone.utc)
+
 CATEGORIES = ["electronics", "books", "clothing", "home", "sports", "toys"]
 ITEMS_PER_CATEGORY = 12  # 6 x 12 = 72 items (>= 60, >= 5 categories)
 
@@ -188,6 +201,48 @@ def generate(
         elif event_type == "cart":
             event["value"] = {"quantity": 1}
         events.append(event)
+
+    # Light users are appended AFTER the main loop on purpose: every rng draw
+    # below happens after the 600 main events, so the original event stream is
+    # bit-identical and the diff against the previous seed is pure addition.
+    for n_light in range(LIGHT_USERS):
+        uid = f"user-light-{n_light + 1:03d}"
+        n_events_light = rng.randint(LIGHT_MIN_EVENTS, LIGHT_MAX_EVENTS)
+        users.append(
+            {
+                "user_id": uid,
+                "gender": rng.choice(GENDERS),
+                "age_group": rng.choice(AGE_GROUPS),
+                "country": rng.choice(COUNTRIES),
+                "affinity_categories": [
+                    CATEGORIES[n_light % len(CATEGORIES)]
+                ],
+            }
+        )
+        for _ in range(n_events_light):
+            item = rng.choice(items)
+            event_type = _event_type(rng)
+            request_id = uuid.UUID(int=rng.getrandbits(128), version=4).hex
+            assert request_id not in request_ids
+            request_ids.add(request_id)
+            event: dict = {
+                "request_id": request_id,
+                "user_id": uid,
+                "item_id": item["item_id"],
+                "event_type": event_type,
+                "timestamp": (
+                    now - timedelta(seconds=rng.randint(0, 30 * 24 * 3600))
+                ).isoformat(),
+                "session_id": f"sess-{uid}-01",
+                "context": {"source": "seed"},
+            }
+            if event_type == "purchase":
+                event["value"] = {
+                    "quantity": rng.randint(1, 3),
+                    "unit_price_cents": rng.randint(500, 200000),
+                    "currency": "USD",
+                }
+            events.append(event)
 
     events.sort(key=lambda e: e["timestamp"])
     return users, items, events
