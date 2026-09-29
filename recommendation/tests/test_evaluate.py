@@ -271,6 +271,7 @@ def test_evaluate_hybrid_result_shape(
         "ndcg_warm", "strategy_counts", "n_rank_errors", "passed",
         "baseline_only",
         "ndcg_category_oracle", "delta_vs_oracle",
+        "cold_start_covered", "oracle_margin_ok",
     }
     assert set(result) == expected_keys
     assert result["version"] == "v1"
@@ -287,7 +288,9 @@ def test_evaluate_hybrid_result_shape(
     assert result["delta"] == pytest.approx(
         result["ndcg_hybrid"] - result["ndcg_baseline"]
     )
-    assert result["passed"] is bool(result["delta"] > evaluate.MARGIN)
+    assert result["passed"] is bool(
+        result["delta"] > evaluate.MARGIN and result["cold_start_covered"]
+    )
     assert result["n_cold_start"] + result["n_warm"] == result["n_test_users"]
     assert result["n_rank_errors"] == 0
     assert sum(result["strategy_counts"].values()) == result["n_test_users"]
@@ -549,3 +552,36 @@ def test_split_light_user_with_four_events_holds_out_one() -> None:
     train, holdout = evaluate.split_temporal_holdout(frame)
     assert holdout == {"u": ["i-4"]}
     assert len(train) == 3
+
+
+def test_cold_start_covered_is_false_when_nothing_is_cold() -> None:
+    """The flag is derived from n_cold_start, so 0 -> False."""
+    from recommendation.app import evaluate as ev
+
+    assert ev._cold_start_covered(0) is False
+    assert ev._cold_start_covered(1) is True
+    assert ev._cold_start_covered(22) is True
+
+
+def test_gate_fails_when_cold_start_is_uncovered(
+    write_parquet: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zero cold-start test users must make `passed` False, not True."""
+    from recommendation.app import evaluate as ev
+
+    write_parquet()
+    # Force every test user to look warm: the fake rank reports cold_start False.
+    monkeypatch.setattr(
+        ev._ranker,
+        "rank",
+        lambda user_id, count=10, **kw: {
+            "recommendations": [{"item_id": "x", "score": 1.0, "reason": "als"}],
+            "cold_start": False,
+            "strategy": "als_hybrid",
+            "model_version": "v1",
+        },
+    )
+    result = ev.evaluate(version="t")
+    assert result["n_cold_start"] == 0
+    assert result["cold_start_covered"] is False
+    assert result["passed"] is False

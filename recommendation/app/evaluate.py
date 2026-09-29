@@ -3,8 +3,10 @@
 Pipeline (all in-memory except a temp ALS model dir under ``/tmp``)::
 
     interactions.parquet
-    -> temporal holdout per user (last 20% by timestamp; users with <5
-       events stay fully in train and are skipped as test users)
+    -> temporal holdout per user (last 20% by timestamp; a user with
+       1..min_events-1 rows keeps all but their last event in train and
+       that last event becomes their holdout, so light users ARE test
+       users and exercise the cold-start branch)
     -> train-only ALS model (build_user_item_matrix / train_model /
        save_model into a TemporaryDirectory — never touches
        ``recommendation/models/``)
@@ -54,8 +56,8 @@ term) — documented, not worked around; the gate still compares the real
    this discipline exists to avoid. Novel-only relevance evaluates the
    job the ranker is built for (surface unseen items): hybrid NDCG
    0.2271 vs baseline 0.0272 (delta +0.1999, PASS). Users left with zero
-   novel holdout items are skipped as test users (same rule as the
-   <5-event users); ``n_test_users`` counts only evaluated users.
+   novel holdout items are skipped as test users; ``n_test_users`` counts
+   only evaluated users.
 
 Metric formulae (binary relevance, rel in {0, 1}, rank i 0-based, K=10):
 
@@ -68,8 +70,10 @@ Metric formulae (binary relevance, rel in {0, 1}, rank i 0-based, K=10):
 - AP@K        = sum over hits at rank i of P@i / min(|holdout|, K),
   MAP@K = macro mean of AP@K.
 
-Gate semantic (SINGLE gate): PASS iff
-``NDCG_hybrid > NDCG_baseline + 0.02``. No alternative pass paths.
+Gate semantic: PASS iff BOTH ``NDCG_hybrid > NDCG_baseline + 0.02`` AND
+``n_cold_start > 0`` (at least one test user scored through the cold-start
+branch). No alternative pass paths. ``delta_vs_oracle`` is reported but is
+NOT yet a pass condition.
 
 Determinism: the holdout split sorts by timestamp (no sampling, so
 ``seed=42`` only labels the run and seeds the ALS refit); ALS refit
@@ -114,7 +118,9 @@ SEED = 42
 #: Cutoff K for all @K metrics.
 K = 10
 
-#: Users with fewer events stay fully in train and are skipped in test.
+#: Users with 1..MIN_EVENTS-1 rows are cold-start users: all but their last
+#: event stays in train and that last event is their holdout, making them
+#: test users.
 MIN_EVENTS = 5
 
 #: Per-user holdout fraction (last N by timestamp, N >= 1).
@@ -219,10 +225,12 @@ def split_temporal_holdout(
     """Split ``df`` into (train_frame, holdout items per test user).
 
     Per user: sort by timestamp ascending (ties broken by ``item_id``
-    asc for determinism); users with ``< min_events`` rows contribute
-    everything to train and are skipped as test users; otherwise the
-    last ``max(1, int(n * holdout_frac))`` rows form the holdout and the
-    rest is train. Holdout items are returned as sorted unique id lists.
+    asc for determinism); a user with 1..min_events-1 rows keeps all
+    but their last event in train and that last event becomes their
+    holdout (so cold-start users are scored, not skipped); otherwise
+    the last ``max(1, int(n * holdout_frac))`` rows form the holdout
+    and the rest is train. Holdout items are returned as sorted unique
+    id lists.
     """
     if df.empty:
         return df.copy(), {}
@@ -354,6 +362,16 @@ def _macro(rows: list[dict[str, float]]) -> dict[str, float]:
     return out
 
 
+def _cold_start_covered(n_cold_start: int) -> bool:
+    """True when at least one test user was scored through cold start.
+
+    A model whose cold-start branch is never measured has not been
+    validated for the users with no history, so the gate treats zero
+    coverage as a failure.
+    """
+    return int(n_cold_start) > 0
+
+
 def evaluate(
     version: str = "v1",
     k: int = K,
@@ -428,7 +446,7 @@ def evaluate(
     oracle_m = _macro(oracle_rows)
     delta = hybrid["ndcg"] - baseline_m["ndcg"]
     delta_vs_oracle = hybrid["ndcg"] - oracle_m["ndcg"]
-    passed = bool(delta > MARGIN)
+    passed = bool(delta > MARGIN and _cold_start_covered(len(cold_rows)))
     try:
         n_train_users = int(train_df["user_id"].nunique()) if not train_df.empty else 0
     except Exception:
@@ -462,6 +480,8 @@ def evaluate(
         "ndcg_warm": warm_m["ndcg"],
         "strategy_counts": strategy_counts,
         "n_rank_errors": n_rank_errors,
+        "cold_start_covered": _cold_start_covered(len(cold_rows)),
+        "oracle_margin_ok": delta_vs_oracle > MARGIN,
         "passed": passed,
         "baseline_only": baseline_only,
     }

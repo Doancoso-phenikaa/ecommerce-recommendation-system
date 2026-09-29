@@ -44,6 +44,15 @@ def _table(res: dict) -> str:
         f"delta_NDCG={res['delta']:+.4f} margin={MARGIN:.2f} "
         f"-> {'PASS' if res['passed'] else 'FAIL'}",
     ]
+    lines.append(
+        f"ndcg_category_oracle={res['ndcg_category_oracle']:.4f} "
+        f"delta_vs_oracle={res['delta_vs_oracle']:+.4f} "
+        f"({'OK' if res['oracle_margin_ok'] else 'BELOW MARGIN'})"
+    )
+    lines.append(
+        f"cold_start_coverage={res['n_cold_start']}/{res['n_test_users']} users "
+        f"({'covered' if res['cold_start_covered'] else 'NOT COVERED — gate fails'})"
+    )
     if res.get("baseline_only"):
         lines.append("(baseline-only mode: hybrid := baseline, delta must be 0)")
     return "\n".join(lines)
