@@ -47,6 +47,7 @@ from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -61,6 +62,7 @@ __all__ = [
     "cold_start_threshold",
     "trending",
     "content_similar",
+    "content_similar_many",
     "user_content_fallback",
 ]
 
@@ -259,6 +261,43 @@ def content_similar(item_id: str, k: int = 10) -> list[dict]:
     )
     return [
         {"item_id": iid, "score": float(score), "reason": "content_similar"}
+        for score, iid in ranked[: int(k)]
+    ]
+
+
+def content_similar_many(seed_ids: list[str], k: int = 10) -> list[dict]:
+    """Return the top-``k`` neighbours of the TF-IDF centroid of ``seed_ids``.
+
+    A cold-start user's whole history is a better signal than their single
+    most recent click, so every item they touched contributes to one
+    centroid query. A single seed is equivalent to
+    :func:`content_similar` for that item. Unknown/empty seeds fall back
+    to :func:`trending` so the result is never empty.
+    """
+    item_ids, matrix, _ = _tfidf_matrix()
+    known = [i for i in seed_ids if i in item_ids]
+    if not known or int(k) <= 0:
+        return trending(max(int(k), 10) if int(k) <= 0 else int(k))
+    if len(known) == 1:
+        return content_similar(known[0], k=int(k))
+
+    rows = matrix[[item_ids.index(i) for i in known]]
+    # ``sparse.mean(axis=0)`` yields a deprecated ``np.matrix``, which
+    # scikit-learn >= 1.4 rejects in ``check_array``. Reshape to a 2-D
+    # ``(1, n_features)`` query so it is one sample over every feature.
+    centroid = np.asarray(rows.mean(axis=0)).reshape(1, -1)
+    sims = cosine_similarity(centroid, matrix).flatten()
+    seed_set = set(known)
+    ranked = sorted(
+        (
+            (float(sims[j]), item_ids[j])
+            for j in range(len(item_ids))
+            if item_ids[j] not in seed_set
+        ),
+        key=lambda t: (-t[0], t[1]),
+    )
+    return [
+        {"item_id": iid, "score": score, "reason": "content_similar"}
         for score, iid in ranked[: int(k)]
     ]
 

@@ -1,0 +1,26 @@
+{
+  "ndcg_hybrid": 0.28824017889877096,
+  "ndcg_baseline": 0.08542779096886093,
+  "delta": 0.20281238792991002,
+  "precision": 0.0724137931034483,
+  "recall": 0.3879310344827586,
+  "map": 0.21871921182266013,
+  "version": "v3",
+  "seed": 42,
+  "k": 10,
+  "margin": 0.02,
+  "passed": true,
+  "n_test_users": 29,
+  "n_cold_start": 8,
+  "n_warm": 21,
+  "ndcg_cold_start": 0.16791801597343772,
+  "ndcg_warm": 0.3340771933465169,
+  "ndcg_category_oracle": 0.12275491742476098,
+  "delta_vs_oracle": 0.16548526147401,
+  "strategy_counts": {
+    "als_hybrid": 21,
+    "content": 6,
+    "trending": 2
+  },
+  "n_rank_errors": 0
+}

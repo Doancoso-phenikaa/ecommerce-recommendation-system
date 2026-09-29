@@ -87,7 +87,7 @@ import pandas as pd
 
 from recommendation.app.baseline import (
     cold_start_threshold,
-    content_similar,
+    content_similar_many,
     trending,
 )
 from recommendation.app.schemas import RecResponse, Strategy
@@ -152,6 +152,29 @@ def _maxnorm(scores: dict[str, float]) -> dict[str, float]:
     return {k: float(v) / float(ceiling) for k, v in scores.items()}
 
 
+def _calibrated(scores: dict[str, float]) -> dict[str, float]:
+    """Content scores that respect absolute similarity, not just rank.
+
+    Pure max-normalisation gives the best content match the full weight
+    even when that match is near-zero cosine, so a weak seed item buys an
+    unqualified boost. Blending the rank-decayed score with the absolute
+    cosine keeps some reward for position while making a 0.05 match worth
+    proportionally little.
+
+    Ties on score are broken by ``item_id`` so the result is deterministic
+    regardless of dict insertion order.
+    """
+    if not scores:
+        return {}
+    total = len(scores)
+    order = sorted(scores.items(), key=lambda t: (-t[1], t[0]))
+    out: dict[str, float] = {}
+    for rank, (iid, absolute) in enumerate(order):
+        decay = float(total - rank) / float(total)
+        out[iid] = 0.5 * decay + 0.5 * float(absolute)
+    return out
+
+
 def _top_category(value: object) -> str:
     """Return the top-level category token for a catalog category_path cell."""
     if isinstance(value, (list, tuple)):
@@ -195,24 +218,43 @@ def _user_item_ids(ev: pd.DataFrame, user_id: str) -> list[str]:
     return sorted({str(i) for i in rows["item_id"].tolist()})
 
 
+def _seed_items(ev: pd.DataFrame, user_id: str, limit: int = 20) -> list[str]:
+    """Every item ``user_id`` consumed, most recent first (cold-start seed).
+
+    The cold-start branch blends content similarity; seeding from one
+    recent item threw away the rest of a light user's signal. The single-item
+    case is :func:`_seed_item`; both share this one ordering rule so they
+    cannot drift apart.
+    """
+    if ev.empty or not {"user_id", "timestamp"} <= set(ev.columns):
+        return []
+    rows = ev[ev["user_id"].astype(str) == str(user_id)]
+    if rows.empty:
+        return []
+    stamps = pd.to_datetime(rows["timestamp"], utc=True, errors="coerce")
+    valid = rows[stamps.notna()]
+    if valid.empty:
+        return []
+    ordered = valid.assign(_ts=stamps[stamps.notna()]).sort_values(
+        ["_ts", "item_id"], ascending=[False, True]
+    )
+    seen: list[str] = []
+    for iid in ordered["item_id"].astype(str).tolist():
+        if iid not in seen:
+            seen.append(iid)
+        if len(seen) >= limit:
+            break
+    return seen
+
+
 def _seed_item(ev: pd.DataFrame, user_id: str) -> str | None:
     """Most recent interacted item for ``user_id`` (None when no history).
 
     Max timestamp wins; ties broken by ``item_id`` asc for determinism.
+    Thin wrapper over :func:`_seed_items`, which applies that same
+    ordering rule to the whole history.
     """
-    if ev.empty:
-        return None
-    rows = ev[ev["user_id"].astype(str) == str(user_id)]
-    if rows.empty:
-        return None
-    stamps = pd.to_datetime(rows["timestamp"], utc=True, errors="coerce")
-    valid = rows[stamps.notna()]
-    if valid.empty:
-        return None
-    stamps = stamps[stamps.notna()]
-    latest = stamps.max()
-    cands = valid.loc[stamps[stamps == latest].index, "item_id"].astype(str)
-    return sorted(cands.unique().tolist())[0]
+    return next(iter(_seed_items(ev, user_id, limit=1)), None)
 
 
 def _als_model_dir() -> Path | str | None:
@@ -357,14 +399,14 @@ def rank(
     pop_rows = trending(limit=POP_N)
     pop_scores = _maxnorm({r["item_id"]: float(r["score"]) for r in pop_rows})
 
-    seed = _seed_item(ev, str(user_id))
+    seed_ids = _seed_items(ev, str(user_id))
     content_scores: dict[str, float] = {}
-    if seed is not None:
+    if seed_ids:
         try:
-            content_rows = content_similar(seed, k=CONTENT_K)
+            content_rows = content_similar_many(seed_ids, k=CONTENT_K)
         except Exception:
             content_rows = []
-        content_scores = _maxnorm(
+        content_scores = _calibrated(
             {
                 r["item_id"]: float(r["score"])
                 for r in content_rows

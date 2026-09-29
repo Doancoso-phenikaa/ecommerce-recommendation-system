@@ -26,6 +26,8 @@ read or written.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from recommendation.app import baseline
@@ -177,3 +179,44 @@ def test_user_fallback_never_empty_unknown_user_is_trending(write_parquet) -> No
     )
     assert baseline.TRENDING_WINDOW_DAYS == 30
     assert baseline.RECENCY_TAU_DAYS == 14.0
+
+
+# --------------------------------------------------------------------------
+# content_similar_many — centroid over a cold user's whole history
+# --------------------------------------------------------------------------
+def test_content_similar_many_aggregates_every_seed(
+    write_parquet: Any,
+) -> None:
+    """A multi-item seed yields a single ranked list, never empty."""
+    from recommendation.app import baseline as bl
+
+    write_parquet()
+    rows = bl.content_similar_many(["ele-001", "boo-001"], k=4)
+    assert rows
+    assert len(rows) <= 4
+    assert all(0.0 <= r["score"] <= 1.0 for r in rows)
+    assert all(r["reason"] == "content_similar" for r in rows)
+
+
+def test_content_similar_many_single_seed_matches_content_similar(
+    write_parquet: Any,
+) -> None:
+    """One seed is identical to content_similar — no behaviour drift."""
+    from recommendation.app import baseline as bl
+
+    write_parquet()
+    assert bl.content_similar_many(["ele-001"], k=5) == bl.content_similar(
+        "ele-001", k=5
+    )
+
+
+def test_content_similar_many_empty_seeds_falls_back_to_trending(
+    write_parquet: Any,
+) -> None:
+    """No seeds -> trending rows, so the caller is never left empty."""
+    from recommendation.app import baseline as bl
+
+    write_parquet()
+    rows = bl.content_similar_many([], k=3)
+    assert rows
+    assert all(r["reason"] == "trending" for r in rows)

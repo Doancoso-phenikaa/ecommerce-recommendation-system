@@ -402,3 +402,82 @@ def test_als_scores_empty_for_unknown_user_does_not_raise(
     write_parquet()
     assert ranker_mod._als_scores("ghost-nobody", 10) == {}
 
+
+# --- cold start: every consumed item, and a deterministic content score ----
+
+
+def test_seed_items_aggregates_every_item_most_recent_first(
+    write_parquet: Any, events_frame: pd.DataFrame
+) -> None:
+    """Cold start seeds from the whole history, not only the newest click."""
+    from recommendation.app import ranker as ranker_mod
+
+    write_parquet()
+    seeds = ranker_mod._seed_items(events_frame, "user-002")
+
+    # user-002 consumed boo-001 (9d), boo-002 (7d), boo-003 (5d) — every one
+    # of them is a seed, most recent first.
+    assert seeds == ["boo-003", "boo-002", "boo-001"]
+    assert len(seeds) == 3, "one item per interaction, not just the latest"
+    assert len(set(seeds)) == len(seeds), "seeds are distinct"
+
+    # The new helper is a strict superset of the old single-seed one: the
+    # previous behaviour is still its first element, so nothing regressed.
+    assert ranker_mod._seed_item(events_frame, "user-002") == seeds[0]
+
+    # `limit` caps the seed set without reordering it.
+    assert ranker_mod._seed_items(events_frame, "user-002", limit=2) == seeds[:2]
+    assert ranker_mod._seed_items(events_frame, "user-002", limit=1) == seeds[:1]
+
+    # A user absent from the frame has no seeds at all (never a raise).
+    assert ranker_mod._seed_items(events_frame, GHOST_USER) == []
+
+
+def test_calibrated_breaks_ties_by_item_id_in_insertion_order_independent_way() -> None:
+    """Equal scores rank by item_id, and the result never depends on dict order."""
+    from recommendation.app import ranker as ranker_mod
+
+    forward = {"zz-003": 0.4, "mm-002": 0.4, "aa-001": 0.4}
+    reverse = {"aa-001": 0.4, "mm-002": 0.4, "zz-003": 0.4}
+    assert list(forward) != list(reverse), "the fixture must differ in insertion order"
+
+    # dict equality is insertion-order-insensitive, so compare the key order —
+    # that is the property rank() depends on when it walks the dict.
+    assert list(ranker_mod._calibrated(forward)) == list(ranker_mod._calibrated(reverse))
+    assert list(ranker_mod._calibrated(forward)) == ["aa-001", "mm-002", "zz-003"]
+
+    # The tie-break is real, not cosmetic: the tied inputs come back as a
+    # strictly decreasing score ladder in that same item_id order.
+    out = ranker_mod._calibrated(forward)
+    assert out["aa-001"] > out["mm-002"] > out["zz-003"]
+    assert ranker_mod._calibrated(forward) == ranker_mod._calibrated(reverse)
+
+    # An empty source is an empty result, and scores stay bounded in [0, 1].
+    assert ranker_mod._calibrated({}) == {}
+    assert all(0.0 <= v <= 1.0 for v in ranker_mod._calibrated(forward).values())
+
+
+def test_rank_hands_content_similar_many_every_interacted_item(
+    write_parquet: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The cold path really passes the user's whole history as the seed set."""
+    from recommendation.app import ranker as ranker_mod
+
+    write_parquet()
+    assert ranker_mod.rank("user-002", count=6)["cold_start"] is True
+
+    recorded: list[list[str]] = []
+    real = ranker_mod.content_similar_many
+
+    def _record(seed_ids: list[str], k: int = 10) -> list[dict]:
+        recorded.append(list(seed_ids))
+        return real(seed_ids, k=k)
+
+    monkeypatch.setattr(ranker_mod, "content_similar_many", _record)
+    result = ranker_mod.rank("user-002", count=6)
+
+    assert recorded, "the cold path never reached content_similar_many"
+    assert sorted(recorded[0]) == ["boo-001", "boo-002", "boo-003"]
+    assert recorded[0] == ["boo-003", "boo-002", "boo-001"], "most recent first"
+    assert result["recommendations"], "the refactored cold path still serves"
+
