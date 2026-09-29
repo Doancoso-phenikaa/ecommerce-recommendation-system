@@ -4,10 +4,13 @@ Key scheme (personalized keys always embed the owning ``user_id`` and are
 never served cross-user — enforced by construction: key builders require the
 owner id and no helper accepts a "target user" differing from the key owner):
 
-- ``recs:{user_id}:{context}:{filter}:{model_version}`` — personalized
-  recommendations, TTL clamped to ``[RECS_TTL_MIN_S, RECS_TTL_MAX_S]``
+- ``recs:{user_id}:{context}:{filter}:{model_version}:{count}`` — personalized
+  recommendations. ``count`` is a segment because it changes the payload: a
+  cached 5-item list must never satisfy a caller who asked for 50.
+  TTL clamped to ``[RECS_TTL_MIN_S, RECS_TTL_MAX_S]``
   (default ``RECS_TTL_DEFAULT_S``).
-- ``similar:{item_id}`` — content-similar items. Intentionally carries NO
+- ``similar:{item_id}:{count}`` — content-similar items, keyed on ``count``
+  for the same reason. Intentionally carries NO
   ``model_version``: content similarity is deterministic on the catalog
   (same item set + same similarity artefact => same neighbours), so
   versioning the key would only fragment the cache without benefit.

@@ -351,6 +351,78 @@ the duration of the eval. With the flag, `retrain.sh` is the only writer and
 promotes on PASS alone. Pass `--no-consumer-restart` when a supervisor owns
 that process.
 
+## Model artifacts and retention (`models/`)
+
+`models/current_version.txt` is the only pointer serving reads. It currently
+holds `v3`, so exactly one model directory is live:
+
+| Artifact | Live? | Read by |
+|---|---|---|
+| `als_v3/` (`model.npz` + `mappings.json`) | **yes** | `train_als._current_model_dir()` → `als_{pointer}` |
+| `eval_v3.json` | gate output | the reference run below |
+| `als_v1/`, `als_v2/` | no | nothing at runtime |
+| `eval_v1.json`, `eval_v2.json` | no | nothing at runtime; `eval_v2.json` supplies the "vs v2" column below |
+| `mlruns/` | no | MLflow UI only, and gitignored |
+
+**Nothing reads a superseded version.** All three serving-time readers
+resolve the pointer and nothing else: `train_als._current_model_dir()`
+(`base / f"als_{version}"`), `ranker._read_model_version()`, and
+`main.current_model_version()`. The ranker's one model-dir override,
+`ranker._als_model_dir()`, accepts only `evaluate._train_only_context`'s
+`/tmp` refit and **raises** on any other shape rather than silently falling
+back to the pointer.
+
+**Nothing prunes them either.** `train_als.run_pipeline` deletes
+`models/snapshot_{version}/` deliberately ("build artifact, keep tree lean")
+but leaves `als_{version}/` in place, and `retrain.sh` has no prune step — so
+the tree grows one directory per nightly run by construction.
+
+**Policy: keep them. They are a rollback history, not disposable output.**
+They are committed — 9 artifact files tracked under `models/` (three `als_*/`
+pairs plus three `eval_*.json`), with only `models/mlruns/` gitignored — and
+they are the only in-repo record of what each version actually scored.
+`eval_v1.json` in particular predates the cold-start gate entirely
+(`n_cold_start: 0`, `ndcg_cold_start: 0.0`, and no `ndcg_category_oracle` key
+at all), which is why `v1` and `v3` are not comparable on those fields.
+
+To roll back, write a previous stamp into the pointer. The artifacts a
+rollback needs are exactly the ones committed — `model.npz` and
+`mappings.json`, with no external dependency:
+
+```bash
+printf 'v2\n' > recommendation/models/current_version.txt
+```
+
+**But the pointer only rolls back the _model_, not the _scoring code_, and
+for `v2` those are not separable today.** `als_v2/` and `als_v3/` are
+byte-for-byte identical — same `model.npz` (`cdba3b36…`) and same
+`mappings.json` (`9136c410…`) — because the v3 promotion changed
+centroid seeding in `ranker.py`/`baseline.py` and copied the weights
+forward rather than retraining. Flipping the pointer to `v2` therefore
+reloads v3's weights and reproduces v3's `ndcg_hybrid` (0.32120) while
+labelling the response `model_version: "v2"`, **not** v2's 0.26804. A
+behavioural rollback to `v2` also needs the code that produced it, which is
+the tree at `5d1a7e1`:
+
+```bash
+git checkout 5d1a7e1 -- recommendation/app/ranker.py recommendation/app/baseline.py
+```
+
+`als_v1/` *is* a genuinely different model (`model.npz` `7fe8e1f2…`), so a
+pointer rollback to `v1` does change what is scored — though it still pairs
+new scoring code with old weights.
+
+**Known gap — no retention *count* is specified anywhere.** No file in the
+repo states a "keep the last N" rule; the only "roll back" mention is
+`retrain.sh`'s note that a failed run leaves the pointer unmoved so "there is
+nothing to roll back", which is about the pointer within one run, not about
+retaining artifacts. Until a count is chosen, keeping is the safe default:
+deleting a rollback target is irreversible in a way that keeping one is not.
+One caveat when reading the table above: `retrain.sh` stamps versions
+`date -u +%Y%m%d-%H%M%S`, so nightly runs produce `als_<timestamp>/`
+directories — `v1/v2/v3` are hand-assigned promotion labels, not a naming
+scheme the pipeline generates.
+
 ## Eval gate (`scripts/evaluate.py --version v1 [--baseline-only]`)
 
 Writes `models/eval_<version>.json`; exit 0 on PASS, exit 3 on FAIL.

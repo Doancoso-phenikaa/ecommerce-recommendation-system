@@ -204,7 +204,7 @@ def test_set_get_hit_with_generated_at(fake_redis: Any) -> None:
 
 
 def test_similar_key_has_no_model_version() -> None:
-    """``similar:{item_id}`` is stable across model versions."""
+    """``similar:{item_id}:{count}`` is stable across model versions."""
     count = _default_count(store.similar_key)
     key = store.similar_key("ele-001")
     assert key == f"similar:ele-001:{count}"
