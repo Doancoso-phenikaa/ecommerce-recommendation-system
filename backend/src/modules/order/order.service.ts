@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -7,6 +8,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { Customer } from '../customer/entities/customer.entity.js';
 import { Inventory } from '../inventory/entities/inventory.entity.js';
+import { Seller } from '../seller/entities/seller.entity.js';
+import { Shop } from '../shop/entities/shop.entity.js';
+import { ShopStatus } from '../shop/enums/shop-status.enum.js';
 import { OrderGroup } from './entities/order-group.entity.js';
 import { OrderItem } from './entities/order-item.entity.js';
 import { Order } from './entities/order.entity.js';
@@ -19,6 +23,10 @@ export class OrderService {
     private readonly customerRepository: Repository<Customer>,
     @InjectRepository(OrderGroup)
     private readonly orderGroupRepository: Repository<OrderGroup>,
+    @InjectRepository(Seller)
+    private readonly sellerRepository: Repository<Seller>,
+    @InjectRepository(Shop)
+    private readonly shopRepository: Repository<Shop>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -120,6 +128,46 @@ export class OrderService {
     };
   }
 
+  async getSellerOrders(userId: string) {
+    const shop = await this.findActiveSellerShop(userId);
+    const orders = await this.dataSource.getRepository(Order).find({
+      where: { shopId: shop.shopId },
+      order: { createdAt: 'DESC', orderId: 'DESC' },
+    });
+
+    return {
+      data: orders.map((order) => this.buildSellerOrderResponse(order)),
+    };
+  }
+
+  async getSellerOrderDetail(userId: string, orderId: string) {
+    const shop = await this.findActiveSellerShop(userId);
+    const order = await this.dataSource
+      .getRepository(Order)
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.items', 'orderItem')
+      .where('order.orderId = :orderId', { orderId })
+      .andWhere('order.shopId = :shopId', { shopId: shop.shopId })
+      .orderBy('orderItem.orderItemId', 'ASC')
+      .getOne();
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    return {
+      ...this.buildSellerOrderResponse(order),
+      items: (order.items ?? []).map((orderItem) => ({
+        orderItemId: orderItem.orderItemId,
+        productId: orderItem.productId,
+        productName: orderItem.productName,
+        quantity: orderItem.quantity,
+        unitPrice: orderItem.unitPrice,
+        subtotal: orderItem.subtotal,
+      })),
+    };
+  }
+
   async cancelMyOrder(userId: string, orderId: string) {
     return this.dataSource.transaction(async (manager) => {
       const customer = await manager
@@ -154,29 +202,7 @@ export class OrderService {
         order: { productId: 'ASC', orderItemId: 'ASC' },
       });
 
-      if (orderItems.length === 0) {
-        throw new ConflictException('Order inventory data is inconsistent');
-      }
-
-      const quantitiesByProductId = this.sumQuantitiesByProduct(orderItems);
-      const inventoriesByProductId = await this.lockInventories(
-        manager,
-        Array.from(quantitiesByProductId.keys()),
-      );
-
-      for (const [productId, quantityToRelease] of quantitiesByProductId) {
-        const inventory = inventoriesByProductId.get(productId);
-
-        if (!inventory || inventory.reservedQuantity < quantityToRelease) {
-          throw new ConflictException('Order inventory data is inconsistent');
-        }
-
-        inventory.reservedQuantity -= quantityToRelease;
-      }
-
-      await manager
-        .getRepository(Inventory)
-        .save(Array.from(inventoriesByProductId.values()));
+      await this.updateInventoryForFinalStatus(manager, orderItems, false);
 
       order.status = OrderStatus.CANCELLED;
       const cancelledOrder = await manager.getRepository(Order).save(order);
@@ -188,6 +214,261 @@ export class OrderService {
         message: 'Order cancelled successfully',
       };
     });
+  }
+
+  async confirmOrder(userId: string, orderId: string) {
+    return this.transitionSellerOrder(
+      userId,
+      orderId,
+      OrderStatus.PENDING,
+      OrderStatus.CONFIRMED,
+      'Order confirmed successfully',
+    );
+  }
+
+  async startShipping(userId: string, orderId: string) {
+    return this.transitionSellerOrder(
+      userId,
+      orderId,
+      OrderStatus.CONFIRMED,
+      OrderStatus.SHIPPING,
+      'Order shipping started successfully',
+    );
+  }
+
+  async completeOrder(userId: string, orderId: string) {
+    return this.dataSource.transaction(async (manager) => {
+      const shop = await this.findActiveSellerShopInTransaction(
+        manager,
+        userId,
+      );
+      const order = await this.findAndLockSellerOrder(
+        manager,
+        orderId,
+        shop.shopId,
+      );
+
+      if (order.status !== OrderStatus.SHIPPING) {
+        throw new ConflictException('Only shipping orders can be completed');
+      }
+
+      const orderItems = await this.findOrderItems(manager, order.orderId);
+      await this.updateInventoryForFinalStatus(manager, orderItems, true);
+
+      order.status = OrderStatus.COMPLETED;
+      const completedOrder = await manager.getRepository(Order).save(order);
+
+      return this.buildOrderStatusResponse(
+        completedOrder,
+        'Order completed successfully',
+      );
+    });
+  }
+
+  async cancelOrderBySeller(userId: string, orderId: string) {
+    return this.dataSource.transaction(async (manager) => {
+      const shop = await this.findActiveSellerShopInTransaction(
+        manager,
+        userId,
+      );
+      const order = await this.findAndLockSellerOrder(
+        manager,
+        orderId,
+        shop.shopId,
+      );
+
+      if (order.status !== OrderStatus.PENDING) {
+        throw new ConflictException('Only pending orders can be cancelled');
+      }
+
+      const orderItems = await this.findOrderItems(manager, order.orderId);
+      await this.updateInventoryForFinalStatus(manager, orderItems, false);
+
+      order.status = OrderStatus.CANCELLED;
+      const cancelledOrder = await manager.getRepository(Order).save(order);
+
+      return this.buildOrderStatusResponse(
+        cancelledOrder,
+        'Order cancelled successfully',
+      );
+    });
+  }
+
+  private async transitionSellerOrder(
+    userId: string,
+    orderId: string,
+    expectedStatus: OrderStatus,
+    nextStatus: OrderStatus,
+    successMessage: string,
+  ) {
+    return this.dataSource.transaction(async (manager) => {
+      const shop = await this.findActiveSellerShopInTransaction(
+        manager,
+        userId,
+      );
+      const order = await this.findAndLockSellerOrder(
+        manager,
+        orderId,
+        shop.shopId,
+      );
+
+      if (order.status !== expectedStatus) {
+        throw new ConflictException(
+          `Order must be ${expectedStatus} to change to ${nextStatus}`,
+        );
+      }
+
+      order.status = nextStatus;
+      const savedOrder = await manager.getRepository(Order).save(order);
+
+      return this.buildOrderStatusResponse(savedOrder, successMessage);
+    });
+  }
+
+  private async findActiveSellerShop(userId: string): Promise<Shop> {
+    const seller = await this.sellerRepository.findOneBy({ userId });
+
+    if (!seller) {
+      throw new NotFoundException('Seller profile not found');
+    }
+
+    const shop = await this.shopRepository.findOneBy({
+      sellerId: seller.sellerId,
+    });
+
+    if (!shop) {
+      throw new NotFoundException('Shop not found');
+    }
+
+    if (shop.status !== ShopStatus.ACTIVE) {
+      throw new ForbiddenException('Shop must be active to manage orders');
+    }
+
+    return shop;
+  }
+
+  private async findActiveSellerShopInTransaction(
+    manager: EntityManager,
+    userId: string,
+  ): Promise<Shop> {
+    const seller = await manager.getRepository(Seller).findOneBy({ userId });
+
+    if (!seller) {
+      throw new NotFoundException('Seller profile not found');
+    }
+
+    const shop = await manager.getRepository(Shop).findOneBy({
+      sellerId: seller.sellerId,
+    });
+
+    if (!shop) {
+      throw new NotFoundException('Shop not found');
+    }
+
+    if (shop.status !== ShopStatus.ACTIVE) {
+      throw new ForbiddenException('Shop must be active to manage orders');
+    }
+
+    return shop;
+  }
+
+  private async findAndLockSellerOrder(
+    manager: EntityManager,
+    orderId: string,
+    shopId: string,
+  ): Promise<Order> {
+    const order = await manager
+      .getRepository(Order)
+      .createQueryBuilder('order')
+      .setLock('pessimistic_write')
+      .where('order.orderId = :orderId', { orderId })
+      .andWhere('order.shopId = :shopId', { shopId })
+      .getOne();
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    return order;
+  }
+
+  private async findOrderItems(
+    manager: EntityManager,
+    orderId: string,
+  ): Promise<OrderItem[]> {
+    const orderItems = await manager.getRepository(OrderItem).find({
+      where: { orderId },
+      order: { productId: 'ASC', orderItemId: 'ASC' },
+    });
+
+    if (orderItems.length === 0) {
+      throw new ConflictException('Order inventory data is inconsistent');
+    }
+
+    return orderItems;
+  }
+
+  private async updateInventoryForFinalStatus(
+    manager: EntityManager,
+    orderItems: OrderItem[],
+    deductQuantity: boolean,
+  ): Promise<void> {
+    if (orderItems.length === 0) {
+      throw new ConflictException('Order inventory data is inconsistent');
+    }
+
+    const quantitiesByProductId = this.sumQuantitiesByProduct(orderItems);
+    const inventoriesByProductId = await this.lockInventories(
+      manager,
+      Array.from(quantitiesByProductId.keys()),
+    );
+
+    for (const [productId, orderQuantity] of quantitiesByProductId) {
+      const inventory = inventoriesByProductId.get(productId);
+
+      if (
+        !inventory ||
+        inventory.reservedQuantity < orderQuantity ||
+        (deductQuantity && inventory.quantity < orderQuantity)
+      ) {
+        throw new ConflictException('Order inventory data is inconsistent');
+      }
+
+      inventory.reservedQuantity -= orderQuantity;
+
+      if (deductQuantity) {
+        inventory.quantity -= orderQuantity;
+      }
+    }
+
+    await manager
+      .getRepository(Inventory)
+      .save(Array.from(inventoriesByProductId.values()));
+  }
+
+  private buildSellerOrderResponse(order: Order) {
+    return {
+      orderId: order.orderId,
+      orderGroupId: order.orderGroupId,
+      subtotal: order.subtotal,
+      discountAmount: order.discountAmount,
+      shippingFee: order.shippingFee,
+      totalAmount: order.totalAmount,
+      shippingAddress: order.shippingAddress,
+      shippingMethod: order.shippingMethod,
+      status: order.status,
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+    };
+  }
+
+  private buildOrderStatusResponse(order: Order, message: string) {
+    return {
+      orderId: order.orderId,
+      status: order.status,
+      updatedAt: order.updatedAt,
+      message,
+    };
   }
 
   private sumQuantitiesByProduct(orderItems: OrderItem[]): Map<string, number> {
