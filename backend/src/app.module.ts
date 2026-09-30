@@ -10,6 +10,8 @@ import { CategoryModule } from './modules/category/category.module.js';
 import { CheckoutModule } from './modules/checkout/checkout.module.js';
 import { CustomerModule } from './modules/customer/customer.module.js';
 import { DiscountModule } from './modules/discount/discount.module.js';
+import { PaymentModule } from './modules/payment/payment.module.js';
+import { OrderModule } from './modules/order/order.module.js';
 import { ProductModule } from './modules/product/product.module.js';
 import { ShopModule } from './modules/shop/shop.module.js';
 import { UserModule } from './modules/user/user.module.js';
@@ -37,6 +39,8 @@ import { WishlistModule } from './modules/wishlist/wishlist.module.js';
     CartModule,
     DiscountModule,
     CheckoutModule,
+    PaymentModule,
+    OrderModule,
   ],
   controllers: [],
   providers: [],
