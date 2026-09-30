@@ -14,6 +14,7 @@ import { PaymentModule } from './modules/payment/payment.module.js';
 import { OrderModule } from './modules/order/order.module.js';
 import { ProductModule } from './modules/product/product.module.js';
 import { ReviewModule } from './modules/review/review.module.js';
+import { SellerModule } from './modules/seller/seller.module.js';
 import { ShopModule } from './modules/shop/shop.module.js';
 import { UserModule } from './modules/user/user.module.js';
 import { WishlistModule } from './modules/wishlist/wishlist.module.js';
@@ -43,6 +44,7 @@ import { WishlistModule } from './modules/wishlist/wishlist.module.js';
     PaymentModule,
     OrderModule,
     ReviewModule,
+    SellerModule,
   ],
   controllers: [],
   providers: [],
