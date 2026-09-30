@@ -78,6 +78,12 @@ export class OrderService {
       .leftJoinAndSelect('orderGroup.orders', 'order')
       .leftJoinAndSelect('order.shop', 'shop')
       .leftJoinAndSelect('order.items', 'orderItem')
+      .leftJoinAndSelect(
+        'order.reviews',
+        'review',
+        'review.customerId = :customerId',
+        { customerId: customer.customerId },
+      )
       .where('orderGroup.orderGroupId = :orderGroupId', { orderGroupId })
       .andWhere('orderGroup.customerId = :customerId', {
         customerId: customer.customerId,
@@ -104,27 +110,47 @@ export class OrderService {
             paidAt: orderGroup.payment.paidAt,
           }
         : null,
-      orders: (orderGroup.orders ?? []).map((order) => ({
-        orderId: order.orderId,
-        shopId: order.shopId,
-        shopName: order.shop.name,
-        subtotal: order.subtotal,
-        discountAmount: order.discountAmount,
-        shippingFee: order.shippingFee,
-        totalAmount: order.totalAmount,
-        shippingAddress: order.shippingAddress,
-        shippingMethod: order.shippingMethod,
-        status: order.status,
-        createdAt: order.createdAt,
-        items: (order.items ?? []).map((orderItem) => ({
-          orderItemId: orderItem.orderItemId,
-          productId: orderItem.productId,
-          productName: orderItem.productName,
-          quantity: orderItem.quantity,
-          unitPrice: orderItem.unitPrice,
-          subtotal: orderItem.subtotal,
-        })),
-      })),
+      orders: (orderGroup.orders ?? []).map((order) => {
+        const reviewsByProductId = new Map(
+          (order.reviews ?? []).map((review) => [review.productId, review]),
+        );
+
+        return {
+          orderId: order.orderId,
+          shopId: order.shopId,
+          shopName: order.shop.name,
+          subtotal: order.subtotal,
+          discountAmount: order.discountAmount,
+          shippingFee: order.shippingFee,
+          totalAmount: order.totalAmount,
+          shippingAddress: order.shippingAddress,
+          shippingMethod: order.shippingMethod,
+          status: order.status,
+          createdAt: order.createdAt,
+          items: (order.items ?? []).map((orderItem) => {
+            const review = reviewsByProductId.get(orderItem.productId);
+
+            return {
+              orderItemId: orderItem.orderItemId,
+              productId: orderItem.productId,
+              productName: orderItem.productName,
+              quantity: orderItem.quantity,
+              unitPrice: orderItem.unitPrice,
+              subtotal: orderItem.subtotal,
+              review: review
+                ? {
+                    reviewId: review.reviewId,
+                    rating: review.rating,
+                    comment: review.comment,
+                    status: review.status,
+                    createdAt: review.createdAt,
+                    updatedAt: review.updatedAt,
+                  }
+                : null,
+            };
+          }),
+        };
+      }),
     };
   }
 
