@@ -11,6 +11,8 @@ import { Inventory } from '../inventory/entities/inventory.entity.js';
 import { Product } from '../product/entities/product.entity.js';
 import { ProductStatus } from '../product/enums/product-status.enum.js';
 import { ShopStatus } from '../shop/enums/shop-status.enum.js';
+import { UserBehaviorService } from '../user-behavior/user-behavior.service.js';
+import { BehaviorType } from '../user-behavior/enums/behavior-type.enum.js';
 import { AddCartItemDto } from './dto/add-cart-item.dto.js';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto.js';
 import { CartItem } from './entities/cart-item.entity.js';
@@ -32,6 +34,7 @@ export class CartService {
     @InjectRepository(CartItem)
     private readonly cartItemRepository: Repository<CartItem>,
     private readonly dataSource: DataSource,
+    private readonly userBehaviorService: UserBehaviorService,
   ) {}
 
   async getCart(userId: string) {
@@ -86,7 +89,7 @@ export class CartService {
     const customer = await this.findCustomerOrFail(userId);
 
     try {
-      return await this.dataSource.transaction(async (manager) => {
+      const response = await this.dataSource.transaction(async (manager) => {
         const cartRepository = manager.getRepository(Cart);
         const cartItemRepository = manager.getRepository(CartItem);
 
@@ -137,6 +140,14 @@ export class CartService {
         const savedItem = await cartItemRepository.save(item);
         return this.buildCartItemResponse(savedItem, product, inventory);
       });
+
+      await this.userBehaviorService.recordBehavior(
+        customer.customerId,
+        addCartItemDto.productId,
+        BehaviorType.ADD_CART,
+      );
+
+      return response;
     } catch (error: unknown) {
       if (this.isUniqueViolation(error)) {
         throw new ConflictException('Product is already being added to cart');
