@@ -9,6 +9,8 @@ import { Customer } from '../customer/entities/customer.entity.js';
 import { Product } from '../product/entities/product.entity.js';
 import { ProductStatus } from '../product/enums/product-status.enum.js';
 import { ShopStatus } from '../shop/enums/shop-status.enum.js';
+import { BehaviorType } from '../user-behavior/enums/behavior-type.enum.js';
+import { UserBehaviorService } from '../user-behavior/user-behavior.service.js';
 import { WishlistItem } from './entities/wishlist-item.entity.js';
 import { Wishlist } from './entities/wishlist.entity.js';
 
@@ -30,6 +32,7 @@ export class WishlistService {
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
     private readonly dataSource: DataSource,
+    private readonly userBehaviorService: UserBehaviorService,
   ) {}
 
   async getWishlist(userId: string) {
@@ -71,7 +74,7 @@ export class WishlistService {
     const product = await this.findAvailableProductOrFail(productId);
 
     try {
-      return await this.dataSource.transaction(async (manager) => {
+      const response = await this.dataSource.transaction(async (manager) => {
         const wishlistRepository = manager.getRepository(Wishlist);
         const wishlistItemRepository = manager.getRepository(WishlistItem);
 
@@ -109,6 +112,14 @@ export class WishlistService {
 
         return this.buildWishlistItemResponse(item, product);
       });
+
+      await this.userBehaviorService.recordBehavior(
+        customer.customerId,
+        productId,
+        BehaviorType.WISHLIST,
+      );
+
+      return response;
     } catch (error: unknown) {
       if (this.isUniqueViolation(error)) {
         throw new ConflictException('Product is already in wishlist');

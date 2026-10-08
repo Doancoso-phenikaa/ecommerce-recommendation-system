@@ -19,6 +19,8 @@ import { OrderStatus } from '../order/enums/order-status.enum.js';
 import { Product } from '../product/entities/product.entity.js';
 import { ProductStatus } from '../product/enums/product-status.enum.js';
 import { ShopStatus } from '../shop/enums/shop-status.enum.js';
+import { BehaviorType } from '../user-behavior/enums/behavior-type.enum.js';
+import { UserBehaviorService } from '../user-behavior/user-behavior.service.js';
 import { CheckoutPreviewDto } from './dto/checkout-preview.dto.js';
 import { ConfirmCheckoutDto } from './dto/confirm-checkout.dto.js';
 
@@ -121,6 +123,7 @@ export class CheckoutService {
     @InjectRepository(Discount)
     private readonly discountRepository: Repository<Discount>,
     private readonly dataSource: DataSource,
+    private readonly userBehaviorService: UserBehaviorService,
   ) {}
 
   async previewCheckout(
@@ -251,160 +254,182 @@ export class CheckoutService {
     userId: string,
     confirmCheckoutDto: ConfirmCheckoutDto,
   ): Promise<ConfirmCheckoutResponse> {
-    return this.dataSource.transaction(async (manager) => {
-      const customer = await manager
-        .getRepository(Customer)
-        .findOneBy({ userId });
+    const transactionResult = await this.dataSource.transaction(
+      async (manager) => {
+        const customer = await manager
+          .getRepository(Customer)
+          .findOneBy({ userId });
 
-      if (!customer) {
-        throw new NotFoundException('Customer profile not found');
-      }
+        if (!customer) {
+          throw new NotFoundException('Customer profile not found');
+        }
 
-      const cart = await manager
-        .getRepository(Cart)
-        .createQueryBuilder('cart')
-        .setLock('pessimistic_write')
-        .where('cart.customerId = :customerId', {
-          customerId: customer.customerId,
-        })
-        .getOne();
+        const cart = await manager
+          .getRepository(Cart)
+          .createQueryBuilder('cart')
+          .setLock('pessimistic_write')
+          .where('cart.customerId = :customerId', {
+            customerId: customer.customerId,
+          })
+          .getOne();
 
-      if (!cart) {
-        throw new BadRequestException('Cart is empty');
-      }
+        if (!cart) {
+          throw new BadRequestException('Cart is empty');
+        }
 
-      const cartItemRepository = manager.getRepository(CartItem);
-      const cartItems = await cartItemRepository
-        .createQueryBuilder('cartItem')
-        .innerJoinAndSelect('cartItem.product', 'product')
-        .innerJoinAndSelect('product.shop', 'shop')
-        .where('cartItem.cartId = :cartId', { cartId: cart.cartId })
-        .orderBy('cartItem.productId', 'ASC')
-        .getMany();
+        const cartItemRepository = manager.getRepository(CartItem);
+        const cartItems = await cartItemRepository
+          .createQueryBuilder('cartItem')
+          .innerJoinAndSelect('cartItem.product', 'product')
+          .innerJoinAndSelect('product.shop', 'shop')
+          .where('cartItem.cartId = :cartId', { cartId: cart.cartId })
+          .orderBy('cartItem.productId', 'ASC')
+          .getMany();
 
-      if (cartItems.length === 0) {
-        throw new BadRequestException('Cart is empty');
-      }
+        if (cartItems.length === 0) {
+          throw new BadRequestException('Cart is empty');
+        }
 
-      const inventoriesByProductId = await this.lockInventories(
-        manager,
-        cartItems.map((cartItem) => cartItem.productId),
-      );
-      const { shopGroups, cartSubtotalInCents } =
-        this.groupAndValidateCartItems(cartItems, inventoriesByProductId);
-      const discount = await this.findAndLockDiscount(
-        manager,
-        confirmCheckoutDto.discountCode,
-        cartSubtotalInCents,
-      );
-      const discountAmountInCents = discount
-        ? this.calculateDiscountAmount(cartSubtotalInCents, discount)
-        : 0n;
-      const finalTotalInCents = cartSubtotalInCents - discountAmountInCents;
-      const discountAllocations = this.allocateDiscountByShop(
-        shopGroups,
-        cartSubtotalInCents,
-        discountAmountInCents,
-      );
+        const inventoriesByProductId = await this.lockInventories(
+          manager,
+          cartItems.map((cartItem) => cartItem.productId),
+        );
+        const { shopGroups, cartSubtotalInCents } =
+          this.groupAndValidateCartItems(cartItems, inventoriesByProductId);
+        const discount = await this.findAndLockDiscount(
+          manager,
+          confirmCheckoutDto.discountCode,
+          cartSubtotalInCents,
+        );
+        const discountAmountInCents = discount
+          ? this.calculateDiscountAmount(cartSubtotalInCents, discount)
+          : 0n;
+        const finalTotalInCents = cartSubtotalInCents - discountAmountInCents;
+        const discountAllocations = this.allocateDiscountByShop(
+          shopGroups,
+          cartSubtotalInCents,
+          discountAmountInCents,
+        );
 
-      const orderGroupRepository = manager.getRepository(OrderGroup);
-      const orderGroup = await orderGroupRepository.save(
-        orderGroupRepository.create({
-          customerId: customer.customerId,
-          totalAmount: this.formatCents(finalTotalInCents),
-        }),
-      );
-      const orderRepository = manager.getRepository(Order);
-      const orderItemRepository = manager.getRepository(OrderItem);
-      const orders: ConfirmCheckoutOrderResponse[] = [];
-
-      for (const shopGroup of shopGroups) {
-        const shopDiscountInCents =
-          discountAllocations.get(shopGroup.shopId) ?? 0n;
-        const shippingFeeInCents = 0n;
-        const orderTotalInCents =
-          shopGroup.subtotalInCents - shopDiscountInCents + shippingFeeInCents;
-        const order = await orderRepository.save(
-          orderRepository.create({
-            orderGroupId: orderGroup.orderGroupId,
-            shopId: shopGroup.shopId,
-            discountId: discount?.discountId ?? null,
-            subtotal: this.formatCents(shopGroup.subtotalInCents),
-            discountAmount: this.formatCents(shopDiscountInCents),
-            shippingFee: this.formatCents(shippingFeeInCents),
-            totalAmount: this.formatCents(orderTotalInCents),
-            shippingAddress: confirmCheckoutDto.shippingAddress.trim(),
-            shippingMethod: confirmCheckoutDto.shippingMethod?.trim() || null,
-            status: OrderStatus.PENDING,
+        const orderGroupRepository = manager.getRepository(OrderGroup);
+        const orderGroup = await orderGroupRepository.save(
+          orderGroupRepository.create({
+            customerId: customer.customerId,
+            totalAmount: this.formatCents(finalTotalInCents),
           }),
         );
-        const savedOrderItems = await orderItemRepository.save(
-          shopGroup.items.map((line) =>
-            orderItemRepository.create({
-              orderId: order.orderId,
-              productId: line.product.productId,
-              productName: line.product.name,
-              quantity: line.cartItem.quantity,
-              unitPrice: line.product.price,
-              subtotal: this.formatCents(line.subtotalInCents),
+        const orderRepository = manager.getRepository(Order);
+        const orderItemRepository = manager.getRepository(OrderItem);
+        const orders: ConfirmCheckoutOrderResponse[] = [];
+
+        for (const shopGroup of shopGroups) {
+          const shopDiscountInCents =
+            discountAllocations.get(shopGroup.shopId) ?? 0n;
+          const shippingFeeInCents = 0n;
+          const orderTotalInCents =
+            shopGroup.subtotalInCents -
+            shopDiscountInCents +
+            shippingFeeInCents;
+          const order = await orderRepository.save(
+            orderRepository.create({
+              orderGroupId: orderGroup.orderGroupId,
+              shopId: shopGroup.shopId,
+              discountId: discount?.discountId ?? null,
+              subtotal: this.formatCents(shopGroup.subtotalInCents),
+              discountAmount: this.formatCents(shopDiscountInCents),
+              shippingFee: this.formatCents(shippingFeeInCents),
+              totalAmount: this.formatCents(orderTotalInCents),
+              shippingAddress: confirmCheckoutDto.shippingAddress.trim(),
+              shippingMethod: confirmCheckoutDto.shippingMethod?.trim() || null,
+              status: OrderStatus.PENDING,
             }),
-          ),
-        );
+          );
+          const savedOrderItems = await orderItemRepository.save(
+            shopGroup.items.map((line) =>
+              orderItemRepository.create({
+                orderId: order.orderId,
+                productId: line.product.productId,
+                productName: line.product.name,
+                quantity: line.cartItem.quantity,
+                unitPrice: line.product.price,
+                subtotal: this.formatCents(line.subtotalInCents),
+              }),
+            ),
+          );
 
-        orders.push({
-          orderId: order.orderId,
-          shopId: order.shopId,
-          subtotal: order.subtotal,
-          discountAmount: order.discountAmount,
-          shippingFee: order.shippingFee,
-          totalAmount: order.totalAmount,
-          shippingAddress: order.shippingAddress,
-          shippingMethod: order.shippingMethod,
-          status: order.status,
-          items: savedOrderItems.map((orderItem) => ({
-            orderItemId: orderItem.orderItemId,
-            productId: orderItem.productId,
-            productName: orderItem.productName,
-            quantity: orderItem.quantity,
-            unitPrice: orderItem.unitPrice,
-            subtotal: orderItem.subtotal,
-          })),
-        });
-      }
-
-      for (const shopGroup of shopGroups) {
-        for (const line of shopGroup.items) {
-          line.inventory.reservedQuantity += line.cartItem.quantity;
+          orders.push({
+            orderId: order.orderId,
+            shopId: order.shopId,
+            subtotal: order.subtotal,
+            discountAmount: order.discountAmount,
+            shippingFee: order.shippingFee,
+            totalAmount: order.totalAmount,
+            shippingAddress: order.shippingAddress,
+            shippingMethod: order.shippingMethod,
+            status: order.status,
+            items: savedOrderItems.map((orderItem) => ({
+              orderItemId: orderItem.orderItemId,
+              productId: orderItem.productId,
+              productName: orderItem.productName,
+              quantity: orderItem.quantity,
+              unitPrice: orderItem.unitPrice,
+              subtotal: orderItem.subtotal,
+            })),
+          });
         }
-      }
 
-      await manager
-        .getRepository(Inventory)
-        .save(Array.from(inventoriesByProductId.values()));
+        for (const shopGroup of shopGroups) {
+          for (const line of shopGroup.items) {
+            line.inventory.reservedQuantity += line.cartItem.quantity;
+          }
+        }
 
-      if (discount) {
         await manager
-          .getRepository(Discount)
-          .increment({ discountId: discount.discountId }, 'usedCount', 1);
-      }
+          .getRepository(Inventory)
+          .save(Array.from(inventoriesByProductId.values()));
 
-      await cartItemRepository.delete({ cartId: cart.cartId });
+        if (discount) {
+          await manager
+            .getRepository(Discount)
+            .increment({ discountId: discount.discountId }, 'usedCount', 1);
+        }
 
-      return {
-        orderGroupId: orderGroup.orderGroupId,
-        cartSubtotal: this.formatCents(cartSubtotalInCents),
-        discount: discount
-          ? {
-              discountId: discount.discountId,
-              code: discount.code,
-            }
-          : null,
-        discountAmount: this.formatCents(discountAmountInCents),
-        totalAmount: orderGroup.totalAmount,
-        orders,
-        createdAt: orderGroup.createdAt,
-      };
-    });
+        await cartItemRepository.delete({ cartId: cart.cartId });
+
+        return {
+          customerId: customer.customerId,
+          productIds: Array.from(
+            new Set(cartItems.map((cartItem) => cartItem.productId)),
+          ),
+          response: {
+            orderGroupId: orderGroup.orderGroupId,
+            cartSubtotal: this.formatCents(cartSubtotalInCents),
+            discount: discount
+              ? {
+                  discountId: discount.discountId,
+                  code: discount.code,
+                }
+              : null,
+            discountAmount: this.formatCents(discountAmountInCents),
+            totalAmount: orderGroup.totalAmount,
+            orders,
+            createdAt: orderGroup.createdAt,
+          },
+        };
+      },
+    );
+
+    await Promise.all(
+      transactionResult.productIds.map((productId) =>
+        this.userBehaviorService.recordBehavior(
+          transactionResult.customerId,
+          productId,
+          BehaviorType.PURCHASE,
+        ),
+      ),
+    );
+
+    return transactionResult.response;
   }
 
   private async findAndValidateDiscount(
