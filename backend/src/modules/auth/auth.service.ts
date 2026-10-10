@@ -41,8 +41,8 @@ export class AuthService {
   ) {}
 
   async login(loginDto: LoginDto) {
-    const email = loginDto.email.trim().toLowerCase();
-    const user = await this.userService.findByEmail(email);
+    const email = this.normalizeEmail(loginDto.email);
+    const user = await this.userService.findByEmailWithPassword(email);
 
     if (!user) {
       throw new UnauthorizedException(INVALID_CREDENTIALS_MESSAGE);
@@ -102,8 +102,8 @@ export class AuthService {
   }
 
   async registerCustomer(registerCustomerDto: RegisterCustomerDto) {
-    const email = registerCustomerDto.email.trim().toLowerCase();
-    const phone = registerCustomerDto.phone?.trim() || null;
+    const email = this.normalizeEmail(registerCustomerDto.email);
+    const phone = this.normalizeOptionalText(registerCustomerDto.phone);
 
     if (await this.userService.checkEmailExists(email)) {
       throw new ConflictException('Email already exists');
@@ -164,8 +164,8 @@ export class AuthService {
   }
 
   async registerSeller(registerSellerDto: RegisterSellerDto) {
-    const email = registerSellerDto.email.trim().toLowerCase();
-    const phone = registerSellerDto.phone?.trim() || null;
+    const email = this.normalizeEmail(registerSellerDto.email);
+    const phone = this.normalizeOptionalText(registerSellerDto.phone);
 
     if (await this.userService.checkEmailExists(email)) {
       throw new ConflictException('Email already exists');
@@ -231,6 +231,14 @@ export class AuthService {
 
     const driverError = error.driverError as PostgresDriverError;
     return driverError.code === POSTGRES_UNIQUE_VIOLATION;
+  }
+
+  private normalizeEmail(email: string): string {
+    return email.trim().toLowerCase();
+  }
+
+  private normalizeOptionalText(value: string | undefined): string | null {
+    return value?.trim() || null;
   }
 
   private createTokenPayload(user: User): AuthenticationTokenPayload {

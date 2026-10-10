@@ -23,10 +23,21 @@ export class User {
   @Column({ name: 'email', type: 'varchar', unique: true, length: 150 })
   email: string;
 
-  @Column({ name: 'password', type: 'varchar', length: 255 })
+  @Column({
+    name: 'password',
+    type: 'varchar',
+    length: 255,
+    select: false,
+  })
   password: string;
 
-  @Column({ name: 'phone', type: 'varchar', nullable: true, length: 20, unique: true })
+  @Column({
+    name: 'phone',
+    type: 'varchar',
+    nullable: true,
+    length: 20,
+    unique: true,
+  })
   phone: string | null;
 
   @Column({
