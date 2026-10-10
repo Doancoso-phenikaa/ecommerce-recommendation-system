@@ -52,31 +52,22 @@ export class CartService {
 
     const items = await this.cartItemRepository
       .createQueryBuilder('cartItem')
-      .innerJoinAndSelect('cartItem.product', 'product')
-      .innerJoinAndSelect('product.inventory', 'inventory')
-      .innerJoin('product.shop', 'shop')
+      .leftJoinAndSelect('cartItem.product', 'product')
+      .leftJoinAndSelect('product.shop', 'shop')
+      .leftJoinAndSelect('product.inventory', 'inventory')
       .where('cartItem.cartId = :cartId', { cartId: cart.cartId })
-      .andWhere('product.status = :productStatus', {
-        productStatus: ProductStatus.APPROVED,
-      })
-      .andWhere('shop.status = :shopStatus', {
-        shopStatus: ShopStatus.ACTIVE,
-      })
       .orderBy('cartItem.createdAt', 'ASC')
       .addOrderBy('cartItem.cartItemId', 'ASC')
       .getMany();
 
     let totalAmountInCents = 0n;
     const responseItems = items.map((item) => {
-      const subtotalInCents =
-        this.priceToCents(item.product.price) * BigInt(item.quantity);
-      totalAmountInCents += subtotalInCents;
+      if (item.product) {
+        totalAmountInCents +=
+          this.priceToCents(item.product.price) * BigInt(item.quantity);
+      }
 
-      return this.buildCartItemResponse(
-        item,
-        item.product,
-        item.product.inventory,
-      );
+      return this.buildCartReadItemResponse(item);
     });
 
     return {
@@ -311,6 +302,57 @@ export class CartService {
       quantity: item.quantity,
       availableQuantity: inventory.quantity - inventory.reservedQuantity,
       subtotal: this.formatCents(subtotalInCents),
+    };
+  }
+
+  private buildCartReadItemResponse(item: CartItem) {
+    const product = item.product;
+
+    if (!product) {
+      return {
+        productId: item.productId,
+        name: null,
+        imageUrl: null,
+        price: null,
+        quantity: item.quantity,
+        availableQuantity: 0,
+        subtotal: null,
+        isAvailable: false,
+        unavailableReason: 'PRODUCT_NOT_AVAILABLE',
+      };
+    }
+
+    const inventory = product.inventory;
+    const calculatedAvailableQuantity = inventory
+      ? inventory.quantity - inventory.reservedQuantity
+      : 0;
+    const availableQuantity =
+      calculatedAvailableQuantity > 0 ? calculatedAvailableQuantity : 0;
+    const subtotalInCents =
+      this.priceToCents(product.price) * BigInt(item.quantity);
+
+    let unavailableReason: string | null = null;
+
+    if (product.status !== ProductStatus.APPROVED) {
+      unavailableReason = 'PRODUCT_NOT_AVAILABLE';
+    } else if (!product.shop || product.shop.status !== ShopStatus.ACTIVE) {
+      unavailableReason = 'SHOP_NOT_ACTIVE';
+    } else if (!inventory) {
+      unavailableReason = 'PRODUCT_NOT_AVAILABLE';
+    } else if (availableQuantity < item.quantity) {
+      unavailableReason = 'INSUFFICIENT_STOCK';
+    }
+
+    return {
+      productId: product.productId,
+      name: product.name,
+      imageUrl: product.imageUrl,
+      price: product.price,
+      quantity: item.quantity,
+      availableQuantity,
+      subtotal: this.formatCents(subtotalInCents),
+      isAvailable: unavailableReason === null,
+      unavailableReason,
     };
   }
 

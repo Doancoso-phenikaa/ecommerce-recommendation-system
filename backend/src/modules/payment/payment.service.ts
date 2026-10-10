@@ -4,9 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { DataSource, QueryFailedError } from 'typeorm';
+import { DataSource, Not, QueryFailedError } from 'typeorm';
 import { Customer } from '../customer/entities/customer.entity.js';
 import { OrderGroup } from '../order/entities/order-group.entity.js';
+import { Order } from '../order/entities/order.entity.js';
+import { OrderStatus } from '../order/enums/order-status.enum.js';
 import { CreatePaymentDto } from './dto/create-payment.dto.js';
 import { Payment } from './entities/payment.entity.js';
 import { PaymentMethod } from './enums/payment-method.enum.js';
@@ -61,6 +63,22 @@ export class PaymentService {
           throw new ConflictException('Order group already has a payment');
         }
 
+        const hasNonCancelledOrder = await manager
+          .getRepository(Order)
+          .existsBy({
+            orderGroupId: orderGroup.orderGroupId,
+            status: Not(OrderStatus.CANCELLED),
+          });
+
+        if (
+          this.isZeroAmount(orderGroup.totalAmount) ||
+          !hasNonCancelledOrder
+        ) {
+          throw new ConflictException(
+            'Cannot create payment for a fully cancelled order group',
+          );
+        }
+
         const isOnline =
           createPaymentDto.paymentMethod === PaymentMethod.ONLINE;
         const payment = await paymentRepository.save(
@@ -104,5 +122,9 @@ export class PaymentService {
 
     const driverError = error.driverError as PostgresDriverError;
     return driverError.code === POSTGRES_UNIQUE_VIOLATION;
+  }
+
+  private isZeroAmount(amount: string): boolean {
+    return /^0+(?:\.0+)?$/.test(amount.trim());
   }
 }

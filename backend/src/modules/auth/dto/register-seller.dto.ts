@@ -1,3 +1,4 @@
+import { Transform } from 'class-transformer';
 import {
   IsEmail,
   IsNotEmpty,
@@ -7,17 +8,23 @@ import {
   MinLength,
 } from 'class-validator';
 
+const trimString = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim() : value;
+
 export class RegisterSellerDto {
+  @Transform(trimString)
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
   fullName: string;
 
+  @Transform(trimString)
   @IsEmail()
   @MaxLength(150)
   email: string;
 
   @IsOptional()
+  @Transform(trimString)
   @IsString()
   @MaxLength(20)
   phone?: string;

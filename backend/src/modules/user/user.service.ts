@@ -15,14 +15,38 @@ export class UserService {
   }
 
   findByEmail(email: string): Promise<User | null> {
-    return this.userRepository.findOneBy({ email });
+    return this.userRepository
+      .createQueryBuilder('user')
+      .where('LOWER(user.email) = :email', {
+        email: this.normalizeEmail(email),
+      })
+      .getOne();
+  }
+
+  findByEmailWithPassword(email: string): Promise<User | null> {
+    return this.userRepository
+      .createQueryBuilder('user')
+      .addSelect('user.password')
+      .where('LOWER(user.email) = :email', {
+        email: this.normalizeEmail(email),
+      })
+      .getOne();
   }
 
   checkEmailExists(email: string): Promise<boolean> {
-    return this.userRepository.existsBy({ email });
+    return this.userRepository
+      .createQueryBuilder('user')
+      .where('LOWER(user.email) = :email', {
+        email: this.normalizeEmail(email),
+      })
+      .getExists();
   }
 
   checkPhoneExists(phone: string): Promise<boolean> {
-    return this.userRepository.existsBy({ phone });
+    return this.userRepository.existsBy({ phone: phone.trim() });
+  }
+
+  private normalizeEmail(email: string): string {
+    return email.trim().toLowerCase();
   }
 }

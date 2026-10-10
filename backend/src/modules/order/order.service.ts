@@ -1,6 +1,5 @@
 import {
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,9 +7,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { Customer } from '../customer/entities/customer.entity.js';
 import { Inventory } from '../inventory/entities/inventory.entity.js';
+import { Payment } from '../payment/entities/payment.entity.js';
+import { PaymentMethod } from '../payment/enums/payment-method.enum.js';
+import { PaymentStatus } from '../payment/enums/payment-status.enum.js';
 import { Seller } from '../seller/entities/seller.entity.js';
 import { Shop } from '../shop/entities/shop.entity.js';
-import { ShopStatus } from '../shop/enums/shop-status.enum.js';
 import { OrderGroup } from './entities/order-group.entity.js';
 import { OrderItem } from './entities/order-item.entity.js';
 import { Order } from './entities/order.entity.js';
@@ -155,7 +156,7 @@ export class OrderService {
   }
 
   async getSellerOrders(userId: string) {
-    const shop = await this.findActiveSellerShop(userId);
+    const shop = await this.findSellerShop(userId);
     const orders = await this.dataSource.getRepository(Order).find({
       where: { shopId: shop.shopId },
       order: { createdAt: 'DESC', orderId: 'DESC' },
@@ -167,7 +168,7 @@ export class OrderService {
   }
 
   async getSellerOrderDetail(userId: string, orderId: string) {
-    const shop = await this.findActiveSellerShop(userId);
+    const shop = await this.findSellerShop(userId);
     const order = await this.dataSource
       .getRepository(Order)
       .createQueryBuilder('order')
@@ -219,19 +220,7 @@ export class OrderService {
         throw new NotFoundException('Order not found');
       }
 
-      if (order.status !== OrderStatus.PENDING) {
-        throw new ConflictException('Only pending orders can be cancelled');
-      }
-
-      const orderItems = await manager.getRepository(OrderItem).find({
-        where: { orderId: order.orderId },
-        order: { productId: 'ASC', orderItemId: 'ASC' },
-      });
-
-      await this.updateInventoryForFinalStatus(manager, orderItems, false);
-
-      order.status = OrderStatus.CANCELLED;
-      const cancelledOrder = await manager.getRepository(Order).save(order);
+      const cancelledOrder = await this.cancelPendingOrder(manager, order);
 
       return {
         orderId: cancelledOrder.orderId,
@@ -243,13 +232,32 @@ export class OrderService {
   }
 
   async confirmOrder(userId: string, orderId: string) {
-    return this.transitionSellerOrder(
-      userId,
-      orderId,
-      OrderStatus.PENDING,
-      OrderStatus.CONFIRMED,
-      'Order confirmed successfully',
-    );
+    return this.dataSource.transaction(async (manager) => {
+      const shop = await this.findSellerShopInTransaction(manager, userId);
+      const order = await this.findAndLockSellerOrder(
+        manager,
+        orderId,
+        shop.shopId,
+      );
+
+      if (order.status !== OrderStatus.PENDING) {
+        throw new ConflictException(
+          'Order must be PENDING to change to CONFIRMED',
+        );
+      }
+
+      await this.lockOrderGroup(manager, order.orderGroupId);
+      const payment = await this.lockPayment(manager, order.orderGroupId);
+      this.validatePaymentReadyForConfirmation(payment);
+
+      order.status = OrderStatus.CONFIRMED;
+      const confirmedOrder = await manager.getRepository(Order).save(order);
+
+      return this.buildOrderStatusResponse(
+        confirmedOrder,
+        'Order confirmed successfully',
+      );
+    });
   }
 
   async startShipping(userId: string, orderId: string) {
@@ -264,10 +272,7 @@ export class OrderService {
 
   async completeOrder(userId: string, orderId: string) {
     return this.dataSource.transaction(async (manager) => {
-      const shop = await this.findActiveSellerShopInTransaction(
-        manager,
-        userId,
-      );
+      const shop = await this.findSellerShopInTransaction(manager, userId);
       const order = await this.findAndLockSellerOrder(
         manager,
         orderId,
@@ -293,25 +298,14 @@ export class OrderService {
 
   async cancelOrderBySeller(userId: string, orderId: string) {
     return this.dataSource.transaction(async (manager) => {
-      const shop = await this.findActiveSellerShopInTransaction(
-        manager,
-        userId,
-      );
+      const shop = await this.findSellerShopInTransaction(manager, userId);
       const order = await this.findAndLockSellerOrder(
         manager,
         orderId,
         shop.shopId,
       );
 
-      if (order.status !== OrderStatus.PENDING) {
-        throw new ConflictException('Only pending orders can be cancelled');
-      }
-
-      const orderItems = await this.findOrderItems(manager, order.orderId);
-      await this.updateInventoryForFinalStatus(manager, orderItems, false);
-
-      order.status = OrderStatus.CANCELLED;
-      const cancelledOrder = await manager.getRepository(Order).save(order);
+      const cancelledOrder = await this.cancelPendingOrder(manager, order);
 
       return this.buildOrderStatusResponse(
         cancelledOrder,
@@ -328,10 +322,7 @@ export class OrderService {
     successMessage: string,
   ) {
     return this.dataSource.transaction(async (manager) => {
-      const shop = await this.findActiveSellerShopInTransaction(
-        manager,
-        userId,
-      );
+      const shop = await this.findSellerShopInTransaction(manager, userId);
       const order = await this.findAndLockSellerOrder(
         manager,
         orderId,
@@ -351,7 +342,7 @@ export class OrderService {
     });
   }
 
-  private async findActiveSellerShop(userId: string): Promise<Shop> {
+  private async findSellerShop(userId: string): Promise<Shop> {
     const seller = await this.sellerRepository.findOneBy({ userId });
 
     if (!seller) {
@@ -366,14 +357,10 @@ export class OrderService {
       throw new NotFoundException('Shop not found');
     }
 
-    if (shop.status !== ShopStatus.ACTIVE) {
-      throw new ForbiddenException('Shop must be active to manage orders');
-    }
-
     return shop;
   }
 
-  private async findActiveSellerShopInTransaction(
+  private async findSellerShopInTransaction(
     manager: EntityManager,
     userId: string,
   ): Promise<Shop> {
@@ -389,10 +376,6 @@ export class OrderService {
 
     if (!shop) {
       throw new NotFoundException('Shop not found');
-    }
-
-    if (shop.status !== ShopStatus.ACTIVE) {
-      throw new ForbiddenException('Shop must be active to manage orders');
     }
 
     return shop;
@@ -432,6 +415,137 @@ export class OrderService {
     }
 
     return orderItems;
+  }
+
+  private async cancelPendingOrder(
+    manager: EntityManager,
+    order: Order,
+  ): Promise<Order> {
+    const orderGroup = await this.lockOrderGroup(manager, order.orderGroupId);
+    const payment = await this.lockPayment(manager, order.orderGroupId);
+
+    if (order.status !== OrderStatus.PENDING) {
+      throw new ConflictException('Only pending orders can be cancelled');
+    }
+
+    this.validatePaymentAllowsCancellation(payment);
+
+    const orderItems = await this.findOrderItems(manager, order.orderId);
+    await this.updateInventoryForFinalStatus(manager, orderItems, false);
+
+    order.status = OrderStatus.CANCELLED;
+    const cancelledOrder = await manager.getRepository(Order).save(order);
+
+    await this.recalculateOrderGroupAfterCancellation(
+      manager,
+      orderGroup,
+      payment,
+    );
+
+    return cancelledOrder;
+  }
+
+  private async lockOrderGroup(
+    manager: EntityManager,
+    orderGroupId: string,
+  ): Promise<OrderGroup> {
+    const orderGroup = await manager
+      .getRepository(OrderGroup)
+      .createQueryBuilder('orderGroup')
+      .setLock('pessimistic_write')
+      .where('orderGroup.orderGroupId = :orderGroupId', { orderGroupId })
+      .getOne();
+
+    if (!orderGroup) {
+      throw new ConflictException('Order group data is inconsistent');
+    }
+
+    return orderGroup;
+  }
+
+  private async lockPayment(
+    manager: EntityManager,
+    orderGroupId: string,
+  ): Promise<Payment | null> {
+    return manager
+      .getRepository(Payment)
+      .createQueryBuilder('payment')
+      .setLock('pessimistic_write')
+      .where('payment.orderGroupId = :orderGroupId', { orderGroupId })
+      .getOne();
+  }
+
+  private validatePaymentReadyForConfirmation(payment: Payment | null): void {
+    if (!payment) {
+      throw new ConflictException(
+        'Payment must be created before confirming the order',
+      );
+    }
+
+    const isCodPending =
+      payment.paymentMethod === PaymentMethod.COD &&
+      payment.status === PaymentStatus.PENDING;
+    const isOnlinePaid =
+      payment.paymentMethod === PaymentMethod.ONLINE &&
+      payment.status === PaymentStatus.PAID;
+
+    if (!isCodPending && !isOnlinePaid) {
+      throw new ConflictException(
+        'Payment is not ready for order confirmation',
+      );
+    }
+  }
+
+  private validatePaymentAllowsCancellation(payment: Payment | null): void {
+    if (!payment) {
+      return;
+    }
+
+    if (
+      payment.paymentMethod === PaymentMethod.ONLINE &&
+      payment.status === PaymentStatus.PAID
+    ) {
+      throw new ConflictException(
+        'Paid online orders cannot be cancelled because refunds are not supported',
+      );
+    }
+
+    const isCodPending =
+      payment.paymentMethod === PaymentMethod.COD &&
+      payment.status === PaymentStatus.PENDING;
+
+    if (!isCodPending && payment.status !== PaymentStatus.FAILED) {
+      throw new ConflictException('Payment does not allow order cancellation');
+    }
+  }
+
+  private async recalculateOrderGroupAfterCancellation(
+    manager: EntityManager,
+    orderGroup: OrderGroup,
+    payment: Payment | null,
+  ): Promise<void> {
+    const total = await manager
+      .getRepository(Order)
+      .createQueryBuilder('order')
+      .select(
+        'COALESCE(SUM("order"."total_amount"), 0)::numeric(14, 2)',
+        'totalAmount',
+      )
+      .where('order.orderGroupId = :orderGroupId', {
+        orderGroupId: orderGroup.orderGroupId,
+      })
+      .andWhere('order.status != :cancelledStatus', {
+        cancelledStatus: OrderStatus.CANCELLED,
+      })
+      .getRawOne<{ totalAmount: string }>();
+
+    orderGroup.totalAmount = total?.totalAmount ?? '0.00';
+    await manager.getRepository(OrderGroup).save(orderGroup);
+
+    if (payment) {
+      payment.amount = orderGroup.totalAmount;
+      await manager.getRepository(Payment).save(payment);
+    }
   }
 
   private async updateInventoryForFinalStatus(
