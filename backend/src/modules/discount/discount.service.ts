@@ -5,7 +5,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Not, QueryFailedError, Repository } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  Not,
+  QueryFailedError,
+  Repository,
+} from 'typeorm';
 import { CreateDiscountDto } from './dto/create-discount.dto.js';
 import { UpdateDiscountStatusDto } from './dto/update-discount-status.dto.js';
 import { UpdateDiscountDto } from './dto/update-discount.dto.js';
@@ -33,6 +39,7 @@ export class DiscountService {
   constructor(
     @InjectRepository(Discount)
     private readonly discountRepository: Repository<Discount>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async createDiscount(createDiscountDto: CreateDiscountDto) {
@@ -80,70 +87,102 @@ export class DiscountService {
     discountId: string,
     updateDiscountDto: UpdateDiscountDto,
   ) {
-    const discount = await this.findDiscountOrFail(discountId);
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        const discountRepository = manager.getRepository(Discount);
+        const discount = await this.findAndLockDiscount(manager, discountId);
 
-    if (updateDiscountDto.code !== undefined) {
-      const code = this.normalizeCode(updateDiscountDto.code);
+        if (updateDiscountDto.code !== undefined) {
+          const code = this.normalizeCode(updateDiscountDto.code);
 
-      if (
-        code !== discount.code &&
-        (await this.discountRepository.existsBy({
-          code,
-          discountId: Not(discountId),
-        }))
-      ) {
+          if (
+            code !== discount.code &&
+            (await discountRepository.existsBy({
+              code,
+              discountId: Not(discountId),
+            }))
+          ) {
+            throw new ConflictException('Discount code already exists');
+          }
+
+          discount.code = code;
+        }
+
+        if (
+          updateDiscountDto.usageLimit !== undefined &&
+          updateDiscountDto.usageLimit !== null &&
+          updateDiscountDto.usageLimit < discount.usedCount
+        ) {
+          throw new ConflictException(
+            'Usage limit cannot be lower than current used count',
+          );
+        }
+
+        const values: DiscountBusinessValues = {
+          type: updateDiscountDto.type ?? discount.type,
+          value: updateDiscountDto.value ?? discount.value,
+          startDate:
+            updateDiscountDto.startDate !== undefined
+              ? new Date(updateDiscountDto.startDate)
+              : discount.startDate,
+          endDate:
+            updateDiscountDto.endDate !== undefined
+              ? new Date(updateDiscountDto.endDate)
+              : discount.endDate,
+          usageLimit:
+            updateDiscountDto.usageLimit !== undefined
+              ? updateDiscountDto.usageLimit
+              : discount.usageLimit,
+          usedCount: discount.usedCount,
+        };
+        this.validateBusinessRules(values);
+
+        discount.type = values.type;
+        discount.value = values.value;
+        discount.startDate = values.startDate;
+        discount.endDate = values.endDate;
+        discount.usageLimit = values.usageLimit;
+
+        if (updateDiscountDto.minOrderAmount !== undefined) {
+          discount.minOrderAmount = updateDiscountDto.minOrderAmount;
+        }
+
+        const savedDiscount = await discountRepository.save(discount);
+        return this.buildDiscountResponse(savedDiscount);
+      });
+    } catch (error: unknown) {
+      if (this.isUniqueViolation(error)) {
         throw new ConflictException('Discount code already exists');
       }
 
-      discount.code = code;
+      throw error;
     }
-
-    const values: DiscountBusinessValues = {
-      type: updateDiscountDto.type ?? discount.type,
-      value: updateDiscountDto.value ?? discount.value,
-      startDate:
-        updateDiscountDto.startDate !== undefined
-          ? new Date(updateDiscountDto.startDate)
-          : discount.startDate,
-      endDate:
-        updateDiscountDto.endDate !== undefined
-          ? new Date(updateDiscountDto.endDate)
-          : discount.endDate,
-      usageLimit:
-        updateDiscountDto.usageLimit !== undefined
-          ? updateDiscountDto.usageLimit
-          : discount.usageLimit,
-      usedCount: discount.usedCount,
-    };
-    this.validateBusinessRules(values);
-
-    discount.type = values.type;
-    discount.value = values.value;
-    discount.startDate = values.startDate;
-    discount.endDate = values.endDate;
-    discount.usageLimit = values.usageLimit;
-
-    if (updateDiscountDto.minOrderAmount !== undefined) {
-      discount.minOrderAmount = updateDiscountDto.minOrderAmount;
-    }
-
-    const savedDiscount = await this.saveWithCodeConflictHandling(discount);
-    return this.buildDiscountResponse(savedDiscount);
   }
 
   async updateDiscountStatus(
     discountId: string,
     updateDiscountStatusDto: UpdateDiscountStatusDto,
   ) {
-    const discount = await this.findDiscountOrFail(discountId);
-    discount.status = updateDiscountStatusDto.status;
+    return this.dataSource.transaction(async (manager) => {
+      const discountRepository = manager.getRepository(Discount);
+      const discount = await this.findAndLockDiscount(manager, discountId);
+      discount.status = updateDiscountStatusDto.status;
 
-    const savedDiscount = await this.discountRepository.save(discount);
-    return this.buildDiscountResponse(savedDiscount);
+      const savedDiscount = await discountRepository.save(discount);
+      return this.buildDiscountResponse(savedDiscount);
+    });
   }
 
-  private async findDiscountOrFail(discountId: string): Promise<Discount> {
-    const discount = await this.discountRepository.findOneBy({ discountId });
+  private async findAndLockDiscount(
+    manager: EntityManager,
+    discountId: string,
+  ): Promise<Discount> {
+    const discount = await manager
+      .getRepository(Discount)
+      .createQueryBuilder('discount')
+      .setLock('pessimistic_write')
+      .where('discount.discountId = :discountId', { discountId })
+      .getOne();
 
     if (!discount) {
       throw new NotFoundException('Discount not found');
