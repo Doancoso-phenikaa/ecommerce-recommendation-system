@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository } from 'typeorm';
 import { Seller } from '../seller/entities/seller.entity.js';
 import { SellerStatus } from '../seller/enums/seller-status.enum.js';
+import { AdminShopQueryDto } from '../admin/dto/admin-shop-query.dto.js';
 import { CreateShopDto } from './dto/create-shop.dto.js';
 import { UpdateShopDto } from './dto/update-shop.dto.js';
 import { Shop } from './entities/shop.entity.js';
@@ -132,12 +133,94 @@ export class ShopService {
     }
   }
 
-  async approveShop(shopId: string) {
-    const shop = await this.shopRepository.findOneBy({ shopId });
+  async getShops(query: AdminShopQueryDto) {
+    const { page, limit } = query;
+    const shopQuery = this.shopRepository
+      .createQueryBuilder('shop')
+      .innerJoinAndSelect('shop.seller', 'seller')
+      .innerJoinAndSelect('seller.user', 'user')
+      .select([
+        'shop.shopId',
+        'shop.name',
+        'shop.description',
+        'shop.rating',
+        'shop.status',
+        'shop.rejectionReason',
+        'shop.createdAt',
+        'shop.updatedAt',
+        'seller.sellerId',
+        'user.userId',
+        'user.fullName',
+        'user.email',
+      ]);
+
+    if (query.search) {
+      shopQuery.andWhere(
+        `(
+          shop.name ILIKE :search
+          OR user.fullName ILIKE :search
+          OR user.email ILIKE :search
+        )`,
+        { search: `%${query.search}%` },
+      );
+    }
+
+    if (query.status !== undefined) {
+      shopQuery.andWhere('shop.status = :status', { status: query.status });
+    }
+
+    const [shops, totalItems] = await shopQuery
+      .orderBy('shop.createdAt', 'DESC')
+      .addOrderBy('shop.shopId', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      data: shops.map((shop) => this.buildAdminShopListResponse(shop)),
+      pagination: {
+        page,
+        limit,
+        totalItems,
+        totalPages: Math.ceil(totalItems / limit),
+      },
+    };
+  }
+
+  async getShopDetail(shopId: string) {
+    const shop = await this.shopRepository
+      .createQueryBuilder('shop')
+      .innerJoinAndSelect('shop.seller', 'seller')
+      .innerJoinAndSelect('seller.user', 'user')
+      .select([
+        'shop.shopId',
+        'shop.name',
+        'shop.description',
+        'shop.rating',
+        'shop.status',
+        'shop.rejectionReason',
+        'shop.createdAt',
+        'shop.updatedAt',
+        'seller.sellerId',
+        'seller.status',
+        'user.userId',
+        'user.fullName',
+        'user.email',
+        'user.phone',
+        'user.isActive',
+      ])
+      .where('shop.shopId = :shopId', { shopId })
+      .getOne();
 
     if (!shop) {
       throw new NotFoundException('Shop not found');
     }
+
+    return this.buildAdminShopDetailResponse(shop);
+  }
+
+  async approveShop(shopId: string) {
+    const shop = await this.findShopOrFail(shopId);
 
     if (shop.status !== ShopStatus.PENDING) {
       throw new ConflictException('Only pending shops can be approved');
@@ -151,11 +234,7 @@ export class ShopService {
   }
 
   async rejectShop(shopId: string, rejectionReasonInput: string) {
-    const shop = await this.shopRepository.findOneBy({ shopId });
-
-    if (!shop) {
-      throw new NotFoundException('Shop not found');
-    }
+    const shop = await this.findShopOrFail(shopId);
 
     if (shop.status !== ShopStatus.PENDING) {
       throw new ConflictException('Only pending shops can be rejected');
@@ -172,6 +251,92 @@ export class ShopService {
     const rejectedShop = await this.shopRepository.save(shop);
 
     return this.buildShopResponse(rejectedShop);
+  }
+
+  async suspendShop(shopId: string) {
+    const shop = await this.findShopOrFail(shopId);
+
+    if (shop.status !== ShopStatus.ACTIVE) {
+      throw new ConflictException('Only active shops can be suspended');
+    }
+
+    shop.status = ShopStatus.SUSPENDED;
+    const suspendedShop = await this.shopRepository.save(shop);
+
+    return {
+      shopId: suspendedShop.shopId,
+      status: suspendedShop.status,
+      message: 'Shop suspended successfully',
+    };
+  }
+
+  async activateShop(shopId: string) {
+    const shop = await this.findShopOrFail(shopId);
+
+    if (shop.status !== ShopStatus.SUSPENDED) {
+      throw new ConflictException('Only suspended shops can be activated');
+    }
+
+    shop.status = ShopStatus.ACTIVE;
+    const activatedShop = await this.shopRepository.save(shop);
+
+    return {
+      shopId: activatedShop.shopId,
+      status: activatedShop.status,
+      message: 'Shop activated successfully',
+    };
+  }
+
+  private async findShopOrFail(shopId: string): Promise<Shop> {
+    const shop = await this.shopRepository.findOneBy({ shopId });
+
+    if (!shop) {
+      throw new NotFoundException('Shop not found');
+    }
+
+    return shop;
+  }
+
+  private buildAdminShopListResponse(shop: Shop) {
+    return {
+      shopId: shop.shopId,
+      name: shop.name,
+      description: shop.description,
+      rating: shop.rating,
+      status: shop.status,
+      rejectionReason: shop.rejectionReason,
+      createdAt: shop.createdAt,
+      updatedAt: shop.updatedAt,
+      seller: {
+        sellerId: shop.seller.sellerId,
+        fullName: shop.seller.user.fullName,
+        email: shop.seller.user.email,
+      },
+    };
+  }
+
+  private buildAdminShopDetailResponse(shop: Shop) {
+    return {
+      shopId: shop.shopId,
+      name: shop.name,
+      description: shop.description,
+      rating: shop.rating,
+      status: shop.status,
+      rejectionReason: shop.rejectionReason,
+      createdAt: shop.createdAt,
+      updatedAt: shop.updatedAt,
+      seller: {
+        sellerId: shop.seller.sellerId,
+        status: shop.seller.status,
+        user: {
+          userId: shop.seller.user.userId,
+          fullName: shop.seller.user.fullName,
+          email: shop.seller.user.email,
+          phone: shop.seller.user.phone,
+          isActive: shop.seller.user.isActive,
+        },
+      },
+    };
   }
 
   private buildShopResponse(shop: Shop) {
