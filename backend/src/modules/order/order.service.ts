@@ -1,6 +1,5 @@
 import {
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -10,7 +9,6 @@ import { Customer } from '../customer/entities/customer.entity.js';
 import { Inventory } from '../inventory/entities/inventory.entity.js';
 import { Seller } from '../seller/entities/seller.entity.js';
 import { Shop } from '../shop/entities/shop.entity.js';
-import { ShopStatus } from '../shop/enums/shop-status.enum.js';
 import { OrderGroup } from './entities/order-group.entity.js';
 import { OrderItem } from './entities/order-item.entity.js';
 import { Order } from './entities/order.entity.js';
@@ -155,7 +153,7 @@ export class OrderService {
   }
 
   async getSellerOrders(userId: string) {
-    const shop = await this.findActiveSellerShop(userId);
+    const shop = await this.findSellerShop(userId);
     const orders = await this.dataSource.getRepository(Order).find({
       where: { shopId: shop.shopId },
       order: { createdAt: 'DESC', orderId: 'DESC' },
@@ -167,7 +165,7 @@ export class OrderService {
   }
 
   async getSellerOrderDetail(userId: string, orderId: string) {
-    const shop = await this.findActiveSellerShop(userId);
+    const shop = await this.findSellerShop(userId);
     const order = await this.dataSource
       .getRepository(Order)
       .createQueryBuilder('order')
@@ -264,10 +262,7 @@ export class OrderService {
 
   async completeOrder(userId: string, orderId: string) {
     return this.dataSource.transaction(async (manager) => {
-      const shop = await this.findActiveSellerShopInTransaction(
-        manager,
-        userId,
-      );
+      const shop = await this.findSellerShopInTransaction(manager, userId);
       const order = await this.findAndLockSellerOrder(
         manager,
         orderId,
@@ -293,10 +288,7 @@ export class OrderService {
 
   async cancelOrderBySeller(userId: string, orderId: string) {
     return this.dataSource.transaction(async (manager) => {
-      const shop = await this.findActiveSellerShopInTransaction(
-        manager,
-        userId,
-      );
+      const shop = await this.findSellerShopInTransaction(manager, userId);
       const order = await this.findAndLockSellerOrder(
         manager,
         orderId,
@@ -328,10 +320,7 @@ export class OrderService {
     successMessage: string,
   ) {
     return this.dataSource.transaction(async (manager) => {
-      const shop = await this.findActiveSellerShopInTransaction(
-        manager,
-        userId,
-      );
+      const shop = await this.findSellerShopInTransaction(manager, userId);
       const order = await this.findAndLockSellerOrder(
         manager,
         orderId,
@@ -351,7 +340,7 @@ export class OrderService {
     });
   }
 
-  private async findActiveSellerShop(userId: string): Promise<Shop> {
+  private async findSellerShop(userId: string): Promise<Shop> {
     const seller = await this.sellerRepository.findOneBy({ userId });
 
     if (!seller) {
@@ -366,14 +355,10 @@ export class OrderService {
       throw new NotFoundException('Shop not found');
     }
 
-    if (shop.status !== ShopStatus.ACTIVE) {
-      throw new ForbiddenException('Shop must be active to manage orders');
-    }
-
     return shop;
   }
 
-  private async findActiveSellerShopInTransaction(
+  private async findSellerShopInTransaction(
     manager: EntityManager,
     userId: string,
   ): Promise<Shop> {
@@ -389,10 +374,6 @@ export class OrderService {
 
     if (!shop) {
       throw new NotFoundException('Shop not found');
-    }
-
-    if (shop.status !== ShopStatus.ACTIVE) {
-      throw new ForbiddenException('Shop must be active to manage orders');
     }
 
     return shop;
