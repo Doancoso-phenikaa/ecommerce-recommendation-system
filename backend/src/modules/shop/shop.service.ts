@@ -14,6 +14,7 @@ import {
 } from 'typeorm';
 import { Seller } from '../seller/entities/seller.entity.js';
 import { SellerStatus } from '../seller/enums/seller-status.enum.js';
+import { User } from '../user/entities/user.entity.js';
 import { AdminShopQueryDto } from '../admin/dto/admin-shop-query.dto.js';
 import { CreateShopDto } from './dto/create-shop.dto.js';
 import { UpdateShopDto } from './dto/update-shop.dto.js';
@@ -237,6 +238,8 @@ export class ShopService {
         throw new ConflictException('Only pending shops can be approved');
       }
 
+      await this.revalidateShopApproval(manager, shop);
+
       shop.status = ShopStatus.ACTIVE;
       shop.rejectionReason = null;
       const approvedShop = await manager.getRepository(Shop).save(shop);
@@ -349,6 +352,39 @@ export class ShopService {
     }
 
     return shop;
+  }
+
+  private async revalidateShopApproval(
+    manager: EntityManager,
+    shop: Shop,
+  ): Promise<void> {
+    const seller = await manager.getRepository(Seller).findOneBy({
+      sellerId: shop.sellerId,
+    });
+
+    if (!seller) {
+      throw new NotFoundException('Seller profile not found');
+    }
+
+    if (seller.status !== SellerStatus.ACTIVE) {
+      throw new ConflictException(
+        'Shop cannot be approved because the seller is not active',
+      );
+    }
+
+    const user = await manager.getRepository(User).findOneBy({
+      userId: seller.userId,
+    });
+
+    if (!user) {
+      throw new NotFoundException('Seller user account not found');
+    }
+
+    if (!user.isActive) {
+      throw new ConflictException(
+        'Shop cannot be approved because the seller account is inactive',
+      );
+    }
   }
 
   private buildAdminShopListResponse(shop: Shop) {

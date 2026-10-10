@@ -291,6 +291,8 @@ export class ProductService {
         throw new ConflictException('Only pending products can be approved');
       }
 
+      await this.revalidateProductApproval(manager, product);
+
       const inventory = await this.findInventoryOrFailInTransaction(
         manager,
         productId,
@@ -395,7 +397,7 @@ export class ProductService {
     userId: string,
   ): Promise<Shop> {
     const seller = await manager.getRepository(Seller).findOneBy({ userId });
-    
+
     if (!seller) {
       throw new NotFoundException('Seller profile not found');
     }
@@ -454,6 +456,39 @@ export class ProductService {
     }
 
     return product;
+  }
+
+  private async revalidateProductApproval(
+    manager: EntityManager,
+    product: Product,
+  ): Promise<void> {
+    const shop = await manager.getRepository(Shop).findOneBy({
+      shopId: product.shopId,
+    });
+
+    if (!shop) {
+      throw new NotFoundException('Shop not found');
+    }
+
+    if (shop.status !== ShopStatus.ACTIVE) {
+      throw new ConflictException(
+        'Product cannot be approved because the shop is not active',
+      );
+    }
+
+    const category = await manager.getRepository(Category).findOneBy({
+      categoryId: product.categoryId,
+    });
+
+    if (!category) {
+      throw new NotFoundException('Category not found');
+    }
+
+    if (category.status !== CategoryStatus.ACTIVE) {
+      throw new ConflictException(
+        'Product cannot be approved because the category is not active',
+      );
+    }
   }
 
   private async findInventoryOrFailInTransaction(
