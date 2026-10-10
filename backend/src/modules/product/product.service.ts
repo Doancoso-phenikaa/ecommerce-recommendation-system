@@ -31,8 +31,6 @@ export class ProductService {
     private readonly categoryRepository: Repository<Category>,
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
-    @InjectRepository(Inventory)
-    private readonly inventoryRepository: Repository<Inventory>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -164,70 +162,84 @@ export class ProductService {
     productId: string,
     updateProductDto: UpdateProductDto,
   ) {
-    const shop = await this.findActiveSellerShop(userId);
-    const product = await this.findOwnedProduct(productId, shop.shopId);
-    const inventory = await this.findInventoryOrFail(productId);
-    let hasChanges = false;
-
-    if (updateProductDto.categoryId !== undefined) {
-      const category = await this.findActiveCategory(
-        updateProductDto.categoryId,
+    return this.dataSource.transaction(async (manager) => {
+      const shop = await this.findActiveSellerShopInTransaction(
+        manager,
+        userId,
       );
+      const product = await this.findAndLockProduct(manager, productId);
 
-      if (product.categoryId !== category.categoryId) {
-        product.categoryId = category.categoryId;
-        hasChanges = true;
+      if (product.shopId !== shop.shopId) {
+        throw new ForbiddenException('Product does not belong to your shop');
       }
-    }
 
-    if (updateProductDto.name !== undefined) {
-      const name = updateProductDto.name.trim();
+      const inventory = await this.findInventoryOrFailInTransaction(
+        manager,
+        productId,
+      );
+      let hasChanges = false;
 
-      if (product.name !== name) {
-        product.name = name;
-        hasChanges = true;
+      if (updateProductDto.categoryId !== undefined) {
+        const category = await this.findActiveCategoryInTransaction(
+          manager,
+          updateProductDto.categoryId,
+        );
+
+        if (product.categoryId !== category.categoryId) {
+          product.categoryId = category.categoryId;
+          hasChanges = true;
+        }
       }
-    }
 
-    if (updateProductDto.description !== undefined) {
-      const description = updateProductDto.description.trim() || null;
+      if (updateProductDto.name !== undefined) {
+        const name = updateProductDto.name.trim();
 
-      if (product.description !== description) {
-        product.description = description;
-        hasChanges = true;
+        if (product.name !== name) {
+          product.name = name;
+          hasChanges = true;
+        }
       }
-    }
 
-    if (updateProductDto.price !== undefined) {
-      const price = updateProductDto.price.trim();
+      if (updateProductDto.description !== undefined) {
+        const description = updateProductDto.description.trim() || null;
 
-      if (product.price !== price) {
-        product.price = price;
-        hasChanges = true;
+        if (product.description !== description) {
+          product.description = description;
+          hasChanges = true;
+        }
       }
-    }
 
-    if (updateProductDto.imageUrl !== undefined) {
-      const imageUrl = updateProductDto.imageUrl.trim() || null;
+      if (updateProductDto.price !== undefined) {
+        const price = updateProductDto.price.trim();
 
-      if (product.imageUrl !== imageUrl) {
-        product.imageUrl = imageUrl;
-        hasChanges = true;
+        if (product.price !== price) {
+          product.price = price;
+          hasChanges = true;
+        }
       }
-    }
 
-    if (!hasChanges) {
-      return this.buildProductResponse(product, inventory);
-    }
+      if (updateProductDto.imageUrl !== undefined) {
+        const imageUrl = updateProductDto.imageUrl.trim() || null;
 
-    if (product.status === ProductStatus.APPROVED) {
-      product.status = ProductStatus.PENDING;
-      product.rejectionReason = null;
-      product.approvedAt = null;
-    }
+        if (product.imageUrl !== imageUrl) {
+          product.imageUrl = imageUrl;
+          hasChanges = true;
+        }
+      }
 
-    const updatedProduct = await this.productRepository.save(product);
-    return this.buildProductResponse(updatedProduct, inventory);
+      if (!hasChanges) {
+        return this.buildProductResponse(product, inventory);
+      }
+
+      if (product.status === ProductStatus.APPROVED) {
+        product.status = ProductStatus.PENDING;
+        product.rejectionReason = null;
+        product.approvedAt = null;
+      }
+
+      const updatedProduct = await manager.getRepository(Product).save(product);
+      return this.buildProductResponse(updatedProduct, inventory);
+    });
   }
 
   async updateInventory(
@@ -240,11 +252,7 @@ export class ProductService {
         manager,
         userId,
       );
-      await this.findOwnedProductInTransaction(
-        manager,
-        productId,
-        shop.shopId,
-      );
+      await this.findOwnedProductInTransaction(manager, productId, shop.shopId);
 
       const inventoryRepository = manager.getRepository(Inventory);
       const inventory = await inventoryRepository
@@ -276,58 +284,88 @@ export class ProductService {
   }
 
   async approveProduct(productId: string) {
-    const product = await this.findProductOrFail(productId);
+    return this.dataSource.transaction(async (manager) => {
+      const product = await this.findAndLockProduct(manager, productId);
 
-    if (product.status !== ProductStatus.PENDING) {
-      throw new ConflictException('Only pending products can be approved');
-    }
+      if (product.status !== ProductStatus.PENDING) {
+        throw new ConflictException('Only pending products can be approved');
+      }
 
-    const inventory = await this.findInventoryOrFail(productId);
-    product.status = ProductStatus.APPROVED;
-    product.rejectionReason = null;
-    product.approvedAt = new Date();
+      const inventory = await this.findInventoryOrFailInTransaction(
+        manager,
+        productId,
+      );
+      product.status = ProductStatus.APPROVED;
+      product.rejectionReason = null;
+      product.approvedAt = new Date();
 
-    const approvedProduct = await this.productRepository.save(product);
-    return this.buildProductResponse(approvedProduct, inventory);
+      const approvedProduct = await manager
+        .getRepository(Product)
+        .save(product);
+      return this.buildProductResponse(approvedProduct, inventory);
+    });
   }
 
   async rejectProduct(productId: string, rejectionReasonInput: string) {
-    const product = await this.findProductOrFail(productId);
+    return this.dataSource.transaction(async (manager) => {
+      const product = await this.findAndLockProduct(manager, productId);
 
-    if (product.status !== ProductStatus.PENDING) {
-      throw new ConflictException('Only pending products can be rejected');
-    }
+      if (product.status !== ProductStatus.PENDING) {
+        throw new ConflictException('Only pending products can be rejected');
+      }
 
-    const rejectionReason = rejectionReasonInput.trim();
+      const rejectionReason = rejectionReasonInput.trim();
 
-    if (!rejectionReason) {
-      throw new BadRequestException('Rejection reason must not be empty');
-    }
+      if (!rejectionReason) {
+        throw new BadRequestException('Rejection reason must not be empty');
+      }
 
-    const inventory = await this.findInventoryOrFail(productId);
-    product.status = ProductStatus.REJECTED;
-    product.rejectionReason = rejectionReason;
-    product.approvedAt = null;
+      const inventory = await this.findInventoryOrFailInTransaction(
+        manager,
+        productId,
+      );
+      product.status = ProductStatus.REJECTED;
+      product.rejectionReason = rejectionReason;
+      product.approvedAt = null;
 
-    const rejectedProduct = await this.productRepository.save(product);
-    return this.buildProductResponse(rejectedProduct, inventory);
+      const rejectedProduct = await manager
+        .getRepository(Product)
+        .save(product);
+      return this.buildProductResponse(rejectedProduct, inventory);
+    });
   }
 
   async resubmitProduct(userId: string, productId: string) {
-    const shop = await this.findActiveSellerShop(userId);
-    const product = await this.findOwnedProduct(productId, shop.shopId);
+    return this.dataSource.transaction(async (manager) => {
+      const shop = await this.findActiveSellerShopInTransaction(
+        manager,
+        userId,
+      );
+      const product = await this.findAndLockProduct(manager, productId);
 
-    if (product.status !== ProductStatus.REJECTED) {
-      throw new ConflictException('Only rejected products can be resubmitted');
-    }
+      if (product.shopId !== shop.shopId) {
+        throw new ForbiddenException('Product does not belong to your shop');
+      }
 
-    const inventory = await this.findInventoryOrFail(productId);
-    product.status = ProductStatus.PENDING;
-    product.rejectionReason = null;
-    product.approvedAt = null;
+      if (product.status !== ProductStatus.REJECTED) {
+        throw new ConflictException(
+          'Only rejected products can be resubmitted',
+        );
+      }
 
-    const resubmittedProduct = await this.productRepository.save(product);
-    return this.buildProductResponse(resubmittedProduct, inventory);
+      const inventory = await this.findInventoryOrFailInTransaction(
+        manager,
+        productId,
+      );
+      product.status = ProductStatus.PENDING;
+      product.rejectionReason = null;
+      product.approvedAt = null;
+
+      const resubmittedProduct = await manager
+        .getRepository(Product)
+        .save(product);
+      return this.buildProductResponse(resubmittedProduct, inventory);
+    });
   }
 
   private async findActiveSellerShop(userId: string): Promise<Shop> {
@@ -357,14 +395,17 @@ export class ProductService {
     userId: string,
   ): Promise<Shop> {
     const seller = await manager.getRepository(Seller).findOneBy({ userId });
-
+    
     if (!seller) {
       throw new NotFoundException('Seller profile not found');
     }
 
-    const shop = await manager.getRepository(Shop).findOneBy({
-      sellerId: seller.sellerId,
-    });
+    const shop = await manager
+      .getRepository(Shop)
+      .createQueryBuilder('shop')
+      .setLock('pessimistic_write')
+      .where('shop.sellerId = :sellerId', { sellerId: seller.sellerId })
+      .getOne();
 
     if (!shop) {
       throw new NotFoundException('Shop not found');
@@ -397,21 +438,16 @@ export class ProductService {
     return product;
   }
 
-  private async findOwnedProduct(
+  private async findAndLockProduct(
+    manager: EntityManager,
     productId: string,
-    shopId: string,
   ): Promise<Product> {
-    const product = await this.findProductOrFail(productId);
-
-    if (product.shopId !== shopId) {
-      throw new ForbiddenException('Product does not belong to your shop');
-    }
-
-    return product;
-  }
-
-  private async findProductOrFail(productId: string): Promise<Product> {
-    const product = await this.productRepository.findOneBy({ productId });
+    const product = await manager
+      .getRepository(Product)
+      .createQueryBuilder('product')
+      .setLock('pessimistic_write')
+      .where('product.productId = :productId', { productId })
+      .getOne();
 
     if (!product) {
       throw new NotFoundException('Product not found');
@@ -420,14 +456,38 @@ export class ProductService {
     return product;
   }
 
-  private async findInventoryOrFail(productId: string): Promise<Inventory> {
-    const inventory = await this.inventoryRepository.findOneBy({ productId });
+  private async findInventoryOrFailInTransaction(
+    manager: EntityManager,
+    productId: string,
+  ): Promise<Inventory> {
+    const inventory = await manager
+      .getRepository(Inventory)
+      .findOneBy({ productId });
 
     if (!inventory) {
       throw new NotFoundException('Inventory not found');
     }
 
     return inventory;
+  }
+
+  private async findActiveCategoryInTransaction(
+    manager: EntityManager,
+    categoryId: string,
+  ): Promise<Category> {
+    const category = await manager
+      .getRepository(Category)
+      .findOneBy({ categoryId });
+
+    if (!category) {
+      throw new NotFoundException('Category not found');
+    }
+
+    if (category.status !== CategoryStatus.ACTIVE) {
+      throw new ConflictException('Category is not active');
+    }
+
+    return category;
   }
 
   private async findActiveCategory(categoryId: string): Promise<Category> {

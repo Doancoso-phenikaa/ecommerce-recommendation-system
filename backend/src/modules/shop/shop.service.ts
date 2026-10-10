@@ -6,7 +6,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { QueryFailedError, Repository } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  QueryFailedError,
+  Repository,
+} from 'typeorm';
 import { Seller } from '../seller/entities/seller.entity.js';
 import { SellerStatus } from '../seller/enums/seller-status.enum.js';
 import { AdminShopQueryDto } from '../admin/dto/admin-shop-query.dto.js';
@@ -28,6 +33,7 @@ export class ShopService {
     private readonly shopRepository: Repository<Shop>,
     @InjectRepository(Seller)
     private readonly sellerRepository: Repository<Seller>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async getMyShop(userId: string) {
@@ -37,42 +43,46 @@ export class ShopService {
   }
 
   async updateMyShop(userId: string, updateShopDto: UpdateShopDto) {
-    const shop = await this.findMyShop(userId);
+    return this.dataSource.transaction(async (manager) => {
+      const shop = await this.findAndLockMyShop(manager, userId);
 
-    if (
-      shop.status !== ShopStatus.REJECTED &&
-      shop.status !== ShopStatus.ACTIVE
-    ) {
-      throw new ConflictException(
-        'Only rejected or active shops can be updated',
-      );
-    }
+      if (
+        shop.status !== ShopStatus.REJECTED &&
+        shop.status !== ShopStatus.ACTIVE
+      ) {
+        throw new ConflictException(
+          'Only rejected or active shops can be updated',
+        );
+      }
 
-    if (updateShopDto.name !== undefined) {
-      shop.name = updateShopDto.name.trim();
-    }
+      if (updateShopDto.name !== undefined) {
+        shop.name = updateShopDto.name.trim();
+      }
 
-    if (updateShopDto.description !== undefined) {
-      shop.description = updateShopDto.description.trim() || null;
-    }
+      if (updateShopDto.description !== undefined) {
+        shop.description = updateShopDto.description.trim() || null;
+      }
 
-    const updatedShop = await this.shopRepository.save(shop);
+      const updatedShop = await manager.getRepository(Shop).save(shop);
 
-    return this.buildShopResponse(updatedShop);
+      return this.buildShopResponse(updatedShop);
+    });
   }
 
   async resubmitShop(userId: string) {
-    const shop = await this.findMyShop(userId);
+    return this.dataSource.transaction(async (manager) => {
+      const shop = await this.findAndLockMyShop(manager, userId);
 
-    if (shop.status !== ShopStatus.REJECTED) {
-      throw new ConflictException('Only rejected shops can be resubmitted');
-    }
+      if (shop.status !== ShopStatus.REJECTED) {
+        throw new ConflictException('Only rejected shops can be resubmitted');
+      }
 
-    shop.status = ShopStatus.PENDING;
-    shop.rejectionReason = null;
-    const resubmittedShop = await this.shopRepository.save(shop);
+      shop.status = ShopStatus.PENDING;
+      shop.rejectionReason = null;
+      const resubmittedShop = await manager.getRepository(Shop).save(shop);
 
-    return this.buildShopResponse(resubmittedShop);
+      return this.buildShopResponse(resubmittedShop);
+    });
   }
 
   private async findMyShop(userId: string): Promise<Shop> {
@@ -220,75 +230,119 @@ export class ShopService {
   }
 
   async approveShop(shopId: string) {
-    const shop = await this.findShopOrFail(shopId);
+    return this.dataSource.transaction(async (manager) => {
+      const shop = await this.findAndLockShop(manager, shopId);
 
-    if (shop.status !== ShopStatus.PENDING) {
-      throw new ConflictException('Only pending shops can be approved');
-    }
+      if (shop.status !== ShopStatus.PENDING) {
+        throw new ConflictException('Only pending shops can be approved');
+      }
 
-    shop.status = ShopStatus.ACTIVE;
-    shop.rejectionReason = null;
-    const approvedShop = await this.shopRepository.save(shop);
+      shop.status = ShopStatus.ACTIVE;
+      shop.rejectionReason = null;
+      const approvedShop = await manager.getRepository(Shop).save(shop);
 
-    return this.buildShopResponse(approvedShop);
+      return this.buildShopResponse(approvedShop);
+    });
   }
 
   async rejectShop(shopId: string, rejectionReasonInput: string) {
-    const shop = await this.findShopOrFail(shopId);
+    return this.dataSource.transaction(async (manager) => {
+      const shop = await this.findAndLockShop(manager, shopId);
 
-    if (shop.status !== ShopStatus.PENDING) {
-      throw new ConflictException('Only pending shops can be rejected');
-    }
+      if (shop.status !== ShopStatus.PENDING) {
+        throw new ConflictException('Only pending shops can be rejected');
+      }
 
-    const rejectionReason = rejectionReasonInput.trim();
+      const rejectionReason = rejectionReasonInput.trim();
 
-    if (!rejectionReason) {
-      throw new BadRequestException('Rejection reason must not be empty');
-    }
+      if (!rejectionReason) {
+        throw new BadRequestException('Rejection reason must not be empty');
+      }
 
-    shop.status = ShopStatus.REJECTED;
-    shop.rejectionReason = rejectionReason;
-    const rejectedShop = await this.shopRepository.save(shop);
+      shop.status = ShopStatus.REJECTED;
+      shop.rejectionReason = rejectionReason;
+      const rejectedShop = await manager.getRepository(Shop).save(shop);
 
-    return this.buildShopResponse(rejectedShop);
+      return this.buildShopResponse(rejectedShop);
+    });
   }
 
   async suspendShop(shopId: string) {
-    const shop = await this.findShopOrFail(shopId);
+    return this.dataSource.transaction(async (manager) => {
+      const shop = await this.findAndLockShop(manager, shopId);
 
-    if (shop.status !== ShopStatus.ACTIVE) {
-      throw new ConflictException('Only active shops can be suspended');
-    }
+      if (shop.status !== ShopStatus.ACTIVE) {
+        throw new ConflictException('Only active shops can be suspended');
+      }
 
-    shop.status = ShopStatus.SUSPENDED;
-    const suspendedShop = await this.shopRepository.save(shop);
+      shop.status = ShopStatus.SUSPENDED;
+      const suspendedShop = await manager.getRepository(Shop).save(shop);
 
-    return {
-      shopId: suspendedShop.shopId,
-      status: suspendedShop.status,
-      message: 'Shop suspended successfully',
-    };
+      return {
+        shopId: suspendedShop.shopId,
+        status: suspendedShop.status,
+        message: 'Shop suspended successfully',
+      };
+    });
   }
 
   async activateShop(shopId: string) {
-    const shop = await this.findShopOrFail(shopId);
+    return this.dataSource.transaction(async (manager) => {
+      const shop = await this.findAndLockShop(manager, shopId);
 
-    if (shop.status !== ShopStatus.SUSPENDED) {
-      throw new ConflictException('Only suspended shops can be activated');
-    }
+      if (shop.status !== ShopStatus.SUSPENDED) {
+        throw new ConflictException('Only suspended shops can be activated');
+      }
 
-    shop.status = ShopStatus.ACTIVE;
-    const activatedShop = await this.shopRepository.save(shop);
+      shop.status = ShopStatus.ACTIVE;
+      const activatedShop = await manager.getRepository(Shop).save(shop);
 
-    return {
-      shopId: activatedShop.shopId,
-      status: activatedShop.status,
-      message: 'Shop activated successfully',
-    };
+      return {
+        shopId: activatedShop.shopId,
+        status: activatedShop.status,
+        message: 'Shop activated successfully',
+      };
+    });
   }
 
-  private async findShopOrFail(shopId: string): Promise<Shop> {
-    const shop = await this.shopRepository.findOneBy({ shopId });
+  private async findAndLockMyShop(
+    manager: EntityManager,
+    userId: string,
+  ): Promise<Shop> {
+    const seller = await manager.getRepository(Seller).findOneBy({ userId });
+
+    if (!seller) {
+      throw new NotFoundException('Seller profile not found');
+    }
+
+    const shopReference = await manager.getRepository(Shop).findOne({
+      select: { shopId: true },
+      where: { sellerId: seller.sellerId },
+    });
+
+    if (!shopReference) {
+      throw new NotFoundException('Shop not found');
+    }
+
+    const shop = await this.findAndLockShop(manager, shopReference.shopId);
+
+    if (shop.sellerId !== seller.sellerId) {
+      throw new NotFoundException('Shop not found');
+    }
+
+    return shop;
+  }
+
+  private async findAndLockShop(
+    manager: EntityManager,
+    shopId: string,
+  ): Promise<Shop> {
+    const shop = await manager
+      .getRepository(Shop)
+      .createQueryBuilder('shop')
+      .setLock('pessimistic_write')
+      .where('shop.shopId = :shopId', { shopId })
+      .getOne();
 
     if (!shop) {
       throw new NotFoundException('Shop not found');
