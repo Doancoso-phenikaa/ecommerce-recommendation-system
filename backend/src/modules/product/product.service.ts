@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { Category } from '../category/entities/category.entity.js';
 import { CategoryStatus } from '../category/enums/category-status.enum.js';
 import { Inventory } from '../inventory/entities/inventory.entity.js';
@@ -235,30 +235,44 @@ export class ProductService {
     productId: string,
     updateInventoryDto: UpdateInventoryDto,
   ) {
-    const shop = await this.findActiveSellerShop(userId);
-    await this.findOwnedProduct(productId, shop.shopId);
-
-    const inventory = await this.inventoryRepository.findOneBy({ productId });
-
-    if (!inventory) {
-      throw new NotFoundException('Inventory not found');
-    }
-
-    if (updateInventoryDto.quantity < inventory.reservedQuantity) {
-      throw new BadRequestException(
-        'Quantity cannot be less than reserved quantity',
+    return this.dataSource.transaction(async (manager) => {
+      const shop = await this.findActiveSellerShopInTransaction(
+        manager,
+        userId,
       );
-    }
+      await this.findOwnedProductInTransaction(
+        manager,
+        productId,
+        shop.shopId,
+      );
 
-    inventory.quantity = updateInventoryDto.quantity;
-    const updatedInventory = await this.inventoryRepository.save(inventory);
+      const inventoryRepository = manager.getRepository(Inventory);
+      const inventory = await inventoryRepository
+        .createQueryBuilder('inventory')
+        .setLock('pessimistic_write')
+        .where('inventory.productId = :productId', { productId })
+        .getOne();
 
-    return {
-      productId,
-      quantity: updatedInventory.quantity,
-      reservedQuantity: updatedInventory.reservedQuantity,
-      updatedAt: updatedInventory.updatedAt,
-    };
+      if (!inventory) {
+        throw new NotFoundException('Inventory not found');
+      }
+
+      if (updateInventoryDto.quantity < inventory.reservedQuantity) {
+        throw new ConflictException(
+          'Inventory quantity cannot be lower than reserved quantity',
+        );
+      }
+
+      inventory.quantity = updateInventoryDto.quantity;
+      const updatedInventory = await inventoryRepository.save(inventory);
+
+      return {
+        productId,
+        quantity: updatedInventory.quantity,
+        reservedQuantity: updatedInventory.reservedQuantity,
+        updatedAt: updatedInventory.updatedAt,
+      };
+    });
   }
 
   async approveProduct(productId: string) {
@@ -336,6 +350,51 @@ export class ProductService {
     }
 
     return shop;
+  }
+
+  private async findActiveSellerShopInTransaction(
+    manager: EntityManager,
+    userId: string,
+  ): Promise<Shop> {
+    const seller = await manager.getRepository(Seller).findOneBy({ userId });
+
+    if (!seller) {
+      throw new NotFoundException('Seller profile not found');
+    }
+
+    const shop = await manager.getRepository(Shop).findOneBy({
+      sellerId: seller.sellerId,
+    });
+
+    if (!shop) {
+      throw new NotFoundException('Shop not found');
+    }
+
+    if (shop.status !== ShopStatus.ACTIVE) {
+      throw new ForbiddenException('Shop must be active to manage products');
+    }
+
+    return shop;
+  }
+
+  private async findOwnedProductInTransaction(
+    manager: EntityManager,
+    productId: string,
+    shopId: string,
+  ): Promise<Product> {
+    const product = await manager.getRepository(Product).findOneBy({
+      productId,
+    });
+
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    if (product.shopId !== shopId) {
+      throw new ForbiddenException('Product does not belong to your shop');
+    }
+
+    return product;
   }
 
   private async findOwnedProduct(
