@@ -5,8 +5,19 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, Repository } from 'typeorm';
+import {
+  Brackets,
+  DataSource,
+  EntityManager,
+  In,
+  Repository,
+} from 'typeorm';
 import { UserRole } from '../../common/enums/user-role.enum.js';
+import { Order } from '../order/entities/order.entity.js';
+import { OrderStatus } from '../order/enums/order-status.enum.js';
+import { Seller } from '../seller/entities/seller.entity.js';
+import { Shop } from '../shop/entities/shop.entity.js';
+import { ShopStatus } from '../shop/enums/shop-status.enum.js';
 import { User } from '../user/entities/user.entity.js';
 import { AdminUserQueryDto } from './dto/admin-user-query.dto.js';
 
@@ -15,6 +26,7 @@ export class AdminUserService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async getUsers(query: AdminUserQueryDto) {
@@ -119,26 +131,34 @@ export class AdminUserService {
   }
 
   async deactivateUser(currentAdminUserId: string, userId: string) {
-    const user = await this.findUserOrFail(userId);
+    return this.dataSource.transaction(async (manager) => {
+      const user = await this.findAndLockUser(manager, userId);
 
-    if (user.userId === currentAdminUserId) {
-      throw new ConflictException('Admin cannot deactivate their own account');
-    }
+      if (user.userId === currentAdminUserId) {
+        throw new ConflictException(
+          'Admin cannot deactivate their own account',
+        );
+      }
 
-    this.ensureNonAdminTarget(user);
+      this.ensureNonAdminTarget(user);
 
-    if (!user.isActive) {
-      throw new ConflictException('User is already inactive');
-    }
+      if (!user.isActive) {
+        throw new ConflictException('User is already inactive');
+      }
 
-    user.isActive = false;
-    const savedUser = await this.userRepository.save(user);
+      if (user.role === UserRole.SELLER) {
+        await this.ensureSellerCanBeDeactivated(manager, user.userId);
+      }
 
-    return {
-      userId: savedUser.userId,
-      isActive: savedUser.isActive,
-      message: 'User deactivated successfully',
-    };
+      user.isActive = false;
+      const savedUser = await manager.getRepository(User).save(user);
+
+      return {
+        userId: savedUser.userId,
+        isActive: savedUser.isActive,
+        message: 'User deactivated successfully',
+      };
+    });
   }
 
   async activateUser(userId: string) {
@@ -174,6 +194,68 @@ export class AdminUserService {
     }
 
     return user;
+  }
+
+  private async findAndLockUser(
+    manager: EntityManager,
+    userId: string,
+  ): Promise<User> {
+    const user = await manager
+      .getRepository(User)
+      .createQueryBuilder('user')
+      .select(['user.userId', 'user.role', 'user.isActive'])
+      .setLock('pessimistic_write')
+      .where('user.userId = :userId', { userId })
+      .getOne();
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user;
+  }
+
+  private async ensureSellerCanBeDeactivated(
+    manager: EntityManager,
+    userId: string,
+  ): Promise<void> {
+    const seller = await manager.getRepository(Seller).findOneBy({ userId });
+
+    if (!seller) {
+      return;
+    }
+
+    const shop = await manager
+      .getRepository(Shop)
+      .createQueryBuilder('shop')
+      .setLock('pessimistic_write')
+      .where('shop.sellerId = :sellerId', { sellerId: seller.sellerId })
+      .getOne();
+
+    if (!shop) {
+      return;
+    }
+
+    if (shop.status === ShopStatus.ACTIVE) {
+      throw new ConflictException(
+        'Seller shop must be suspended before deactivating the seller account',
+      );
+    }
+
+    const hasActiveOrders = await manager.getRepository(Order).existsBy({
+      shopId: shop.shopId,
+      status: In([
+        OrderStatus.PENDING,
+        OrderStatus.CONFIRMED,
+        OrderStatus.SHIPPING,
+      ]),
+    });
+
+    if (hasActiveOrders) {
+      throw new ConflictException(
+        'Seller cannot be deactivated while active orders still exist',
+      );
+    }
   }
 
   private ensureNonAdminTarget(user: User): void {
