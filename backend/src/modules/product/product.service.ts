@@ -13,8 +13,10 @@ import { Inventory } from '../inventory/entities/inventory.entity.js';
 import { Seller } from '../seller/entities/seller.entity.js';
 import { Shop } from '../shop/entities/shop.entity.js';
 import { ShopStatus } from '../shop/enums/shop-status.enum.js';
+import { AdminProductQueryDto } from './dto/admin-product-query.dto.js';
 import { CreateProductDto } from './dto/create-product.dto.js';
 import { ProductQueryDto } from './dto/product-query.dto.js';
+import { SellerProductQueryDto } from './dto/seller-product-query.dto.js';
 import { UpdateInventoryDto } from './dto/update-inventory.dto.js';
 import { UpdateProductDto } from './dto/update-product.dto.js';
 import { Product } from './entities/product.entity.js';
@@ -121,6 +123,132 @@ export class ProductService {
     }
 
     return this.buildPublicProductResponse(product);
+  }
+
+  async getSellerProducts(userId: string, query: SellerProductQueryDto) {
+    const shop = await this.findSellerShop(userId);
+    const productQuery = this.productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.inventory', 'inventory')
+      .leftJoinAndSelect('product.category', 'category')
+      .where('product.shopId = :shopId', { shopId: shop.shopId });
+
+    if (query.search) {
+      productQuery.andWhere('product.name ILIKE :search', {
+        search: `%${query.search}%`,
+      });
+    }
+
+    if (query.status !== undefined) {
+      productQuery.andWhere('product.status = :status', {
+        status: query.status,
+      });
+    }
+
+    if (query.categoryId !== undefined) {
+      productQuery.andWhere('product.categoryId = :categoryId', {
+        categoryId: query.categoryId,
+      });
+    }
+
+    const [products, totalItems] = await productQuery
+      .orderBy('product.createdAt', 'DESC')
+      .addOrderBy('product.productId', 'DESC')
+      .skip((query.page - 1) * query.limit)
+      .take(query.limit)
+      .getManyAndCount();
+
+    return {
+      data: products.map((product) => this.buildSellerProductResponse(product)),
+      pagination: {
+        page: query.page,
+        limit: query.limit,
+        totalItems,
+        totalPages: Math.ceil(totalItems / query.limit),
+      },
+    };
+  }
+
+  async getSellerProductDetail(userId: string, productId: string) {
+    const shop = await this.findSellerShop(userId);
+    const product = await this.productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.inventory', 'inventory')
+      .leftJoinAndSelect('product.category', 'category')
+      .where('product.productId = :productId', { productId })
+      .andWhere('product.shopId = :shopId', { shopId: shop.shopId })
+      .getOne();
+
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    return this.buildSellerProductResponse(product);
+  }
+
+  async getAdminProducts(query: AdminProductQueryDto) {
+    const productQuery = this.productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.inventory', 'inventory')
+      .leftJoinAndSelect('product.category', 'category')
+      .leftJoinAndSelect('product.shop', 'shop');
+
+    if (query.search) {
+      productQuery.andWhere('product.name ILIKE :search', {
+        search: `%${query.search}%`,
+      });
+    }
+
+    if (query.status !== undefined) {
+      productQuery.andWhere('product.status = :status', {
+        status: query.status,
+      });
+    }
+
+    if (query.categoryId !== undefined) {
+      productQuery.andWhere('product.categoryId = :categoryId', {
+        categoryId: query.categoryId,
+      });
+    }
+
+    if (query.shopId !== undefined) {
+      productQuery.andWhere('product.shopId = :shopId', {
+        shopId: query.shopId,
+      });
+    }
+
+    const [products, totalItems] = await productQuery
+      .orderBy('product.createdAt', 'DESC')
+      .addOrderBy('product.productId', 'DESC')
+      .skip((query.page - 1) * query.limit)
+      .take(query.limit)
+      .getManyAndCount();
+
+    return {
+      data: products.map((product) => this.buildAdminProductResponse(product)),
+      pagination: {
+        page: query.page,
+        limit: query.limit,
+        totalItems,
+        totalPages: Math.ceil(totalItems / query.limit),
+      },
+    };
+  }
+
+  async getAdminProductDetail(productId: string) {
+    const product = await this.productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.inventory', 'inventory')
+      .leftJoinAndSelect('product.category', 'category')
+      .leftJoinAndSelect('product.shop', 'shop')
+      .where('product.productId = :productId', { productId })
+      .getOne();
+
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    return this.buildAdminProductResponse(product);
   }
 
   async createProduct(userId: string, createProductDto: CreateProductDto) {
@@ -392,6 +520,24 @@ export class ProductService {
     return shop;
   }
 
+  private async findSellerShop(userId: string): Promise<Shop> {
+    const seller = await this.sellerRepository.findOneBy({ userId });
+
+    if (!seller) {
+      throw new NotFoundException('Seller profile not found');
+    }
+
+    const shop = await this.shopRepository.findOneBy({
+      sellerId: seller.sellerId,
+    });
+
+    if (!shop) {
+      throw new NotFoundException('Shop not found');
+    }
+
+    return shop;
+  }
+
   private async findActiveSellerShopInTransaction(
     manager: EntityManager,
     userId: string,
@@ -583,6 +729,56 @@ export class ProductService {
       },
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
+    };
+  }
+
+  private buildSellerProductResponse(product: Product) {
+    const inventory = product.inventory;
+    const calculatedAvailableQuantity = inventory
+      ? inventory.quantity - inventory.reservedQuantity
+      : 0;
+
+    return {
+      productId: product.productId,
+      shopId: product.shopId,
+      categoryId: product.categoryId,
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      imageUrl: product.imageUrl,
+      status: product.status,
+      rejectionReason: product.rejectionReason,
+      approvedAt: product.approvedAt,
+      inventory: inventory
+        ? {
+            quantity: inventory.quantity,
+            reservedQuantity: inventory.reservedQuantity,
+            availableQuantity:
+              calculatedAvailableQuantity > 0 ? calculatedAvailableQuantity : 0,
+          }
+        : null,
+      category: product.category
+        ? {
+            categoryId: product.category.categoryId,
+            name: product.category.name,
+            status: product.category.status,
+          }
+        : null,
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt,
+    };
+  }
+
+  private buildAdminProductResponse(product: Product) {
+    return {
+      ...this.buildSellerProductResponse(product),
+      shop: product.shop
+        ? {
+            shopId: product.shop.shopId,
+            name: product.shop.name,
+            status: product.shop.status,
+          }
+        : null,
     };
   }
 

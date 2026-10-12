@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -11,6 +13,7 @@ import { UserRole } from '../../common/enums/user-role.enum.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { CategoryService } from './category.service.js';
+import { AdminCategoryQueryDto } from './dto/admin-category-query.dto.js';
 import { CategoryIdParamDto } from './dto/category-id-param.dto.js';
 import { CreateCategoryDto } from './dto/create-category.dto.js';
 import { UpdateCategoryDto } from './dto/update-category.dto.js';
@@ -21,6 +24,11 @@ import { UpdateCategoryStatusDto } from './dto/update-category-status.dto.js';
 @Roles(UserRole.ADMIN)
 export class AdminCategoryController {
   constructor(private readonly categoryService: CategoryService) {}
+
+  @Get()
+  getCategories(@Query() query: AdminCategoryQueryDto) {
+    return this.categoryService.getAdminCategories(query);
+  }
 
   @Post()
   createCategory(@Body() createCategoryDto: CreateCategoryDto) {
