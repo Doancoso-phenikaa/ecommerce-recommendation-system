@@ -2,6 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Customer } from '../customer/entities/customer.entity.js';
+import { Product } from '../product/entities/product.entity.js';
+import { ProductStatus } from '../product/enums/product-status.enum.js';
+import { ShopStatus } from '../shop/enums/shop-status.enum.js';
 import { UserBehavior } from './entities/user-behavior.entity.js';
 import { BehaviorType } from './enums/behavior-type.enum.js';
 
@@ -14,6 +17,8 @@ export class UserBehaviorService {
     private readonly userBehaviorRepository: Repository<UserBehavior>,
     @InjectRepository(Customer)
     private readonly customerRepository: Repository<Customer>,
+    @InjectRepository(Product)
+    private readonly productRepository: Repository<Product>,
   ) {}
 
   async recordBehavior(
@@ -41,6 +46,23 @@ export class UserBehaviorService {
       if (!customer) {
         this.logger.warn(
           `Unable to record VIEW behavior: customer profile not found for user ${userId}`,
+        );
+        return;
+      }
+
+      const product = await this.productRepository.findOne({
+        where: { productId },
+        relations: { shop: true },
+      });
+
+      if (
+        !product ||
+        product.status !== ProductStatus.APPROVED ||
+        !product.shop ||
+        product.shop.status !== ShopStatus.ACTIVE
+      ) {
+        this.logger.warn(
+          `Unable to record VIEW behavior: product ${productId} is not publicly available`,
         );
         return;
       }
