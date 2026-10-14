@@ -4,6 +4,7 @@ import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterCustomerPage } from './pages/auth/RegisterCustomerPage';
 import { RegisterSellerPage } from './pages/auth/RegisterSellerPage';
 import { CustomerHomePage } from './pages/customer/CustomerHomePage';
+import { ProductDetailPage } from './pages/customer/ProductDetailPage';
 import { SellerDashboardPage } from './pages/seller/SellerDashboardPage';
 import { CustomerLayout } from './layouts/CustomerLayout';
 import { GuestRoute } from './routes/GuestRoute';
@@ -21,6 +22,7 @@ function App() {
       <Route element={<RoleRoute allowedRoles={['CUSTOMER']} />}>
         <Route element={<CustomerLayout />}>
           <Route path="/" element={<CustomerHomePage />} />
+          <Route path="/products/:productId" element={<ProductDetailPage />} />
         </Route>
       </Route>
       <Route element={<RoleRoute allowedRoles={['SELLER']} />}><Route path="/seller" element={<SellerDashboardPage />} /></Route>

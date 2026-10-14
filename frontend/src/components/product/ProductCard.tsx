@@ -1,15 +1,11 @@
+import { Link } from 'react-router-dom';
 import type { PublicProduct } from '../../types/product';
+import { formatCurrency } from '../../utils/format-currency';
 import './product-card.css';
 
 interface ProductCardProps {
   product: PublicProduct;
 }
-
-const currencyFormatter = new Intl.NumberFormat('vi-VN', {
-  style: 'currency',
-  currency: 'VND',
-  maximumFractionDigits: 0,
-});
 
 export function ProductCard({ product }: ProductCardProps) {
   const availableQuantity = Math.max(product.inventory.availableQuantity, 0);
@@ -17,7 +13,7 @@ export function ProductCard({ product }: ProductCardProps) {
 
   return (
     <article className="product-card">
-      <div className="product-card__media">
+      <Link className="product-card__media" to={`/products/${product.productId}`} aria-label={`Xem ${product.name}`}>
         {product.imageUrl ? (
           <img src={product.imageUrl} alt={product.name} loading="lazy" />
         ) : (
@@ -26,17 +22,17 @@ export function ProductCard({ product }: ProductCardProps) {
             <small>Chưa có hình ảnh</small>
           </div>
         )}
-      </div>
+      </Link>
 
       <div className="product-card__body">
-        <h3>{product.name}</h3>
-        <strong className="product-card__price">{currencyFormatter.format(Number(product.price))}</strong>
+        <h3><Link to={`/products/${product.productId}`}>{product.name}</Link></h3>
+        <strong className="product-card__price">{formatCurrency(product.price)}</strong>
         <p className={`product-card__stock${isInStock ? '' : ' product-card__stock--empty'}`}>
           {isInStock ? `Còn ${availableQuantity} sản phẩm` : 'Tạm hết hàng'}
         </p>
-        <button className="product-card__action" type="button" aria-label={`Xem chi tiết ${product.name}`}>
+        <Link className="product-card__action" to={`/products/${product.productId}`} aria-label={`Xem chi tiết ${product.name}`}>
           Xem chi tiết
-        </button>
+        </Link>
       </div>
     </article>
   );
