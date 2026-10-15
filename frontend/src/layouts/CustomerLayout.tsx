@@ -34,12 +34,12 @@ export function CustomerLayout() {
           </label>
 
           <div className="customer-actions">
-            <button className="customer-action" type="button" aria-label="Danh sách yêu thích" data-count="">
+            <Link className="customer-action" to="/wishlist" aria-label="Danh sách yêu thích" data-count="">
               <span aria-hidden="true">♡</span><small>Yêu thích</small>
-            </button>
-            <button className="customer-action" type="button" aria-label="Giỏ hàng" data-count="">
+            </Link>
+            <Link className="customer-action" to="/cart" aria-label="Giỏ hàng" data-count="">
               <span aria-hidden="true">▢</span><small>Giỏ hàng</small>
-            </button>
+            </Link>
             <div className="customer-account__identity">
               <span>Xin chào</span>
               <strong>{user?.fullName}</strong>

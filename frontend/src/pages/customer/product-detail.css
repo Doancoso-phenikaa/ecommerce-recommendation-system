@@ -17,3 +17,32 @@
     aspect-ratio: 4 / 3;
   }
 }
+
+.wishlist-button:disabled {
+  color: #9ca3af;
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+  cursor: wait;
+}
+
+.wishlist-feedback-error {
+  margin: .65rem 0 0;
+  padding: .58rem .7rem;
+  color: #991b1b;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: .45rem;
+  font-size: .74rem;
+  font-weight: 650;
+}
+
+.cart-feedback-error {
+  margin: .65rem 0 0;
+  padding: .58rem .7rem;
+  color: #991b1b;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: .45rem;
+  font-size: .74rem;
+  font-weight: 650;
+}

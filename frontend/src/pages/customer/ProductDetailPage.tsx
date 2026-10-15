@@ -1,10 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ProductCard } from '../../components/product/ProductCard';
+import { addToCart } from '../../api/cart.api';
+import {
+  addToWishlist,
+  getWishlist,
+  removeFromWishlist,
+} from '../../api/wishlist.api';
 import { mockCategories } from '../../mock/categories';
 import { mockProducts } from '../../mock/products';
 import type { PublicProduct } from '../../types/product';
 import { formatCurrency } from '../../utils/format-currency';
+import { getApiErrorMessage } from '../../utils/auth';
 import './product-detail.css';
 
 const mockReviews = [
@@ -36,6 +43,11 @@ export function ProductDetailPage() {
 function ProductDetailContent({ product }: { product: PublicProduct }) {
   const [quantity, setQuantity] = useState(1);
   const [isFavorite, setIsFavorite] = useState(false);
+  const [isWishlistLoading, setIsWishlistLoading] = useState(true);
+  const [isWishlistUpdating, setIsWishlistUpdating] = useState(false);
+  const [wishlistError, setWishlistError] = useState('');
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
+  const [cartError, setCartError] = useState('');
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const availableQuantity = Math.max(product.inventory.availableQuantity, 0);
   const isOutOfStock = availableQuantity === 0;
@@ -51,6 +63,39 @@ function ProductDetailContent({ product }: { product: PublicProduct }) {
   const relatedProducts = [...sameCategoryProducts, ...otherProducts].slice(0, 4);
 
   useEffect(() => {
+    let isCurrent = true;
+
+    const loadWishlistState = async () => {
+      try {
+        const response = await getWishlist();
+
+        if (isCurrent) {
+          setIsFavorite(
+            response.items.some((item) => item.productId === product.productId),
+          );
+        }
+      } catch (error: unknown) {
+        if (isCurrent) {
+          setWishlistError(
+            getApiErrorMessage(
+              error,
+              'Không thể kiểm tra trạng thái yêu thích.',
+            ),
+          );
+        }
+      } finally {
+        if (isCurrent) setIsWishlistLoading(false);
+      }
+    };
+
+    void loadWishlistState();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [product.productId]);
+
+  useEffect(() => {
     if (!feedbackMessage) return undefined;
     const timer = window.setTimeout(() => setFeedbackMessage(''), 3000);
     return () => window.clearTimeout(timer);
@@ -60,8 +105,52 @@ function ProductDetailContent({ product }: { product: PublicProduct }) {
   const increaseQuantity = () => {
     setQuantity((current) => Math.min(availableQuantity, current + 1));
   };
-  const handleAddToCart = () => {
-    if (!isOutOfStock) setFeedbackMessage('Đã thêm sản phẩm vào giỏ hàng');
+  const handleAddToCart = async () => {
+    if (isOutOfStock || isAddingToCart) return;
+
+    setIsAddingToCart(true);
+    setCartError('');
+
+    try {
+      await addToCart(product.productId, quantity);
+      setFeedbackMessage('Đã thêm sản phẩm vào giỏ hàng');
+    } catch (error: unknown) {
+      setCartError(
+        getApiErrorMessage(error, 'Không thể thêm sản phẩm vào giỏ hàng.'),
+      );
+    } finally {
+      setIsAddingToCart(false);
+    }
+  };
+
+  const handleWishlistToggle = async () => {
+    if (isWishlistLoading || isWishlistUpdating) return;
+
+    setIsWishlistUpdating(true);
+    setWishlistError('');
+
+    try {
+      if (isFavorite) {
+        await removeFromWishlist(product.productId);
+        setIsFavorite(false);
+        setFeedbackMessage('Đã xóa sản phẩm khỏi danh sách yêu thích');
+      } else {
+        await addToWishlist(product.productId);
+        setIsFavorite(true);
+        setFeedbackMessage('Đã thêm sản phẩm vào danh sách yêu thích');
+      }
+    } catch (error: unknown) {
+      setWishlistError(
+        getApiErrorMessage(
+          error,
+          isFavorite
+            ? 'Không thể xóa sản phẩm khỏi danh sách yêu thích.'
+            : 'Không thể thêm sản phẩm vào danh sách yêu thích.',
+        ),
+      );
+    } finally {
+      setIsWishlistUpdating(false);
+    }
   };
 
   return (
@@ -112,13 +201,35 @@ function ProductDetailContent({ product }: { product: PublicProduct }) {
           </div>
 
           <div className="product-actions">
-            <button className="add-to-cart-button" type="button" onClick={handleAddToCart} disabled={isOutOfStock}>Thêm vào giỏ hàng</button>
+            <button
+              className="add-to-cart-button"
+              type="button"
+              onClick={() => void handleAddToCart()}
+              disabled={isOutOfStock || isAddingToCart}
+            >
+              {isAddingToCart ? 'Đang thêm...' : 'Thêm vào giỏ hàng'}
+            </button>
             <button className="buy-now-button" type="button" onClick={() => setFeedbackMessage('Tính năng mua ngay sẽ được kết nối sau')} disabled={isOutOfStock}>Mua ngay</button>
-            <button className={`wishlist-button${isFavorite ? ' wishlist-button--active' : ''}`} type="button" onClick={() => setIsFavorite((current) => !current)} aria-pressed={isFavorite}>
-              <span aria-hidden="true">{isFavorite ? '♥' : '♡'}</span>{isFavorite ? 'Đã yêu thích' : 'Yêu thích'}
+            <button
+              className={`wishlist-button${isFavorite ? ' wishlist-button--active' : ''}`}
+              type="button"
+              onClick={() => void handleWishlistToggle()}
+              disabled={isWishlistLoading || isWishlistUpdating}
+              aria-pressed={isFavorite}
+            >
+              <span aria-hidden="true">{isFavorite ? '♥' : '♡'}</span>
+              {isWishlistLoading
+                ? 'Đang kiểm tra...'
+                : isWishlistUpdating
+                  ? 'Đang cập nhật...'
+                  : isFavorite
+                    ? 'Đã yêu thích'
+                    : 'Yêu thích'}
             </button>
           </div>
           {feedbackMessage && <p className="cart-feedback" role="status">{feedbackMessage}</p>}
+          {cartError && <p className="cart-feedback-error" role="alert">{cartError}</p>}
+          {wishlistError && <p className="wishlist-feedback-error" role="alert">{wishlistError}</p>}
         </div>
       </section>
 
