@@ -9,6 +9,7 @@ import { ProductDetailPage } from './pages/customer/ProductDetailPage';
 import { WishlistPage } from './pages/customer/WishlistPage';
 import { SellerDashboardPage } from './pages/seller/SellerDashboardPage';
 import { CustomerLayout } from './layouts/CustomerLayout';
+import { SellerLayout } from './layouts/SellerLayout';
 import { GuestRoute } from './routes/GuestRoute';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { RoleRoute } from './routes/RoleRoute';
@@ -29,7 +30,12 @@ function App() {
           <Route path="/cart" element={<CartPage />} />
         </Route>
       </Route>
-      <Route element={<RoleRoute allowedRoles={['SELLER']} />}><Route path="/seller" element={<SellerDashboardPage />} /></Route>
+      <Route element={<RoleRoute allowedRoles={['SELLER']} />}>
+        <Route path="/seller" element={<SellerLayout />}>
+          <Route index element={<SellerDashboardPage />} />
+          <Route path="shop" element={<SellerDashboardPage />} />
+        </Route>
+      </Route>
       <Route element={<RoleRoute allowedRoles={['ADMIN']} />}><Route path="/admin" element={<AdminDashboardPage />} /></Route>
     </Route>
     <Route path="*" element={<Navigate to="/login" replace />} />
