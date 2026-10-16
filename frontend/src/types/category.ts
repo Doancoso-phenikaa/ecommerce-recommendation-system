@@ -4,6 +4,7 @@ export interface Category {
   categoryId: string;
   name: string;
   description: string | null;
+  imageUrl: string | null;
   status: CategoryStatus;
   createdAt: string;
   updatedAt: string;
@@ -29,11 +30,13 @@ export interface AdminCategoryListResponse {
 export interface CreateCategoryRequest {
   name: string;
   description?: string;
+  imageUrl?: string;
 }
 
 export interface UpdateCategoryRequest {
   name?: string;
   description?: string;
+  imageUrl?: string;
 }
 
 export interface UpdateCategoryStatusRequest {

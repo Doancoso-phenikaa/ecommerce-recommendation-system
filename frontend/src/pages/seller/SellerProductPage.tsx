@@ -20,6 +20,7 @@ import type { Shop } from '../../types/shop';
 import { getApiErrorMessage } from '../../utils/auth';
 import { formatCurrency } from '../../utils/format-currency';
 import './seller-product.css';
+import './seller-product-skeleton.css';
 
 const PAGE_SIZE = 10;
 const PRICE_PATTERN = /^(?=.*[1-9])\d{1,10}(?:\.\d{1,2})?$/;
@@ -340,6 +341,8 @@ export function SellerProductPage() {
         <button type="button" disabled={!canManageProducts} onClick={openCreateForm}><span aria-hidden="true">+</span> Thêm sản phẩm</button>
       </header>
 
+      {isLoading && !shop && <SellerProductInitialSkeleton />}
+
       {!isLoading && !shop && (
         <section className="seller-product-guard"><span aria-hidden="true">◇</span><div><strong>Bạn cần tạo gian hàng trước khi đăng sản phẩm.</strong><p>Đi tới mục Gian hàng để tạo hồ sơ và gửi Admin duyệt.</p></div></section>
       )}
@@ -399,6 +402,36 @@ export function SellerProductPage() {
         <div className="seller-product-modal-backdrop"><section className="seller-product-confirm" role="dialog" aria-modal="true" aria-labelledby="resubmit-title"><span aria-hidden="true">↗</span><h2 id="resubmit-title">Gửi lại sản phẩm để duyệt?</h2><p>Hãy chắc chắn bạn đã chỉnh sửa “{resubmitTarget.name}” theo phản hồi của Admin.</p>{formError && <div className="seller-product-form-error">{formError}</div>}<footer><button type="button" disabled={isSubmitting} onClick={() => setResubmitTarget(null)}>Quay lại</button><button className="is-primary" type="button" disabled={isSubmitting} onClick={() => void handleResubmit()}>{isSubmitting ? 'Đang gửi...' : 'Gửi lại duyệt'}</button></footer></section></div>
       )}
     </main>
+  );
+}
+
+function SellerProductInitialSkeleton() {
+  return (
+    <section
+      className="seller-product-initial-skeleton"
+      aria-label="Đang tải dữ liệu quản lý sản phẩm"
+      aria-busy="true"
+    >
+      <div className="seller-product-initial-skeleton__summary">
+        {Array.from({ length: 3 }, (_, index) => (
+          <span key={index} />
+        ))}
+      </div>
+
+      <div className="seller-product-initial-skeleton__panel">
+        <div className="seller-product-initial-skeleton__toolbar">
+          {Array.from({ length: 3 }, (_, index) => (
+            <span key={index} />
+          ))}
+        </div>
+
+        <div className="seller-product-skeleton">
+          {Array.from({ length: 5 }, (_, index) => (
+            <span key={index} />
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 

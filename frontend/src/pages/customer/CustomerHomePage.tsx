@@ -1,12 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import { getActiveCategories } from '../../api/category.api';
 import { BannerCarousel } from '../../components/customer/BannerCarousel';
 import { CategorySection } from '../../components/customer/CategorySection';
 import { ProductCard } from '../../components/product/ProductCard';
 import { mockBanners, mockSidePromotions } from '../../mock/banners';
-import { mockCategories } from '../../mock/categories';
 import { mockProducts } from '../../mock/products';
+import type { Category } from '../../types/category';
 import type { PublicProduct } from '../../types/product';
+import { getApiErrorMessage } from '../../utils/auth';
 import './customer-home.css';
 
 interface CustomerOutletContext {
@@ -19,6 +21,32 @@ export function CustomerHomePage() {
   const products: PublicProduct[] = mockProducts;
   const { searchTerm, setSearchTerm } = useOutletContext<CustomerOutletContext>();
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [isCategoryLoading, setIsCategoryLoading] = useState(true);
+  const [categoryError, setCategoryError] = useState('');
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    void getActiveCategories()
+      .then((activeCategories) => {
+        if (isCurrent) setCategories(activeCategories);
+      })
+      .catch((requestError: unknown) => {
+        if (isCurrent) {
+          setCategoryError(
+            getApiErrorMessage(requestError, 'Không thể tải danh mục lúc này.'),
+          );
+        }
+      })
+      .finally(() => {
+        if (isCurrent) setIsCategoryLoading(false);
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
 
   const filteredProducts = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLocaleLowerCase('vi');
@@ -63,9 +91,11 @@ export function CustomerHomePage() {
       </section>
 
       <CategorySection
-        categories={mockCategories}
+        categories={categories}
         selectedCategoryId={selectedCategoryId}
         onSelect={setSelectedCategoryId}
+        isLoading={isCategoryLoading}
+        error={categoryError}
       />
 
       <section className="featured-section" id="featured-products" aria-labelledby="featured-title">

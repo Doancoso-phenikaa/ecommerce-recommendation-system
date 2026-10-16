@@ -35,6 +35,7 @@ export class CategoryService {
     const category = this.categoryRepository.create({
       name,
       description: createCategoryDto.description?.trim() || null,
+      imageUrl: createCategoryDto.imageUrl?.trim() || null,
       status: CategoryStatus.ACTIVE,
     });
 
@@ -112,6 +113,10 @@ export class CategoryService {
       category.description = updateCategoryDto.description.trim() || null;
     }
 
+    if (updateCategoryDto.imageUrl !== undefined) {
+      category.imageUrl = updateCategoryDto.imageUrl.trim() || null;
+    }
+
     const savedCategory = await this.saveWithNameConflictHandling(category);
     return this.buildCategoryResponse(savedCategory);
   }
@@ -156,6 +161,7 @@ export class CategoryService {
       categoryId: category.categoryId,
       name: category.name,
       description: category.description,
+      imageUrl: category.imageUrl,
       status: category.status,
       createdAt: category.createdAt,
       updatedAt: category.updatedAt,

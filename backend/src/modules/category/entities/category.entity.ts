@@ -21,6 +21,9 @@ export class Category {
   @Column({ name: 'description', type: 'text', nullable: true })
   description: string | null;
 
+  @Column({ name: 'image_url', type: 'text', nullable: true })
+  imageUrl: string | null;
+
   @Column({
     name: 'status',
     type: 'enum',

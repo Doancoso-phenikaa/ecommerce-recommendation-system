@@ -12,6 +12,7 @@ import type {
 } from '../../types/category';
 import { getApiErrorMessage } from '../../utils/auth';
 import './admin-category.css';
+import './admin-category-images.css';
 
 const PAGE_SIZE = 10;
 
@@ -46,6 +47,7 @@ export function AdminCategoryPage() {
   const [formState, setFormState] = useState<CategoryFormState | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusTarget, setStatusTarget] = useState<Category | null>(null);
@@ -131,6 +133,7 @@ export function AdminCategoryPage() {
     setFormState({ mode: 'create', category: null });
     setName('');
     setDescription('');
+    setImageUrl('');
     setFormError('');
   };
 
@@ -138,6 +141,7 @@ export function AdminCategoryPage() {
     setFormState({ mode: 'edit', category });
     setName(category.name);
     setDescription(category.description ?? '');
+    setImageUrl(category.imageUrl ?? '');
     setFormError('');
   };
 
@@ -166,6 +170,7 @@ export function AdminCategoryPage() {
 
     const normalizedName = name.trim();
     const normalizedDescription = description.trim();
+    const normalizedImageUrl = imageUrl.trim();
     if (!normalizedName) {
       setFormError('Tên danh mục không được để trống.');
       return;
@@ -183,6 +188,7 @@ export function AdminCategoryPage() {
         await createAdminCategory({
           name: normalizedName,
           description: normalizedDescription || undefined,
+          imageUrl: normalizedImageUrl || undefined,
         });
         setSuccessMessage('Đã tạo danh mục mới.');
         setPage(1);
@@ -191,6 +197,7 @@ export function AdminCategoryPage() {
         await updateAdminCategory(formState.category.categoryId, {
           name: normalizedName,
           description: normalizedDescription,
+          imageUrl: normalizedImageUrl,
         });
         setSuccessMessage('Đã cập nhật danh mục.');
         await requestData();
@@ -323,7 +330,12 @@ export function AdminCategoryPage() {
                 <tbody>
                   {result.data.map((category) => (
                     <tr key={category.categoryId}>
-                      <td data-label="Danh mục"><strong>{category.name}</strong><small>#{category.categoryId}</small></td>
+                      <td data-label="Danh mục">
+                        <div className="admin-category-identity">
+                          <CategoryImage key={category.imageUrl ?? 'placeholder'} imageUrl={category.imageUrl} name={category.name} />
+                          <div><strong>{category.name}</strong><small>#{category.categoryId}</small></div>
+                        </div>
+                      </td>
                       <td data-label="Mô tả"><p>{category.description || 'Chưa có mô tả'}</p></td>
                       <td data-label="Trạng thái">
                         <span className={`category-status category-status--${category.status.toLowerCase()}`}>
@@ -367,6 +379,14 @@ export function AdminCategoryPage() {
               <div className="admin-category-character-count">{name.length}/100</div>
               <label htmlFor="category-description">Mô tả <small>Không bắt buộc</small></label>
               <textarea id="category-description" rows={5} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Mô tả ngắn về nhóm sản phẩm..." />
+              <label htmlFor="category-image-url">URL ảnh danh mục <small>Không bắt buộc</small></label>
+              <input id="category-image-url" type="url" value={imageUrl} onChange={(event) => { setImageUrl(event.target.value); setFormError(''); }} placeholder="https://example.com/category.jpg" />
+              {imageUrl.trim() && (
+                <div className="admin-category-image-preview">
+                  <CategoryImage key={imageUrl.trim()} imageUrl={imageUrl.trim()} name={name || 'Danh mục'} />
+                  <span>Xem trước ảnh danh mục</span>
+                </div>
+              )}
               {formError && <div className="admin-category-form-error" role="alert">{formError}</div>}
               <footer><button type="button" disabled={isSubmitting} onClick={closeForm}>Hủy</button><button className="is-primary" type="submit" disabled={isSubmitting}>{isSubmitting ? 'Đang lưu...' : formState.mode === 'create' ? 'Tạo danh mục' : 'Lưu thay đổi'}</button></footer>
             </form>
@@ -391,4 +411,14 @@ export function AdminCategoryPage() {
       )}
     </main>
   );
+}
+
+function CategoryImage({ imageUrl, name }: { imageUrl: string | null; name: string }) {
+  const [hasError, setHasError] = useState(false);
+
+  if (!imageUrl || hasError) {
+    return <span className="admin-category-image-placeholder" aria-hidden="true">◇</span>;
+  }
+
+  return <img className="admin-category-image" src={imageUrl} alt={name} onError={() => setHasError(true)} />;
 }
