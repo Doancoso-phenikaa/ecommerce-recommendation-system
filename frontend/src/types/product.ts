@@ -28,12 +28,16 @@ export interface ProductListResponse {
   };
 }
 
+export type ProductSort = 'NEWEST' | 'PRICE_ASC' | 'PRICE_DESC';
+
 export interface PublicProductQuery {
   search?: string;
   categoryId?: string;
   shopId?: string;
   minPrice?: string;
   maxPrice?: string;
+  inStock?: boolean;
+  sort?: ProductSort;
   page?: number;
   limit?: number;
 }

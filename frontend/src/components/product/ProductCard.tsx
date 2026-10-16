@@ -3,6 +3,7 @@ import type { PublicProduct } from '../../types/product';
 import { formatCurrency } from '../../utils/format-currency';
 import './product-card.css';
 import './product-card-link.css';
+import './product-card-compact.css';
 
 interface ProductCardProps {
   product: PublicProduct;

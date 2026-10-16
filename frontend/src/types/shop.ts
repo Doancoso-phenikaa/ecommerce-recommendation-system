@@ -1,5 +1,14 @@
 export type ShopStatus = 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED';
 
+export interface PublicShop {
+  shopId: string;
+  name: string;
+}
+
+export interface PublicShopListResponse {
+  data: PublicShop[];
+}
+
 export interface Shop {
   shopId: string;
   sellerId: string;
