@@ -10,6 +10,10 @@ import { WishlistPage } from './pages/customer/WishlistPage';
 import { SellerDashboardPage } from './pages/seller/SellerDashboardPage';
 import { CustomerLayout } from './layouts/CustomerLayout';
 import { SellerLayout } from './layouts/SellerLayout';
+import { AdminLayout } from './layouts/AdminLayout';
+import { AdminShopPage } from './pages/admin/AdminShopPage';
+import { AdminShopDetailPage } from './pages/admin/AdminShopDetailPage';
+import { AdminCategoryPage } from './pages/admin/AdminCategoryPage';
 import { GuestRoute } from './routes/GuestRoute';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { RoleRoute } from './routes/RoleRoute';
@@ -36,7 +40,14 @@ function App() {
           <Route path="shop" element={<SellerDashboardPage />} />
         </Route>
       </Route>
-      <Route element={<RoleRoute allowedRoles={['ADMIN']} />}><Route path="/admin" element={<AdminDashboardPage />} /></Route>
+      <Route element={<RoleRoute allowedRoles={['ADMIN']} />}>
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<AdminDashboardPage />} />
+          <Route path="shops" element={<AdminShopPage />} />
+          <Route path="shops/:shopId" element={<AdminShopDetailPage />} />
+          <Route path="categories" element={<AdminCategoryPage />} />
+        </Route>
+      </Route>
     </Route>
     <Route path="*" element={<Navigate to="/login" replace />} />
   </Routes>;

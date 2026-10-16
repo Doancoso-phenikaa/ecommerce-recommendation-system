@@ -21,3 +21,58 @@ export interface UpdateShopRequest {
   name?: string;
   description?: string;
 }
+
+export interface AdminShopSellerSummary {
+  sellerId: string;
+  fullName: string;
+  email: string;
+}
+
+export interface AdminShopListItem {
+  shopId: string;
+  name: string;
+  description: string | null;
+  rating: string;
+  status: ShopStatus;
+  rejectionReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+  seller: AdminShopSellerSummary;
+}
+
+export interface AdminShopDetail extends Omit<AdminShopListItem, 'seller'> {
+  seller: {
+    sellerId: string;
+    status: string;
+    user: {
+      userId: string;
+      fullName: string;
+      email: string;
+      phone: string | null;
+      isActive: boolean;
+    };
+  };
+}
+
+export interface AdminShopListResponse {
+  data: AdminShopListItem[];
+  pagination: {
+    page: number;
+    limit: number;
+    totalItems: number;
+    totalPages: number;
+  };
+}
+
+export interface AdminShopQuery {
+  search?: string;
+  status?: ShopStatus;
+  page?: number;
+  limit?: number;
+}
+
+export interface ShopStatusTransitionResponse {
+  shopId: string;
+  status: ShopStatus;
+  message: string;
+}
