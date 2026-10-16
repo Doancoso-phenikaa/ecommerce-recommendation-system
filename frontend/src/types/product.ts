@@ -105,3 +105,27 @@ export interface InventoryUpdateResponse {
   reservedQuantity: number;
   updatedAt: string;
 }
+
+export interface AdminProductShop {
+  shopId: string;
+  name: string;
+  status: 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED';
+}
+
+export interface AdminProduct extends SellerProduct {
+  shop: AdminProductShop | null;
+}
+
+export interface AdminProductQuery {
+  search?: string;
+  status?: ProductStatus;
+  categoryId?: string;
+  shopId?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface AdminProductListResponse {
+  data: AdminProduct[];
+  pagination: ProductListResponse['pagination'];
+}
