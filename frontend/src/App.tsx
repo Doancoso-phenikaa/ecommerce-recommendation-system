@@ -6,6 +6,7 @@ import { RegisterSellerPage } from './pages/auth/RegisterSellerPage';
 import { CustomerHomePage } from './pages/customer/CustomerHomePage';
 import { CartPage } from './pages/customer/CartPage';
 import { ProductDetailPage } from './pages/customer/ProductDetailPage';
+import { CategoryProductPage } from './pages/customer/CategoryProductPage';
 import { WishlistPage } from './pages/customer/WishlistPage';
 import { SellerDashboardPage } from './pages/seller/SellerDashboardPage';
 import { SellerProductPage } from './pages/seller/SellerProductPage';
@@ -33,6 +34,7 @@ function App() {
         <Route element={<CustomerLayout />}>
           <Route path="/" element={<CustomerHomePage />} />
           <Route path="/products/:productId" element={<ProductDetailPage />} />
+          <Route path="/categories/:categoryId" element={<CategoryProductPage />} />
           <Route path="/wishlist" element={<WishlistPage />} />
           <Route path="/cart" element={<CartPage />} />
         </Route>

@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ProductCard } from '../../components/product/ProductCard';
 import { addToCart } from '../../api/cart.api';
+import { getActiveCategories } from '../../api/category.api';
+import { getProductDetail, getProducts } from '../../api/product.api';
 import {
   addToWishlist,
   getWishlist,
   removeFromWishlist,
 } from '../../api/wishlist.api';
-import { mockCategories } from '../../mock/categories';
-import { mockProducts } from '../../mock/products';
 import type { PublicProduct } from '../../types/product';
 import { formatCurrency } from '../../utils/format-currency';
 import { getApiErrorMessage } from '../../utils/auth';
@@ -21,26 +21,100 @@ const mockReviews = [
 ];
 
 export function ProductDetailPage() {
-  const { productId } = useParams<{ productId: string }>();
-  const product = mockProducts.find((item) => item.productId === productId);
+  const { productId = '' } = useParams<{ productId: string }>();
+  const [product, setProduct] = useState<PublicProduct | null>(null);
+  const [categoryName, setCategoryName] = useState('');
+  const [relatedProducts, setRelatedProducts] = useState<PublicProduct[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    const loadProduct = async () => {
+      setIsLoading(true);
+      setError('');
+      setProduct(null);
+      setRelatedProducts([]);
+
+      try {
+        const currentProduct = await getProductDetail(productId);
+        if (!isCurrent) return;
+        setProduct(currentProduct);
+        setCategoryName(`Danh mục #${currentProduct.categoryId}`);
+
+        const [categoriesResult, relatedResult] = await Promise.allSettled([
+          getActiveCategories(),
+          getProducts({
+            categoryId: currentProduct.categoryId,
+            page: 1,
+            limit: 5,
+          }),
+        ]);
+
+        if (!isCurrent) return;
+        if (categoriesResult.status === 'fulfilled') {
+          const category = categoriesResult.value.find(
+            (item) => item.categoryId === currentProduct.categoryId,
+          );
+          if (category) setCategoryName(category.name);
+        }
+        if (relatedResult.status === 'fulfilled') {
+          setRelatedProducts(
+            relatedResult.value.data
+              .filter((item) => item.productId !== currentProduct.productId)
+              .slice(0, 4),
+          );
+        }
+      } catch (requestError: unknown) {
+        if (isCurrent) {
+          setError(
+            getApiErrorMessage(
+              requestError,
+              'Không thể tải thông tin sản phẩm.',
+            ),
+          );
+        }
+      } finally {
+        if (isCurrent) setIsLoading(false);
+      }
+    };
+
+    void loadProduct();
+    return () => {
+      isCurrent = false;
+    };
+  }, [productId]);
+
+  if (isLoading) {
+    return (
+      <main className="product-detail-page">
+        <section className="product-not-found" aria-busy="true">
+          <span aria-hidden="true">…</span>
+          <h1>Đang tải thông tin sản phẩm</h1>
+          <p>Vui lòng chờ trong giây lát.</p>
+        </section>
+      </main>
+    );
+  }
 
   if (!product) {
     return (
       <main className="product-detail-page">
         <section className="product-not-found">
           <span aria-hidden="true">?</span>
-          <h1>Sản phẩm không tồn tại</h1>
-          <p>Sản phẩm bạn đang tìm có thể đã được thay đổi hoặc không còn hiển thị.</p>
+          <h1>Không thể hiển thị sản phẩm</h1>
+          <p>{error || 'Sản phẩm bạn đang tìm có thể đã được thay đổi hoặc không còn hiển thị.'}</p>
           <Link to="/">Quay lại trang chủ</Link>
         </section>
       </main>
     );
   }
 
-  return <ProductDetailContent key={product.productId} product={product} />;
+  return <ProductDetailContent key={product.productId} product={product} categoryName={categoryName} relatedProducts={relatedProducts} />;
 }
 
-function ProductDetailContent({ product }: { product: PublicProduct }) {
+function ProductDetailContent({ product, categoryName, relatedProducts }: { product: PublicProduct; categoryName: string; relatedProducts: PublicProduct[] }) {
   const [quantity, setQuantity] = useState(1);
   const [isFavorite, setIsFavorite] = useState(false);
   const [isWishlistLoading, setIsWishlistLoading] = useState(true);
@@ -51,16 +125,6 @@ function ProductDetailContent({ product }: { product: PublicProduct }) {
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const availableQuantity = Math.max(product.inventory.availableQuantity, 0);
   const isOutOfStock = availableQuantity === 0;
-  const categoryName = mockCategories.find(
-    (category) => category.categoryId === product.categoryId,
-  )?.name ?? `Danh mục #${product.categoryId}`;
-  const sameCategoryProducts = mockProducts.filter(
-    (item) => item.productId !== product.productId && item.categoryId === product.categoryId,
-  );
-  const otherProducts = mockProducts.filter(
-    (item) => item.productId !== product.productId && item.categoryId !== product.categoryId,
-  );
-  const relatedProducts = [...sameCategoryProducts, ...otherProducts].slice(0, 4);
 
   useEffect(() => {
     let isCurrent = true;
@@ -272,12 +336,12 @@ function ProductDetailContent({ product }: { product: PublicProduct }) {
         </div>
       </section>
 
-      <section className="related-products" aria-labelledby="related-title">
+      {relatedProducts.length > 0 && <section className="related-products" aria-labelledby="related-title">
         <div className="related-products__heading"><h2 id="related-title">Sản phẩm liên quan</h2><span>Cùng danh mục và các lựa chọn khác</span></div>
         <div className="related-products__grid">
           {relatedProducts.map((item) => <ProductCard key={item.productId} product={item} />)}
         </div>
-      </section>
+      </section>}
     </main>
   );
 }

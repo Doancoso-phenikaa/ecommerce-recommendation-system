@@ -1,0 +1,14 @@
+.product-card {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.product-card:hover h3 {
+  color: var(--market-primary-strong);
+}
+
+.product-card:focus-visible {
+  outline: 3px solid rgba(249, 115, 22, 0.32);
+  outline-offset: 3px;
+}

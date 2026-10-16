@@ -8,6 +8,10 @@
   background: #fff7ed;
 }
 
+.category-item {
+  text-decoration: none;
+}
+
 .category-item > .category-item__image--placeholder {
   display: grid;
   place-items: center;

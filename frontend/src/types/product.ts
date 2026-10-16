@@ -28,6 +28,16 @@ export interface ProductListResponse {
   };
 }
 
+export interface PublicProductQuery {
+  search?: string;
+  categoryId?: string;
+  shopId?: string;
+  minPrice?: string;
+  maxPrice?: string;
+  page?: number;
+  limit?: number;
+}
+
 export type ProductStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
 export interface SellerProductCategory {
