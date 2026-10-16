@@ -8,6 +8,7 @@ import { CartPage } from './pages/customer/CartPage';
 import { ProductDetailPage } from './pages/customer/ProductDetailPage';
 import { WishlistPage } from './pages/customer/WishlistPage';
 import { SellerDashboardPage } from './pages/seller/SellerDashboardPage';
+import { SellerProductPage } from './pages/seller/SellerProductPage';
 import { CustomerLayout } from './layouts/CustomerLayout';
 import { SellerLayout } from './layouts/SellerLayout';
 import { AdminLayout } from './layouts/AdminLayout';
@@ -38,6 +39,7 @@ function App() {
         <Route path="/seller" element={<SellerLayout />}>
           <Route index element={<SellerDashboardPage />} />
           <Route path="shop" element={<SellerDashboardPage />} />
+          <Route path="products" element={<SellerProductPage />} />
         </Route>
       </Route>
       <Route element={<RoleRoute allowedRoles={['ADMIN']} />}>

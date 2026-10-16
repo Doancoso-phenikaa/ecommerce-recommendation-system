@@ -27,3 +27,81 @@ export interface ProductListResponse {
     totalPages: number;
   };
 }
+
+export type ProductStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface SellerProductCategory {
+  categoryId: string;
+  name: string;
+  status: 'ACTIVE' | 'INACTIVE';
+}
+
+export interface SellerProduct {
+  productId: string;
+  shopId: string;
+  categoryId: string;
+  name: string;
+  description: string | null;
+  price: string;
+  imageUrl: string | null;
+  status: ProductStatus;
+  rejectionReason: string | null;
+  approvedAt: string | null;
+  inventory: ProductInventory | null;
+  category: SellerProductCategory | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SellerProductQuery {
+  search?: string;
+  status?: ProductStatus;
+  categoryId?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface SellerProductListResponse {
+  data: SellerProduct[];
+  pagination: ProductListResponse['pagination'];
+}
+
+export interface CreateSellerProductRequest {
+  categoryId: string;
+  name: string;
+  description?: string;
+  price: string;
+  imageUrl?: string;
+  quantity: number;
+}
+
+export interface UpdateSellerProductRequest {
+  categoryId?: string;
+  name?: string;
+  description?: string;
+  price?: string;
+  imageUrl?: string;
+}
+
+export interface ProductMutationResponse {
+  productId: string;
+  shopId: string;
+  categoryId: string;
+  name: string;
+  description: string | null;
+  price: string;
+  imageUrl: string | null;
+  status: ProductStatus;
+  rejectionReason: string | null;
+  approvedAt: string | null;
+  inventory: Omit<ProductInventory, 'availableQuantity'>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InventoryUpdateResponse {
+  productId: string;
+  quantity: number;
+  reservedQuantity: number;
+  updatedAt: string;
+}

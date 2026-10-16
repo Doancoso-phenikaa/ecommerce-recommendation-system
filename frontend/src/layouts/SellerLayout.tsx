@@ -3,12 +3,16 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import './seller-layout.css';
 
-const futureNavigation = ['Sản phẩm', 'Đơn hàng', 'Thống kê'];
+const futureNavigation = [
+  { label: 'Đơn hàng', icon: '▤' },
+  { label: 'Thống kê', icon: '↗' },
+];
 
 export function SellerLayout() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [isNavigationOpen, setIsNavigationOpen] = useState(false);
+  const closeNavigation = () => setIsNavigationOpen(false);
 
   const handleLogout = () => {
     logout();
@@ -24,16 +28,19 @@ export function SellerLayout() {
         </div>
 
         <nav className="seller-navigation" aria-label="Điều hướng người bán">
-          <NavLink end to="/seller" onClick={() => setIsNavigationOpen(false)}>
+          <NavLink end to="/seller" onClick={closeNavigation}>
             <span aria-hidden="true">⌂</span>Tổng quan
           </NavLink>
-          <NavLink to="/seller/shop" onClick={() => setIsNavigationOpen(false)}>
+          <NavLink to="/seller/shop" onClick={closeNavigation}>
             <span aria-hidden="true">◇</span>Gian hàng
           </NavLink>
-          {futureNavigation.map((item, index) => (
-            <span className="seller-navigation__disabled" aria-disabled="true" key={item}>
-              <span aria-hidden="true">{index === 0 ? '▦' : index === 1 ? '▤' : '↗'}</span>
-              {item}<small>Sắp có</small>
+          <NavLink to="/seller/products" onClick={closeNavigation}>
+            <span aria-hidden="true">▦</span>Sản phẩm
+          </NavLink>
+          {futureNavigation.map((item) => (
+            <span className="seller-navigation__disabled" aria-disabled="true" key={item.label}>
+              <span aria-hidden="true">{item.icon}</span>
+              {item.label}<small>Sắp có</small>
             </span>
           ))}
         </nav>
@@ -47,23 +54,12 @@ export function SellerLayout() {
       </aside>
 
       {isNavigationOpen && (
-        <button
-          className="seller-sidebar-backdrop"
-          type="button"
-          aria-label="Đóng menu"
-          onClick={() => setIsNavigationOpen(false)}
-        />
+        <button className="seller-sidebar-backdrop" type="button" aria-label="Đóng menu" onClick={closeNavigation} />
       )}
 
       <div className="seller-workspace">
         <header className="seller-topbar">
-          <button
-            className="seller-menu-button"
-            type="button"
-            aria-label="Mở menu"
-            aria-expanded={isNavigationOpen}
-            onClick={() => setIsNavigationOpen((current) => !current)}
-          >☰</button>
+          <button className="seller-menu-button" type="button" aria-label="Mở menu" aria-expanded={isNavigationOpen} onClick={() => setIsNavigationOpen((current) => !current)}>☰</button>
           <div><span>Kênh người bán</span><strong>{user?.fullName}</strong></div>
           <button className="seller-logout" type="button" onClick={handleLogout}>Đăng xuất</button>
         </header>
