@@ -7,9 +7,18 @@ interface ProductGridProps {
   isLoading: boolean;
   error?: string;
   onResetFilters?: () => void;
+  emptyTitle?: string;
+  emptyMessage?: string;
 }
 
-export function ProductGrid({ products, isLoading, error, onResetFilters }: ProductGridProps) {
+export function ProductGrid({
+  products,
+  isLoading,
+  error,
+  onResetFilters,
+  emptyTitle = 'Không tìm thấy sản phẩm phù hợp',
+  emptyMessage = 'Thử thay đổi khoảng giá, gian hàng hoặc điều kiện còn hàng.',
+}: ProductGridProps) {
   if (isLoading) {
     return (
       <div className="listing-grid" aria-label="Đang tải sản phẩm" aria-busy="true">
@@ -39,8 +48,8 @@ export function ProductGrid({ products, isLoading, error, onResetFilters }: Prod
     return (
       <div className="listing-state">
         <span aria-hidden="true">0</span>
-        <h2>Không tìm thấy sản phẩm phù hợp</h2>
-        <p>Thử thay đổi khoảng giá, gian hàng hoặc điều kiện còn hàng.</p>
+        <h2>{emptyTitle}</h2>
+        <p>{emptyMessage}</p>
         {onResetFilters && <button type="button" onClick={onResetFilters}>Xóa bộ lọc</button>}
       </div>
     );

@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import type { Category } from '../../types/category';
 import type { PublicShop } from '../../types/shop';
 import type { ProductListingFilters } from './product-listing.types';
 import './product-listing.css';
@@ -6,9 +7,14 @@ import './product-listing.css';
 interface ProductFilterSidebarProps {
   filters: ProductListingFilters;
   shops: PublicShop[];
+  categories?: Category[];
+  showCategoryFilter?: boolean;
+  isLoadingCategories?: boolean;
+  categoryError?: string;
   isLoadingShops?: boolean;
   shopError?: string;
   onShopChange: (shopId: string) => void;
+  onCategoryChange?: (categoryId: string) => void;
   onInStockChange: (inStock: boolean) => void;
   onApplyPrice: (minPrice: string, maxPrice: string) => void;
   onReset: () => void;
@@ -24,14 +30,20 @@ function toCents(value: string): bigint {
 export function ProductFilterSidebar({
   filters,
   shops,
+  categories = [],
+  showCategoryFilter = false,
+  isLoadingCategories = false,
+  categoryError,
   isLoadingShops = false,
   shopError,
   onShopChange,
+  onCategoryChange,
   onInStockChange,
   onApplyPrice,
   onReset,
 }: ProductFilterSidebarProps) {
   const shopFilterId = useId();
+  const categoryFilterId = useId();
   const [minPrice, setMinPrice] = useState(filters.minPrice);
   const [maxPrice, setMaxPrice] = useState(filters.maxPrice);
   const [priceError, setPriceError] = useState('');
@@ -66,6 +78,24 @@ export function ProductFilterSidebar({
         </div>
         <button type="button" onClick={onReset}>Đặt lại</button>
       </div>
+
+      {showCategoryFilter && (
+        <section className="listing-filter__section">
+          <label className="listing-filter__label" htmlFor={categoryFilterId}>Danh mục</label>
+          <select
+            id={categoryFilterId}
+            value={filters.categoryId}
+            disabled={isLoadingCategories}
+            onChange={(event) => onCategoryChange?.(event.target.value)}
+          >
+            <option value="">Tất cả danh mục</option>
+            {categories.map((category) => (
+              <option key={category.categoryId} value={category.categoryId}>{category.name}</option>
+            ))}
+          </select>
+          {categoryError && <p className="listing-filter__hint">{categoryError}</p>}
+        </section>
+      )}
 
       <section className="listing-filter__section">
         <h3>Khoảng giá</h3>

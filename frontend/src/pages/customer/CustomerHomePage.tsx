@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
 import { getActiveCategories } from '../../api/category.api';
 import { getProducts } from '../../api/product.api';
 import { BannerCarousel } from '../../components/customer/BannerCarousel';
@@ -12,13 +11,7 @@ import { getApiErrorMessage } from '../../utils/auth';
 import './customer-home.css';
 import './customer-product-states.css';
 
-interface CustomerOutletContext {
-  searchTerm: string;
-  setSearchTerm: (value: string) => void;
-}
-
 export function CustomerHomePage() {
-  const { searchTerm, setSearchTerm } = useOutletContext<CustomerOutletContext>();
   const [categories, setCategories] = useState<Category[]>([]);
   const [isCategoryLoading, setIsCategoryLoading] = useState(true);
   const [categoryError, setCategoryError] = useState('');
@@ -35,9 +28,7 @@ export function CustomerHomePage() {
       })
       .catch((requestError: unknown) => {
         if (isCurrent) {
-          setCategoryError(
-            getApiErrorMessage(requestError, 'Không thể tải danh mục lúc này.'),
-          );
+          setCategoryError(getApiErrorMessage(requestError, 'Không thể tải danh mục lúc này.'));
         }
       })
       .finally(() => {
@@ -51,44 +42,27 @@ export function CustomerHomePage() {
 
   useEffect(() => {
     let isCurrent = true;
-    const timer = window.setTimeout(() => {
-      setIsProductLoading(true);
-      setProductError('');
 
-      void getProducts({
-        search: searchTerm.trim() || undefined,
-        page: 1,
-        limit: 10,
+    void getProducts({ page: 1, limit: 10 })
+      .then((result) => {
+        if (isCurrent) setProductResult(result);
       })
-        .then((result) => {
-          if (isCurrent) setProductResult(result);
-        })
-        .catch((requestError: unknown) => {
-          if (isCurrent) {
-            setProductError(
-              getApiErrorMessage(requestError, 'Không thể tải sản phẩm.'),
-            );
-          }
-        })
-        .finally(() => {
-          if (isCurrent) setIsProductLoading(false);
-        });
-    }, 300);
+      .catch((requestError: unknown) => {
+        if (isCurrent) {
+          setProductError(getApiErrorMessage(requestError, 'Không thể tải sản phẩm.'));
+        }
+      })
+      .finally(() => {
+        if (isCurrent) setIsProductLoading(false);
+      });
 
     return () => {
       isCurrent = false;
-      window.clearTimeout(timer);
     };
-  }, [searchTerm]);
+  }, []);
 
   const products = useMemo(() => productResult?.data ?? [], [productResult]);
-
-  const suggestedProducts = useMemo(
-    () => [...products].reverse(),
-    [products],
-  );
-
-  const clearSearch = () => setSearchTerm('');
+  const suggestedProducts = useMemo(() => [...products].reverse(), [products]);
 
   return (
     <main className="customer-home">
@@ -108,23 +82,11 @@ export function CustomerHomePage() {
         </aside>
       </section>
 
-      <CategorySection
-        categories={categories}
-        isLoading={isCategoryLoading}
-        error={categoryError}
-      />
+      <CategorySection categories={categories} isLoading={isCategoryLoading} error={categoryError} />
 
       <section className="featured-section" id="featured-products" aria-labelledby="featured-title">
         <div className="market-section-heading featured-section__heading">
-          <div>
-            <h2 id="featured-title">Sản phẩm nổi bật</h2>
-            {searchTerm && (
-              <p>{productResult?.pagination.totalItems ?? 0} kết quả phù hợp</p>
-            )}
-          </div>
-          {searchTerm && (
-            <button type="button" onClick={clearSearch}>Xóa tìm kiếm</button>
-          )}
+          <div><h2 id="featured-title">Sản phẩm nổi bật</h2></div>
         </div>
 
         {isProductLoading ? (
@@ -139,16 +101,13 @@ export function CustomerHomePage() {
           </div>
         ) : products.length > 0 ? (
           <div className="product-grid">
-            {products.map((product) => (
-              <ProductCard key={product.productId} product={product} />
-            ))}
+            {products.map((product) => <ProductCard key={product.productId} product={product} />)}
           </div>
         ) : (
           <div className="catalog-empty">
             <span aria-hidden="true">0</span>
-            <h3>Không tìm thấy sản phẩm phù hợp</h3>
-            <p>Hãy thử một từ khóa hoặc danh mục khác.</p>
-            {searchTerm && <button type="button" onClick={clearSearch}>Xem tất cả sản phẩm</button>}
+            <h3>Chưa có sản phẩm để hiển thị</h3>
+            <p>Hãy quay lại sau để khám phá các sản phẩm mới.</p>
           </div>
         )}
       </section>

@@ -1,54 +1,28 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { getActiveCategories } from '../../api/category.api';
 import { getProducts } from '../../api/product.api';
-import { getPublicShops } from '../../api/shop-public.api';
-import { ProductFilterSidebar } from '../../components/product-listing/ProductFilterSidebar';
-import { ProductGrid } from '../../components/product-listing/ProductGrid';
-import { ProductListingToolbar } from '../../components/product-listing/ProductListingToolbar';
-import { ProductPagination } from '../../components/product-listing/ProductPagination';
-import type { ProductListingFilters } from '../../components/product-listing/product-listing.types';
+import { ProductListingView } from '../../components/product-listing/ProductListingView';
+import { useProductListingOptions } from '../../hooks/useProductListingOptions';
+import { useProductListingParams } from '../../hooks/useProductListingParams';
 import type { Category } from '../../types/category';
-import type { ProductListResponse, ProductSort } from '../../types/product';
-import type { PublicShop } from '../../types/shop';
+import type { ProductListResponse } from '../../types/product';
 import { getApiErrorMessage } from '../../utils/auth';
 import './category-product.css';
 
 const PAGE_SIZE = 15;
-const SORT_OPTIONS: ProductSort[] = ['NEWEST', 'PRICE_ASC', 'PRICE_DESC'];
-
-function readPositiveInteger(value: string | null, fallback: number): number {
-  if (!value || !/^[1-9]\d*$/.test(value)) return fallback;
-  return Number(value);
-}
-
-function readSort(value: string | null): ProductSort {
-  return SORT_OPTIONS.includes(value as ProductSort) ? value as ProductSort : 'NEWEST';
-}
 
 export function CategoryProductPage() {
   const { categoryId = '' } = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const { page, sort, filters, updateQuery, resetFilters } = useProductListingParams();
+  const listingOptions = useProductListingOptions();
   const [category, setCategory] = useState<Category | null>(null);
-  const [shops, setShops] = useState<PublicShop[]>([]);
   const [result, setResult] = useState<ProductListResponse | null>(null);
   const [isCategoryLoading, setIsCategoryLoading] = useState(true);
   const [isProductLoading, setIsProductLoading] = useState(false);
-  const [isShopLoading, setIsShopLoading] = useState(true);
   const [categoryError, setCategoryError] = useState('');
   const [productError, setProductError] = useState('');
-  const [shopError, setShopError] = useState('');
   const [isNotFound, setIsNotFound] = useState(false);
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
-
-  const page = readPositiveInteger(searchParams.get('page'), 1);
-  const sort = readSort(searchParams.get('sort'));
-  const filters = useMemo<ProductListingFilters>(() => ({
-    shopId: searchParams.get('shopId') ?? '',
-    minPrice: searchParams.get('minPrice') ?? '',
-    maxPrice: searchParams.get('maxPrice') ?? '',
-    inStock: searchParams.get('inStock') === 'true',
-  }), [searchParams]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -68,8 +42,8 @@ export function CategoryProductPage() {
       try {
         const categories = await getActiveCategories();
         if (!isCurrent) return;
-
         const currentCategory = categories.find((item) => item.categoryId === categoryId);
+
         if (!currentCategory) {
           setIsNotFound(true);
           return;
@@ -77,9 +51,7 @@ export function CategoryProductPage() {
 
         setCategory(currentCategory);
       } catch (requestError: unknown) {
-        if (isCurrent) {
-          setCategoryError(getApiErrorMessage(requestError, 'Không thể tải danh mục.'));
-        }
+        if (isCurrent) setCategoryError(getApiErrorMessage(requestError, 'Không thể tải danh mục.'));
       } finally {
         if (isCurrent) setIsCategoryLoading(false);
       }
@@ -90,30 +62,6 @@ export function CategoryProductPage() {
       isCurrent = false;
     };
   }, [categoryId]);
-
-  useEffect(() => {
-    let isCurrent = true;
-
-    const loadShops = async () => {
-      setIsShopLoading(true);
-      setShopError('');
-      try {
-        const response = await getPublicShops();
-        if (isCurrent) setShops(response.data);
-      } catch (requestError: unknown) {
-        if (isCurrent) {
-          setShopError(getApiErrorMessage(requestError, 'Không thể tải danh sách gian hàng.'));
-        }
-      } finally {
-        if (isCurrent) setIsShopLoading(false);
-      }
-    };
-
-    void loadShops();
-    return () => {
-      isCurrent = false;
-    };
-  }, []);
 
   useEffect(() => {
     if (!category) return;
@@ -149,42 +97,6 @@ export function CategoryProductPage() {
     };
   }, [category, filters.inStock, filters.maxPrice, filters.minPrice, filters.shopId, page, sort]);
 
-  const updateQuery = (updates: Record<string, string | null>, resetPage = true) => {
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current);
-      Object.entries(updates).forEach(([key, value]) => {
-        if (!value) next.delete(key);
-        else next.set(key, value);
-      });
-      if (resetPage) next.delete('page');
-      return next;
-    });
-  };
-
-  const handlePageChange = (nextPage: number) => {
-    updateQuery({ page: nextPage > 1 ? String(nextPage) : null }, false);
-    document.getElementById('category-products')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
-  const resetFilters = () => {
-    updateQuery({ shopId: null, minPrice: null, maxPrice: null, inStock: null });
-    setIsFilterOpen(false);
-  };
-
-  const filterProps = {
-    filters,
-    shops,
-    isLoadingShops: isShopLoading,
-    shopError,
-    onShopChange: (shopId: string) => updateQuery({ shopId: shopId || null }),
-    onInStockChange: (inStock: boolean) => updateQuery({ inStock: inStock ? 'true' : null }),
-    onApplyPrice: (minPrice: string, maxPrice: string) => {
-      updateQuery({ minPrice: minPrice || null, maxPrice: maxPrice || null });
-      setIsFilterOpen(false);
-    },
-    onReset: resetFilters,
-  };
-
   if (isNotFound) {
     return (
       <main className="category-product-page">
@@ -205,8 +117,6 @@ export function CategoryProductPage() {
     );
   }
 
-  const totalPages = result?.pagination.totalPages ?? 0;
-
   return (
     <main className="category-product-page">
       <nav className="category-product-breadcrumb" aria-label="Breadcrumb">
@@ -222,57 +132,22 @@ export function CategoryProductPage() {
         </div>
       </header>
 
-      <section className="category-product-catalog" id="category-products" aria-labelledby="category-products-title">
+      <section className="category-product-catalog" aria-labelledby="category-products-title">
         <h2 className="category-product-catalog__title" id="category-products-title">Sản phẩm trong danh mục</h2>
-
-        <ProductListingToolbar
-          totalItems={result?.pagination.totalItems ?? 0}
+        <ProductListingView
+          sectionId="category-products"
+          filters={filters}
           sort={sort}
           page={page}
-          totalPages={totalPages}
+          result={result}
           isLoading={isProductLoading}
-          onSortChange={(nextSort) => updateQuery({ sort: nextSort === 'NEWEST' ? null : nextSort })}
-          onPageChange={handlePageChange}
-          onOpenFilters={() => setIsFilterOpen(true)}
+          error={productError}
+          {...listingOptions}
+          onUpdateQuery={updateQuery}
+          onResetFilters={resetFilters}
           trailingAction={<Link to="/">Tiếp tục khám phá</Link>}
         />
-
-        <div className="category-product-layout">
-          <aside className="category-product-sidebar" aria-label="Bộ lọc sản phẩm">
-            <ProductFilterSidebar key={`${filters.minPrice}:${filters.maxPrice}`} {...filterProps} />
-          </aside>
-
-          <div className="category-product-results">
-            <ProductGrid
-              products={result?.data ?? []}
-              isLoading={isProductLoading}
-              error={productError}
-              onResetFilters={resetFilters}
-            />
-            {!isProductLoading && !productError && (result?.data.length ?? 0) > 0 && (
-              <ProductPagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
-            )}
-          </div>
-        </div>
       </section>
-
-      {isFilterOpen && (
-        <div className="category-filter-drawer" role="presentation" onMouseDown={() => setIsFilterOpen(false)}>
-          <div
-            className="category-filter-drawer__panel"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Bộ lọc sản phẩm"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="category-filter-drawer__header">
-              <strong>Lọc sản phẩm</strong>
-              <button type="button" onClick={() => setIsFilterOpen(false)} aria-label="Đóng bộ lọc">×</button>
-            </div>
-            <ProductFilterSidebar key={`${filters.minPrice}:${filters.maxPrice}`} {...filterProps} />
-          </div>
-        </div>
-      )}
     </main>
   );
 }
