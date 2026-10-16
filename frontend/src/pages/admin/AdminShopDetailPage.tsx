@@ -44,36 +44,35 @@ export function AdminShopDetailPage() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [rejectValidation, setRejectValidation] = useState('');
 
-  const loadDetail = useCallback(async () => {
-    setIsLoading(true);
-    setError('');
+  const loadDetail = useCallback(async (showLoading = true) => {
     try {
       setShop(await getAdminShopDetail(shopId));
+      setError('');
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, 'Không thể tải thông tin gian hàng.'));
     } finally {
-      setIsLoading(false);
+      if (showLoading) setIsLoading(false);
     }
   }, [shopId]);
 
   useEffect(() => {
     let isCurrent = true;
-    void getAdminShopDetail(shopId)
-      .then((data) => {
-        if (isCurrent) setShop(data);
-      })
-      .catch((requestError: unknown) => {
-        if (isCurrent) {
-          setError(getApiErrorMessage(requestError, 'Không thể tải thông tin gian hàng.'));
-        }
-      })
-      .finally(() => {
-        if (isCurrent) setIsLoading(false);
-      });
+    queueMicrotask(() => {
+      if (isCurrent) void loadDetail(true);
+    });
     return () => {
       isCurrent = false;
     };
-  }, [shopId]);
+  }, [loadDetail]);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      void loadDetail(false);
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [loadDetail]);
 
   const executeAction = async (action: ConfirmAction) => {
     setActiveAction(action);
@@ -83,7 +82,7 @@ export function AdminShopDetailPage() {
       if (action === 'suspend') await suspendAdminShop(shopId);
       if (action === 'activate') await activateAdminShop(shopId);
       setConfirmAction(null);
-      await loadDetail();
+      await loadDetail(false);
     } catch (requestError) {
       setActionError(getApiErrorMessage(requestError, 'Không thể cập nhật trạng thái gian hàng.'));
     } finally {
@@ -105,7 +104,7 @@ export function AdminShopDetailPage() {
       await rejectAdminShop(shopId, normalizedReason);
       setIsRejectOpen(false);
       setRejectionReason('');
-      await loadDetail();
+      await loadDetail(false);
     } catch (requestError) {
       setActionError(getApiErrorMessage(requestError, 'Không thể từ chối gian hàng.'));
     } finally {
@@ -117,13 +116,13 @@ export function AdminShopDetailPage() {
     return <main className="admin-shop-detail-page"><div className="admin-detail-loading">Đang tải thông tin gian hàng...</div></main>;
   }
 
-  if (error || !shop) {
+  if (!shop) {
     return (
       <main className="admin-shop-detail-page">
         <Link className="admin-back-link" to="/admin/shops">← Danh sách gian hàng</Link>
         <div className="admin-shop-state admin-shop-state--error">
           <strong>Không tải được gian hàng</strong><p>{error}</p>
-          <button type="button" onClick={() => void loadDetail()}>Thử lại</button>
+          <button type="button" onClick={() => { setIsLoading(true); setError(''); void loadDetail(true); }}>Thử lại</button>
         </div>
       </main>
     );
@@ -159,6 +158,7 @@ export function AdminShopDetailPage() {
       </header>
 
       {actionError && <div className="admin-action-error" role="alert">{actionError}</div>}
+      {error && <div className="admin-action-error" role="alert">{error}</div>}
 
       <div className="admin-detail-grid">
         <section className="admin-detail-card">

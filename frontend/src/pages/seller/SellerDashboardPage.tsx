@@ -67,7 +67,7 @@ export function SellerDashboardPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResubmitting, setIsResubmitting] = useState(false);
 
-  const loadShop = useCallback(async () => {
+  const loadShop = useCallback(async (showLoading = true) => {
     try {
       const response = await getMyShop();
       setShop(response);
@@ -82,37 +82,28 @@ export function SellerDashboardPage() {
         );
       }
     } finally {
-      setIsLoading(false);
+      if (showLoading) setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
     let isCurrent = true;
-
-    getMyShop()
-      .then((response) => {
-        if (!isCurrent) return;
-        setShop(response);
-      })
-      .catch((error: unknown) => {
-        if (!isCurrent) return;
-
-        if (isShopNotFoundError(error)) {
-          setShop(null);
-        } else {
-          setPageError(
-            getApiErrorMessage(error, 'Không thể tải thông tin gian hàng.'),
-          );
-        }
-      })
-      .finally(() => {
-        if (isCurrent) setIsLoading(false);
-      });
-
+    queueMicrotask(() => {
+      if (isCurrent) void loadShop(true);
+    });
     return () => {
       isCurrent = false;
     };
-  }, []);
+  }, [loadShop]);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      void loadShop(false);
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [loadShop]);
 
   const openCreateForm = () => {
     setName('');
@@ -216,7 +207,7 @@ export function SellerDashboardPage() {
   const handleRetry = () => {
     setIsLoading(true);
     setPageError('');
-    void loadShop();
+    void loadShop(true);
   };
 
   return (
@@ -237,7 +228,7 @@ export function SellerDashboardPage() {
         <section className="seller-shop-loading" aria-label="Đang tải thông tin gian hàng">
           <div><span /><i /><i /></div><aside><i /><i /><i /></aside>
         </section>
-      ) : pageError ? (
+      ) : pageError && !shop ? (
         <section className="seller-page-error">
           <span aria-hidden="true">!</span>
           <h2>Không thể tải gian hàng</h2>
@@ -273,6 +264,7 @@ export function SellerDashboardPage() {
         </>
       ) : (
         <>
+          {pageError && <p className="seller-message seller-message--error" role="alert">{pageError}</p>}
           <section className="seller-shop-card" id="shop-management">
             <div className="seller-shop-card__topline">
               <div className="seller-shop-card__identity">

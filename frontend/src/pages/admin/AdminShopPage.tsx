@@ -28,9 +28,7 @@ export function AdminShopPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const loadShops = useCallback(async () => {
-    setIsLoading(true);
-    setError('');
+  const loadShops = useCallback(async (showLoading = true) => {
     try {
       const data = await getAdminShops({
         status: status || undefined,
@@ -39,38 +37,32 @@ export function AdminShopPage() {
         limit: PAGE_SIZE,
       });
       setResult(data);
+      setError('');
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, 'Không thể tải danh sách gian hàng.'));
     } finally {
-      setIsLoading(false);
+      if (showLoading) setIsLoading(false);
     }
   }, [page, search, status]);
 
   useEffect(() => {
     let isCurrent = true;
-
-    void getAdminShops({
-      status: status || undefined,
-      search: search || undefined,
-      page,
-      limit: PAGE_SIZE,
-    })
-      .then((data) => {
-        if (isCurrent) setResult(data);
-      })
-      .catch((requestError: unknown) => {
-        if (isCurrent) {
-          setError(getApiErrorMessage(requestError, 'Không thể tải danh sách gian hàng.'));
-        }
-      })
-      .finally(() => {
-        if (isCurrent) setIsLoading(false);
-      });
-
+    queueMicrotask(() => {
+      if (isCurrent) void loadShops(true);
+    });
     return () => {
       isCurrent = false;
     };
-  }, [page, search, status]);
+  }, [loadShops]);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      void loadShops(false);
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [loadShops]);
 
   const handleSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -135,15 +127,17 @@ export function AdminShopPage() {
           </form>
         </div>
 
+        {error && result && <div className="admin-action-error" role="alert">{error}</div>}
+
         {isLoading ? (
           <div className="admin-shop-skeleton" aria-label="Đang tải">
             {Array.from({ length: 5 }, (_, index) => <span key={index} />)}
           </div>
-        ) : error ? (
+        ) : error && !result ? (
           <div className="admin-shop-state admin-shop-state--error">
             <strong>Không tải được dữ liệu</strong>
             <p>{error}</p>
-            <button type="button" onClick={() => void loadShops()}>Thử lại</button>
+            <button type="button" onClick={() => { setIsLoading(true); setError(''); void loadShops(true); }}>Thử lại</button>
           </div>
         ) : !result?.data.length ? (
           <div className="admin-shop-state">
