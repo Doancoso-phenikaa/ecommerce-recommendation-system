@@ -1,0 +1,395 @@
+.customer-register-page {
+  font-family: var(--font-body);
+}
+
+.customer-register-page :where(p, span, small, strong, b, i, label, input, textarea, button, a) {
+  font-family: var(--font-body);
+}
+
+.customer-register-workspace {
+  padding-top: clamp(1.4rem, 3.5vh, 2.65rem);
+}
+
+.customer-register-card {
+  min-height: 36rem;
+  grid-template-columns: minmax(20rem, .86fr) minmax(27rem, 1.14fr);
+}
+
+.customer-register-promo {
+  color: #2b2527;
+  background:
+    radial-gradient(circle at 0 100%, rgba(220, 38, 38, .1), transparent 38%),
+    linear-gradient(145deg, #fff8f8 0%, #f5e8e9 100%);
+}
+
+.customer-register-promo::after {
+  border-color: rgba(220, 38, 38, .08);
+}
+
+.customer-register-promo__badge {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .38rem .65rem;
+  color: #fff;
+  background: #dc2626;
+  border-radius: 999px;
+  font-size: .61rem;
+  font-weight: 600;
+  letter-spacing: .035em;
+}
+
+.customer-register-promo__intro {
+  margin-top: 1rem;
+}
+
+.customer-register-promo__intro h2 {
+  max-width: 24rem;
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(1.8rem, 3vw, 2.55rem);
+  font-weight: 700;
+  line-height: 1.13;
+  letter-spacing: -.045em;
+  text-wrap: balance;
+}
+
+.customer-register-promo__intro h2 em {
+  display: block;
+  color: #dc2626;
+  font-family: var(--font-heading);
+  font-style: normal;
+}
+
+.customer-register-promo__intro p {
+  max-width: 27rem;
+  margin: .7rem 0 0;
+  color: #6d6265;
+  font-size: .74rem;
+  line-height: 1.6;
+}
+
+.customer-register-benefits {
+  display: grid;
+  gap: .55rem;
+  margin-top: 1.15rem;
+}
+
+.customer-register-benefits article {
+  position: relative;
+  display: grid;
+  grid-template-columns: 2.1rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .65rem;
+  padding: .68rem .7rem;
+  background: rgba(255, 255, 255, .86);
+  border: 1px solid rgba(220, 38, 38, .08);
+  border-radius: .48rem;
+  box-shadow: 0 .25rem .8rem rgba(77, 31, 36, .045);
+}
+
+.customer-register-benefits article > span {
+  width: 2.1rem;
+  height: 2.1rem;
+  display: grid;
+  place-items: center;
+  color: #dc2626;
+  background: #fff1f2;
+  border-radius: .4rem;
+  font-size: .82rem;
+  font-weight: 700;
+}
+
+.customer-register-benefits strong,
+.customer-register-benefits p {
+  display: block;
+  margin: 0;
+}
+
+.customer-register-benefits strong {
+  color: #373033;
+  font-size: .71rem;
+  font-weight: 600;
+}
+
+.customer-register-benefits p {
+  margin-top: .14rem;
+  color: #877c7f;
+  font-size: .61rem;
+  line-height: 1.4;
+}
+
+.customer-register-benefits small {
+  padding: .22rem .42rem;
+  color: #be2020;
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  border-radius: 999px;
+  font-size: .5rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.customer-register-proof {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .6rem;
+  margin-top: auto;
+  padding-top: .9rem;
+  border-top: 1px solid rgba(113, 64, 69, .12);
+}
+
+.customer-register-proof .login-social-proof__people span {
+  color: #731d25;
+  background: #fff;
+  border-color: #f1dfe1;
+}
+
+.customer-register-proof > div:nth-child(2) strong,
+.customer-register-proof > div:nth-child(2) small,
+.customer-register-proof > div:last-child strong,
+.customer-register-proof > div:last-child span {
+  display: block;
+}
+
+.customer-register-proof > div:nth-child(2) strong {
+  color: #443c3e;
+  font-size: .61rem;
+}
+
+.customer-register-proof > div:nth-child(2) small {
+  margin-top: .08rem;
+  color: #8d8285;
+  font-size: .51rem;
+}
+
+.customer-register-proof > div:last-child {
+  text-align: right;
+}
+
+.customer-register-proof > div:last-child span {
+  color: #dc2626;
+  font-size: .55rem;
+  letter-spacing: .04em;
+}
+
+.customer-register-proof > div:last-child strong {
+  margin-top: .12rem;
+  color: #504749;
+  font-size: .55rem;
+}
+
+.customer-register-form-panel {
+  padding-block: 2.25rem;
+}
+
+.customer-register-form-inner {
+  width: min(30rem, 100%);
+}
+
+.customer-register-heading h1 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+}
+
+.customer-register-form {
+  gap: .68rem;
+  margin-top: 1rem;
+}
+
+.customer-register-page .form-field {
+  gap: .3rem;
+}
+
+.customer-register-page .form-field__heading label {
+  color: #3e383a;
+  font-size: .65rem;
+  font-weight: 600;
+}
+
+.customer-register-page .form-field__heading span {
+  color: #93898c;
+  font-size: .56rem;
+}
+
+.customer-register-page .form-field input,
+.customer-register-page .form-field textarea {
+  min-height: 2.55rem;
+  padding: .6rem .75rem;
+  color: #1e1e24;
+  background: #f5f3f3;
+  border-color: #eee9e9;
+  border-radius: .43rem;
+  font-size: .72rem;
+}
+
+.customer-register-page .form-field textarea {
+  min-height: 4.15rem;
+}
+
+.customer-register-page .form-field input::placeholder,
+.customer-register-page .form-field textarea::placeholder {
+  color: #a39b9e;
+}
+
+.customer-register-page .form-field input:focus,
+.customer-register-page .form-field textarea:focus {
+  background: #fff;
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, .1);
+}
+
+.customer-register-page .form-field--invalid input,
+.customer-register-page .form-field--invalid textarea {
+  border-color: #dc2626;
+}
+
+.customer-register-page .form-field__error {
+  color: #b91c1c;
+  font-size: .62rem;
+}
+
+.customer-register-page .password-input input {
+  padding-right: 4rem;
+}
+
+.customer-register-page .password-input__toggle {
+  right: .38rem;
+  color: #7c252c;
+  font-size: .62rem;
+  font-weight: 600;
+}
+
+.customer-register-page .password-input__toggle:hover {
+  background: #fee2e2;
+}
+
+.customer-register-submit {
+  min-height: 2.7rem;
+  margin-top: .18rem;
+  background: #dc2626;
+  border-radius: .43rem;
+  font-size: .7rem;
+  font-weight: 600;
+}
+
+.customer-register-submit:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.customer-register-login-link {
+  margin: .85rem 0 0;
+  color: #736a6d;
+  font-size: .67rem;
+  text-align: center;
+}
+
+.customer-register-login-link a {
+  margin-left: .2rem;
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.customer-register-login-link a:hover {
+  text-decoration: underline;
+  text-underline-offset: .16rem;
+}
+
+.seller-register-links {
+  margin-top: .8rem;
+}
+
+.seller-register-links .customer-register-login-link {
+  margin-top: .25rem;
+}
+
+@media (max-width: 900px) {
+  .customer-register-card {
+    grid-template-columns: minmax(17rem, .78fr) minmax(24rem, 1.22fr);
+  }
+
+  .customer-register-form-panel {
+    padding: 1.7rem;
+  }
+
+  .customer-register-benefits article {
+    grid-template-columns: 2rem 1fr;
+  }
+
+  .customer-register-benefits article > small {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .customer-register-card {
+    grid-template-columns: 1fr;
+  }
+
+  .customer-register-form-panel {
+    padding: 2rem clamp(1.2rem, 7vw, 3.5rem);
+  }
+
+  .customer-register-promo {
+    min-height: auto;
+  }
+
+  .customer-register-benefits {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .customer-register-benefits article {
+    display: block;
+  }
+
+  .customer-register-benefits article > span {
+    margin-bottom: .45rem;
+  }
+
+  .customer-register-benefits p,
+  .customer-register-benefits article > small {
+    display: none;
+  }
+
+  .customer-register-proof {
+    margin-top: 1rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .customer-register-form-panel {
+    padding: 1.8rem 1rem 2.1rem;
+  }
+
+  .customer-register-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .customer-register-promo {
+    padding: 1.5rem 1rem;
+  }
+
+  .customer-register-benefits {
+    grid-template-columns: 1fr;
+  }
+
+  .customer-register-benefits article {
+    display: grid;
+  }
+
+  .customer-register-benefits p {
+    display: block;
+  }
+
+  .customer-register-proof {
+    grid-template-columns: auto 1fr;
+  }
+
+  .customer-register-proof > div:last-child {
+    display: none;
+  }
+}
