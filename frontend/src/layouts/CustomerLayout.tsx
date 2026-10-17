@@ -37,6 +37,9 @@ export function CustomerLayout() {
           />
 
           <div className="customer-actions">
+            <Link className="customer-action" to="/orders" aria-label="Đơn hàng của tôi">
+              <span aria-hidden="true">▤</span><small>Đơn hàng</small>
+            </Link>
             <Link className="customer-action" to="/wishlist" aria-label="Danh sách yêu thích" data-count="">
               <span aria-hidden="true">♡</span><small>Yêu thích</small>
             </Link>

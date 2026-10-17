@@ -10,6 +10,8 @@ import { CategoryProductPage } from './pages/customer/CategoryProductPage';
 import { ProductSearchPage } from './pages/customer/ProductSearchPage';
 import { CheckoutPage } from './pages/customer/CheckoutPage';
 import { PaymentResultPage } from './pages/customer/PaymentResultPage';
+import { OrderHistoryPage } from './pages/customer/OrderHistoryPage';
+import { OrderDetailPage } from './pages/customer/OrderDetailPage';
 import { WishlistPage } from './pages/customer/WishlistPage';
 import { SellerDashboardPage } from './pages/seller/SellerDashboardPage';
 import { SellerProductPage } from './pages/seller/SellerProductPage';
@@ -43,6 +45,8 @@ function App() {
           <Route path="/cart" element={<CartPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/checkout/payment/result" element={<PaymentResultPage />} />
+          <Route path="/orders" element={<OrderHistoryPage />} />
+          <Route path="/orders/:orderGroupId" element={<OrderDetailPage />} />
         </Route>
       </Route>
       <Route element={<RoleRoute allowedRoles={['SELLER']} />}>

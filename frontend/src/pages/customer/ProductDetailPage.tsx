@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ProductCard } from '../../components/product/ProductCard';
 import { addToCart } from '../../api/cart.api';
 import { getActiveCategories } from '../../api/category.api';
@@ -115,12 +115,14 @@ export function ProductDetailPage() {
 }
 
 function ProductDetailContent({ product, categoryName, relatedProducts }: { product: PublicProduct; categoryName: string; relatedProducts: PublicProduct[] }) {
+  const navigate = useNavigate();
   const [quantity, setQuantity] = useState(1);
   const [isFavorite, setIsFavorite] = useState(false);
   const [isWishlistLoading, setIsWishlistLoading] = useState(true);
   const [isWishlistUpdating, setIsWishlistUpdating] = useState(false);
   const [wishlistError, setWishlistError] = useState('');
   const [isAddingToCart, setIsAddingToCart] = useState(false);
+  const [isBuyingNow, setIsBuyingNow] = useState(false);
   const [cartError, setCartError] = useState('');
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const availableQuantity = Math.max(product.inventory.availableQuantity, 0);
@@ -170,7 +172,7 @@ function ProductDetailContent({ product, categoryName, relatedProducts }: { prod
     setQuantity((current) => Math.min(availableQuantity, current + 1));
   };
   const handleAddToCart = async () => {
-    if (isOutOfStock || isAddingToCart) return;
+    if (isOutOfStock || isAddingToCart || isBuyingNow) return;
 
     setIsAddingToCart(true);
     setCartError('');
@@ -184,6 +186,27 @@ function ProductDetailContent({ product, categoryName, relatedProducts }: { prod
       );
     } finally {
       setIsAddingToCart(false);
+    }
+  };
+
+  const handleBuyNow = async () => {
+    if (isOutOfStock || isAddingToCart || isBuyingNow) return;
+
+    setIsBuyingNow(true);
+    setCartError('');
+    setFeedbackMessage('');
+
+    try {
+      await addToCart(product.productId, quantity);
+      navigate('/checkout');
+    } catch (error: unknown) {
+      setCartError(
+        getApiErrorMessage(
+          error,
+          'Không thể chuẩn bị sản phẩm để đặt hàng.',
+        ),
+      );
+      setIsBuyingNow(false);
     }
   };
 
@@ -269,11 +292,18 @@ function ProductDetailContent({ product, categoryName, relatedProducts }: { prod
               className="add-to-cart-button"
               type="button"
               onClick={() => void handleAddToCart()}
-              disabled={isOutOfStock || isAddingToCart}
+              disabled={isOutOfStock || isAddingToCart || isBuyingNow}
             >
               {isAddingToCart ? 'Đang thêm...' : 'Thêm vào giỏ hàng'}
             </button>
-            <button className="buy-now-button" type="button" onClick={() => setFeedbackMessage('Tính năng mua ngay sẽ được kết nối sau')} disabled={isOutOfStock}>Mua ngay</button>
+            <button
+              className="buy-now-button"
+              type="button"
+              onClick={() => void handleBuyNow()}
+              disabled={isOutOfStock || isAddingToCart || isBuyingNow}
+            >
+              {isBuyingNow ? 'Đang chuẩn bị...' : 'Mua ngay'}
+            </button>
             <button
               className={`wishlist-button${isFavorite ? ' wishlist-button--active' : ''}`}
               type="button"

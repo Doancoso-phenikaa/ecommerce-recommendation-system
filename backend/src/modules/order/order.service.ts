@@ -79,6 +79,7 @@ export class OrderService {
       .leftJoinAndSelect('orderGroup.orders', 'order')
       .leftJoinAndSelect('order.shop', 'shop')
       .leftJoinAndSelect('order.items', 'orderItem')
+      .leftJoinAndSelect('orderItem.product', 'product')
       .leftJoinAndSelect(
         'order.reviews',
         'review',
@@ -135,6 +136,7 @@ export class OrderService {
               orderItemId: orderItem.orderItemId,
               productId: orderItem.productId,
               productName: orderItem.productName,
+              imageUrl: orderItem.product.imageUrl,
               quantity: orderItem.quantity,
               unitPrice: orderItem.unitPrice,
               subtotal: orderItem.subtotal,
@@ -428,8 +430,6 @@ export class OrderService {
       throw new ConflictException('Only pending orders can be cancelled');
     }
 
-    this.validatePaymentAllowsCancellation(payment);
-
     const orderItems = await this.findOrderItems(manager, order.orderId);
     await this.updateInventoryForFinalStatus(manager, orderItems, false);
 
@@ -493,29 +493,6 @@ export class OrderService {
       throw new ConflictException(
         'Payment is not ready for order confirmation',
       );
-    }
-  }
-
-  private validatePaymentAllowsCancellation(payment: Payment | null): void {
-    if (!payment) {
-      return;
-    }
-
-    if (
-      payment.paymentMethod === PaymentMethod.ONLINE &&
-      payment.status === PaymentStatus.PAID
-    ) {
-      throw new ConflictException(
-        'Paid online orders cannot be cancelled because refunds are not supported',
-      );
-    }
-
-    const isCodPending =
-      payment.paymentMethod === PaymentMethod.COD &&
-      payment.status === PaymentStatus.PENDING;
-
-    if (!isCodPending && payment.status !== PaymentStatus.FAILED) {
-      throw new ConflictException('Payment does not allow order cancellation');
     }
   }
 
