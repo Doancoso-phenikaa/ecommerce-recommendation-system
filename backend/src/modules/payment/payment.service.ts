@@ -70,24 +70,23 @@ export class PaymentService {
             status: Not(OrderStatus.CANCELLED),
           });
 
-        if (
-          this.isZeroAmount(orderGroup.totalAmount) ||
-          !hasNonCancelledOrder
-        ) {
+        if (!hasNonCancelledOrder) {
           throw new ConflictException(
             'Cannot create payment for a fully cancelled order group',
           );
         }
 
+        const isZeroTotal = this.isZeroAmount(orderGroup.totalAmount);
         const isOnline =
           createPaymentDto.paymentMethod === PaymentMethod.ONLINE;
+        const isPaid = isZeroTotal || isOnline;
         const payment = await paymentRepository.save(
           paymentRepository.create({
             orderGroupId: orderGroup.orderGroupId,
             paymentMethod: createPaymentDto.paymentMethod,
-            amount: orderGroup.totalAmount,
-            status: isOnline ? PaymentStatus.PAID : PaymentStatus.PENDING,
-            paidAt: isOnline ? new Date() : null,
+            amount: isZeroTotal ? '0.00' : orderGroup.totalAmount,
+            status: isPaid ? PaymentStatus.PAID : PaymentStatus.PENDING,
+            paidAt: isPaid ? new Date() : null,
           }),
         );
 

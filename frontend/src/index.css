@@ -1,1 +1,202 @@
-:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#17213a;background:#f3f6fb;font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}*{box-sizing:border-box}html{min-width:320px;background:#f3f6fb}body{min-width:320px;min-height:100vh;margin:0}button,input,textarea{font:inherit}a{color:inherit;text-decoration:none}#root{min-height:100vh}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid rgba(49,92,212,.25);outline-offset:2px}
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  src: url('./assets/font/Be-vietnam-pro/BeVietnamPro-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  src: url('./assets/font/Be-vietnam-pro/BeVietnamPro-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  src: url('./assets/font/Be-vietnam-pro/BeVietnamPro-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  src: url('./assets/font/Be-vietnam-pro/BeVietnamPro-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('./assets/font/Plus-jarkata-sans/PlusJakartaSans-VariableFont_wght.ttf') format('truetype-variations');
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --font-heading: 'Plus Jakarta Sans', sans-serif;
+  --font-body: 'Be Vietnam Pro', sans-serif;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+  --text-4xl: 36px;
+  font-family: var(--font-body);
+  color: #17213a;
+  background: #f3f6fb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  min-width: 320px;
+  background: #f3f6fb;
+  font-family: var(--font-body);
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  font-family: var(--font-body);
+  font-weight: var(--font-weight-regular);
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-body);
+}
+
+button { font-weight: var(--font-weight-semibold); }
+
+input,
+select,
+textarea { font-weight: var(--font-weight-regular); }
+
+label,
+th {
+  font-family: var(--font-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+table,
+thead,
+tbody,
+tr,
+th,
+td,
+[class*='status'],
+[class*='badge'],
+[class*='price'],
+[class*='pagination'] {
+  font-family: var(--font-body);
+}
+
+/* Existing semantic title containers across Customer, Seller and Admin areas. */
+:where(
+  .auth-copy,
+  .auth-brand-panel__copy,
+  .auth-form-header,
+  .dashboard-hero,
+  .customer-hero,
+  .home-hero,
+  .banner-slide__content,
+  .product-detail-main,
+  [class$='-heading'],
+  [class*='-heading '],
+  [class$='__heading'],
+  [class*='__heading ']
+) :is(h1, h2),
+:where(
+  .page-title,
+  .section-title,
+  .hero-title,
+  .modal-title,
+  .dashboard-title,
+  [class$='__title'],
+  [class$='-title']
+) {
+  font-family: var(--font-heading);
+  font-weight: var(--font-weight-bold);
+}
+
+/* Page-level titles that are not wrapped by a named heading container. */
+main > header h1,
+main > section:first-child h1,
+[class$='-page'] > header h1,
+[class$='-page'] > section:first-child h1,
+[class$='-detail-page'] h1,
+[class$='-modal'] h2,
+[class*='-modal '] h2,
+[class$='-confirm'] h2,
+[class*='-confirm '] h2,
+[role='dialog'] h2 {
+  font-family: var(--font-heading);
+  font-weight: var(--font-weight-bold);
+}
+
+/* Major section titles retain their existing size and spacing. */
+:where(
+  .customer-home-page,
+  .product-detail-page,
+  .checkout-page,
+  .order-detail-page,
+  .seller-statistics-page,
+  .admin-statistics-page
+) section > header h2,
+.customer-home-page > section > h2,
+.product-detail-page > section > h2 {
+  font-family: var(--font-heading);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Visually prominent dashboard metrics use the display face, not their labels. */
+:where(
+  [class*='-metrics'],
+  [class*='-summary'],
+  [class*='-statistics-cards'],
+  [class*='-stat-cards']
+) article > strong {
+  font-family: var(--font-heading);
+  font-weight: var(--font-weight-bold);
+}
+
+/* Normal product names and prices always remain in the UI face. */
+.product-card h3,
+[class*='product-card'] h3,
+[class*='product-identity'] h3,
+[class*='product-identity'] strong,
+[class*='price'] {
+  font-family: var(--font-body);
+}
+
+a { color: inherit; text-decoration: none; }
+#root { min-height: 100vh; }
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(49, 92, 212, .25);
+  outline-offset: 2px;
+}
