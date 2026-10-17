@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { getCart, removeCartItem, updateCartItem } from '../../api/cart.api';
 import type { CartItem, CartUnavailableReason } from '../../types/cart';
 import { getApiErrorMessage } from '../../utils/auth';
@@ -23,6 +23,7 @@ function getUnavailableMessage(item: CartItem): string | null {
 }
 
 export function CartPage() {
+  const navigate = useNavigate();
   const [cart, setCart] = useState({ items: [] as CartItem[], totalAmount: '0.00' });
   const [isLoading, setIsLoading] = useState(true);
   const [busyProductId, setBusyProductId] = useState<string | null>(null);
@@ -241,11 +242,17 @@ export function CartPage() {
               <div><dt>Số sản phẩm</dt><dd>{totalQuantity}</dd></div>
               <div className="cart-summary__total"><dt>Tổng cộng</dt><dd>{formatCurrency(cart.totalAmount)}</dd></div>
             </dl>
-            <button type="button" disabled>Tiến hành đặt hàng</button>
+            <button
+              type="button"
+              disabled={hasUnavailableItems || Boolean(busyProductId)}
+              onClick={() => navigate('/checkout')}
+            >
+              Tiến hành đặt hàng
+            </button>
             <p className={hasUnavailableItems ? 'cart-summary__notice cart-summary__notice--warning' : 'cart-summary__notice'}>
               {hasUnavailableItems
                 ? 'Vui lòng xử lý các sản phẩm không khả dụng trước khi đặt hàng.'
-                : 'Chức năng đặt hàng sẽ được kết nối ở bước tiếp theo.'}
+                : 'Sản phẩm và tồn kho sẽ được kiểm tra lại ở bước xác nhận.'}
             </p>
             <Link to="/">Tiếp tục mua sắm</Link>
           </aside>

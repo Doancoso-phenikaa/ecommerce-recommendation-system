@@ -8,6 +8,8 @@ import { CartPage } from './pages/customer/CartPage';
 import { ProductDetailPage } from './pages/customer/ProductDetailPage';
 import { CategoryProductPage } from './pages/customer/CategoryProductPage';
 import { ProductSearchPage } from './pages/customer/ProductSearchPage';
+import { CheckoutPage } from './pages/customer/CheckoutPage';
+import { PaymentResultPage } from './pages/customer/PaymentResultPage';
 import { WishlistPage } from './pages/customer/WishlistPage';
 import { SellerDashboardPage } from './pages/seller/SellerDashboardPage';
 import { SellerProductPage } from './pages/seller/SellerProductPage';
@@ -39,6 +41,8 @@ function App() {
           <Route path="/search" element={<ProductSearchPage />} />
           <Route path="/wishlist" element={<WishlistPage />} />
           <Route path="/cart" element={<CartPage />} />
+          <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/checkout/payment/result" element={<PaymentResultPage />} />
         </Route>
       </Route>
       <Route element={<RoleRoute allowedRoles={['SELLER']} />}>
