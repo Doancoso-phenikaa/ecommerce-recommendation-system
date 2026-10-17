@@ -46,3 +46,23 @@
   font-size: .74rem;
   font-weight: 650;
 }
+
+.product-review-state {
+  display: grid;
+  justify-items: center;
+  gap: .3rem;
+  margin-top: .8rem;
+  padding: 1.5rem 1rem;
+  color: #6b7280;
+  background: #f9fafb;
+  border: 1px dashed #d1d5db;
+  border-radius: .5rem;
+  font-size: .75rem;
+  text-align: center;
+}
+
+.product-review-state strong { color: #374151; font-size: .82rem; }
+.product-review-state p { margin: 0; line-height: 1.5; }
+.product-review-state.is-error { color: #991b1b; background: #fef2f2; border-color: #fecaca; }
+.product-review-state button { margin-top: .25rem; padding: .42rem .65rem; color: #fff; background: #f97316; border: 1px solid #f97316; border-radius: .4rem; font-size: .68rem; font-weight: 750; cursor: pointer; }
+.product-review-state button:hover { background: #ea580c; border-color: #ea580c; }

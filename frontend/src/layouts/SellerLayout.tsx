@@ -39,6 +39,9 @@ export function SellerLayout() {
           <NavLink to="/seller/orders" onClick={closeNavigation}>
             <span aria-hidden="true">▤</span>Đơn hàng
           </NavLink>
+          <NavLink to="/seller/reviews" onClick={closeNavigation}>
+            <span aria-hidden="true">★</span>Đánh giá
+          </NavLink>
           {futureNavigation.map((item) => (
             <span className="seller-navigation__disabled" aria-disabled="true" key={item.label}>
               <span aria-hidden="true">{item.icon}</span>

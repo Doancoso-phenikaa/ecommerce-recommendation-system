@@ -5,7 +5,10 @@ import {
   confirmCustomerOrderReceived,
   getCustomerOrderDetail,
 } from '../../api/order.api';
+import { createReview, updateReview } from '../../api/review.api';
+import { ReviewModal } from '../../components/review/ReviewModal';
 import type {
+  CustomerOrderDetailItem,
   CustomerOrderDetailOrder,
   CustomerOrderDetailResponse,
   OrderStatus,
@@ -25,6 +28,11 @@ interface OrderDetailLocationState {
   focusOrderId?: string;
 }
 
+interface ReviewTarget {
+  orderId: string;
+  item: CustomerOrderDetailItem;
+}
+
 export function OrderDetailPage() {
   const { orderGroupId = '' } = useParams();
   const location = useLocation();
@@ -37,6 +45,8 @@ export function OrderDetailPage() {
   const [orderToReceive, setOrderToReceive] = useState<CustomerOrderDetailOrder | null>(null);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [receivingOrderId, setReceivingOrderId] = useState<string | null>(null);
+  const [reviewTarget, setReviewTarget] = useState<ReviewTarget | null>(null);
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [actionError, setActionError] = useState('');
   const [actionSuccess, setActionSuccess] = useState('');
   const requestIdRef = useRef(0);
@@ -129,6 +139,57 @@ export function OrderDetailPage() {
     }
   };
 
+  const handleReviewSubmit = async ({
+    rating,
+    comment,
+  }: {
+    rating: number;
+    comment: string;
+  }) => {
+    if (!reviewTarget || isSubmittingReview) return;
+
+    const target = reviewTarget;
+    const isEditing = target.item.review !== null;
+    setIsSubmittingReview(true);
+    setActionError('');
+    setActionSuccess('');
+
+    try {
+      if (target.item.review) {
+        await updateReview(target.item.review.reviewId, { rating, comment });
+      } else {
+        await createReview({
+          orderId: target.orderId,
+          productId: target.item.productId,
+          rating,
+          comment,
+        });
+      }
+
+      setReviewTarget(null);
+      setActionSuccess(
+        isEditing
+          ? 'Đã cập nhật đánh giá.'
+          : 'Đánh giá sản phẩm thành công.',
+      );
+      await loadOrderDetail(false);
+    } catch (error: unknown) {
+      setReviewTarget(null);
+      setActionError(
+        getApiErrorMessage(
+          error,
+          isEditing
+            ? 'Không thể cập nhật đánh giá.'
+            : 'Không thể gửi đánh giá.',
+        ),
+      );
+      // Refresh stale data so a duplicate review created in another tab is shown.
+      await loadOrderDetail(false);
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <main className="order-page">
@@ -187,6 +248,10 @@ export function OrderDetailPage() {
               isReceiving={receivingOrderId === order.orderId}
               onRequestCancel={setOrderToCancel}
               onRequestReceived={setOrderToReceive}
+              onRequestReview={(item) => setReviewTarget({
+                orderId: order.orderId,
+                item,
+              })}
               key={order.orderId}
             />
           ))}
@@ -235,6 +300,22 @@ export function OrderDetailPage() {
           onConfirm={() => void handleConfirmReceived()}
         />
       )}
+
+      {reviewTarget && (
+        <ReviewModal
+          product={{
+            productName: reviewTarget.item.productName,
+            imageUrl: reviewTarget.item.imageUrl,
+          }}
+          orderId={reviewTarget.orderId}
+          review={reviewTarget.item.review}
+          isSubmitting={isSubmittingReview}
+          onClose={() => {
+            if (!isSubmittingReview) setReviewTarget(null);
+          }}
+          onSubmit={(value) => void handleReviewSubmit(value)}
+        />
+      )}
     </main>
   );
 }
@@ -265,6 +346,7 @@ function OrderDetailCard({
   isReceiving,
   onRequestCancel,
   onRequestReceived,
+  onRequestReview,
 }: {
   order: CustomerOrderDetailOrder;
   isFocused: boolean;
@@ -272,6 +354,7 @@ function OrderDetailCard({
   isReceiving: boolean;
   onRequestCancel: (order: CustomerOrderDetailOrder) => void;
   onRequestReceived: (order: CustomerOrderDetailOrder) => void;
+  onRequestReview: (item: CustomerOrderDetailItem) => void;
 }) {
   return (
     <article className={`order-detail-card${isFocused ? ' is-focused' : ''}`} id={`order-${order.orderId}`}>
@@ -318,8 +401,27 @@ function OrderDetailCard({
                 ? <img src={item.imageUrl} alt={item.productName} loading="lazy" />
                 : <span aria-hidden="true">{item.productName.charAt(0)}</span>}
             </Link>
-            <div><Link to={`/products/${item.productId}`}>{item.productName}</Link><small>{formatCurrency(item.unitPrice)} × {item.quantity}</small></div>
-            <strong>{formatCurrency(item.subtotal)}</strong>
+            <div className="order-detail-product__content">
+              <Link to={`/products/${item.productId}`}>{item.productName}</Link>
+              <small>{formatCurrency(item.unitPrice)} × {item.quantity}</small>
+              {order.status === 'COMPLETED' && item.review && (
+                <div className="order-item-review">
+                  <span className="order-item-review__stars" aria-label={`${item.review.rating} sao`}>
+                    {'★'.repeat(item.review.rating)}{'☆'.repeat(5 - item.review.rating)}
+                  </span>
+                  {item.review.comment && <p>{item.review.comment}</p>}
+                  {item.review.status === 'HIDDEN' && <small>Đánh giá này hiện đang bị ẩn.</small>}
+                </div>
+              )}
+            </div>
+            <div className="order-detail-product__actions">
+              <strong>{formatCurrency(item.subtotal)}</strong>
+              {order.status === 'COMPLETED' && (
+                <button type="button" onClick={() => onRequestReview(item)}>
+                  {item.review ? 'Chỉnh sửa đánh giá' : 'Đánh giá sản phẩm'}
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </section>

@@ -1,4 +1,5 @@
 import type { PaymentMethod, PaymentStatus } from './payment';
+import type { OrderItemReview } from './review';
 
 export type OrderStatus =
   | 'PENDING'
@@ -34,15 +35,6 @@ export interface CustomerOrderHistoryResponse {
   data: CustomerOrderGroupListItem[];
 }
 
-export interface CustomerOrderReview {
-  reviewId: string;
-  rating: number;
-  comment: string | null;
-  status: 'ACTIVE' | 'HIDDEN';
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface CustomerOrderDetailItem {
   orderItemId: string;
   productId: string;
@@ -51,7 +43,7 @@ export interface CustomerOrderDetailItem {
   quantity: number;
   unitPrice: string;
   subtotal: string;
-  review: CustomerOrderReview | null;
+  review: OrderItemReview | null;
 }
 
 export interface CustomerOrderDetailOrder {

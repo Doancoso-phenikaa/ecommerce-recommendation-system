@@ -4,21 +4,18 @@ import { ProductCard } from '../../components/product/ProductCard';
 import { addToCart } from '../../api/cart.api';
 import { getActiveCategories } from '../../api/category.api';
 import { getProductDetail, getProducts } from '../../api/product.api';
+import { getProductReviews } from '../../api/review.api';
 import {
   addToWishlist,
   getWishlist,
   removeFromWishlist,
 } from '../../api/wishlist.api';
 import type { PublicProduct } from '../../types/product';
+import type { ProductReviewsResponse } from '../../types/review';
 import { formatCurrency } from '../../utils/format-currency';
 import { getApiErrorMessage } from '../../utils/auth';
+import { formatOrderDate } from '../../utils/order';
 import './product-detail.css';
-
-const mockReviews = [
-  { reviewId: 'r1', customerName: 'Minh Anh', rating: 5, comment: 'Sản phẩm giống mô tả, đóng gói cẩn thận và sử dụng rất ổn.', date: '12/10/2026' },
-  { reviewId: 'r2', customerName: 'Hoàng Nam', rating: 5, comment: 'Chất lượng tốt trong tầm giá, giao hàng nhanh hơn dự kiến.', date: '08/10/2026' },
-  { reviewId: 'r3', customerName: 'Thu Hà', rating: 4, comment: 'Thiết kế đẹp và dễ sử dụng. Mình sẽ tiếp tục theo dõi gian hàng.', date: '02/10/2026' },
-];
 
 export function ProductDetailPage() {
   const { productId = '' } = useParams<{ productId: string }>();
@@ -125,6 +122,10 @@ function ProductDetailContent({ product, categoryName, relatedProducts }: { prod
   const [isBuyingNow, setIsBuyingNow] = useState(false);
   const [cartError, setCartError] = useState('');
   const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [reviews, setReviews] = useState<ProductReviewsResponse | null>(null);
+  const [isReviewsLoading, setIsReviewsLoading] = useState(true);
+  const [reviewError, setReviewError] = useState('');
+  const [reviewReloadKey, setReviewReloadKey] = useState(0);
   const availableQuantity = Math.max(product.inventory.availableQuantity, 0);
   const isOutOfStock = availableQuantity === 0;
 
@@ -160,6 +161,33 @@ function ProductDetailContent({ product, categoryName, relatedProducts }: { prod
       isCurrent = false;
     };
   }, [product.productId]);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    const loadReviews = async () => {
+      setIsReviewsLoading(true);
+      setReviewError('');
+
+      try {
+        const response = await getProductReviews(product.productId);
+        if (isCurrent) setReviews(response);
+      } catch (error: unknown) {
+        if (isCurrent) {
+          setReviewError(
+            getApiErrorMessage(error, 'Không thể tải đánh giá sản phẩm.'),
+          );
+        }
+      } finally {
+        if (isCurrent) setIsReviewsLoading(false);
+      }
+    };
+
+    void loadReviews();
+    return () => {
+      isCurrent = false;
+    };
+  }, [product.productId, reviewReloadKey]);
 
   useEffect(() => {
     if (!feedbackMessage) return undefined;
@@ -265,8 +293,16 @@ function ProductDetailContent({ product, categoryName, relatedProducts }: { prod
           </div>
           <h1 id="product-title">{product.name}</h1>
           <div className="product-meta" aria-label="Thông tin đánh giá và lượt bán">
-            <strong>4.8 <span aria-hidden="true">★</span></strong>
-            <span>120 đánh giá</span><span>350 đã bán</span>
+            {isReviewsLoading ? (
+              <span>Đang tải đánh giá...</span>
+            ) : reviews && reviews.summary.totalReviews > 0 ? (
+              <>
+                <strong>{reviews.summary.averageRating.toFixed(1)} <span aria-hidden="true">★</span></strong>
+                <span>{reviews.summary.totalReviews} đánh giá</span>
+              </>
+            ) : (
+              <span>Chưa có đánh giá</span>
+            )}
           </div>
           <strong className="product-detail-price">{formatCurrency(product.price)}</strong>
           <div className={`product-detail-stock${isOutOfStock ? ' product-detail-stock--empty' : ''}`}>
@@ -354,16 +390,60 @@ function ProductDetailContent({ product, categoryName, relatedProducts }: { prod
       </section>
 
       <section className="product-detail-section product-reviews" aria-labelledby="reviews-title">
-        <div className="section-title-row"><h2 id="reviews-title">Đánh giá sản phẩm</h2><span>Dữ liệu minh họa</span></div>
-        <div className="review-overview"><strong>4.8 <small>/ 5</small></strong><div><span aria-label="5 sao">★★★★★</span><p>120 đánh giá</p></div></div>
-        <div className="review-list">
-          {mockReviews.map((review) => (
-            <article key={review.reviewId}>
-              <div className="review-avatar" aria-hidden="true">{review.customerName.charAt(0)}</div>
-              <div><header><strong>{review.customerName}</strong><time>{review.date}</time></header><span className="review-stars" aria-label={`${review.rating} sao`}>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</span><p>{review.comment}</p></div>
-            </article>
-          ))}
+        <div className="section-title-row">
+          <h2 id="reviews-title">Đánh giá sản phẩm</h2>
+          {reviews && <span>{reviews.summary.totalReviews} đánh giá</span>}
         </div>
+
+        {isReviewsLoading && (
+          <div className="product-review-state" aria-busy="true">Đang tải đánh giá...</div>
+        )}
+
+        {!isReviewsLoading && reviewError && (
+          <div className="product-review-state is-error" role="alert">
+            <p>{reviewError}</p>
+            <button type="button" onClick={() => setReviewReloadKey((value) => value + 1)}>Thử lại</button>
+          </div>
+        )}
+
+        {!isReviewsLoading && !reviewError && reviews && reviews.summary.totalReviews === 0 && (
+          <div className="product-review-state">
+            <strong>Chưa có đánh giá</strong>
+            <p>Hãy là khách hàng đầu tiên chia sẻ trải nghiệm về sản phẩm.</p>
+          </div>
+        )}
+
+        {!isReviewsLoading && !reviewError && reviews && reviews.summary.totalReviews > 0 && (
+          <>
+            <div className="review-overview">
+              <strong>{reviews.summary.averageRating.toFixed(1)} <small>/ 5</small></strong>
+              <div>
+                <span aria-label={`${reviews.summary.averageRating} sao`}>
+                  {'★'.repeat(Math.round(reviews.summary.averageRating))}
+                  {'☆'.repeat(5 - Math.round(reviews.summary.averageRating))}
+                </span>
+                <p>{reviews.summary.totalReviews} đánh giá đã xác thực</p>
+              </div>
+            </div>
+            <div className="review-list">
+              {reviews.data.map((review) => (
+                <article key={review.reviewId}>
+                  <div className="review-avatar" aria-hidden="true">{review.customerName.charAt(0)}</div>
+                  <div>
+                    <header>
+                      <strong>{review.customerName}</strong>
+                      <time dateTime={review.createdAt}>{formatOrderDate(review.createdAt)}</time>
+                    </header>
+                    <span className="review-stars" aria-label={`${review.rating} sao`}>
+                      {'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}
+                    </span>
+                    {review.comment && <p>{review.comment}</p>}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
+        )}
       </section>
 
       {relatedProducts.length > 0 && <section className="related-products" aria-labelledby="related-title">

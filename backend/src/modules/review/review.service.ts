@@ -9,10 +9,12 @@ import { Customer } from '../customer/entities/customer.entity.js';
 import { OrderItem } from '../order/entities/order-item.entity.js';
 import { Order } from '../order/entities/order.entity.js';
 import { OrderStatus } from '../order/enums/order-status.enum.js';
+import { Seller } from '../seller/entities/seller.entity.js';
 import { CreateReviewDto } from './dto/create-review.dto.js';
 import { UpdateReviewDto } from './dto/update-review.dto.js';
 import { Review } from './entities/review.entity.js';
 import { ReviewStatus } from './enums/review-status.enum.js';
+import { SellerReviewQueryDto } from './dto/seller-review-query.dto.js';
 
 const POSTGRES_UNIQUE_VIOLATION = '23505';
 
@@ -31,6 +33,8 @@ export class ReviewService {
     private readonly orderItemRepository: Repository<OrderItem>,
     @InjectRepository(Review)
     private readonly reviewRepository: Repository<Review>,
+    @InjectRepository(Seller)
+    private readonly sellerRepository: Repository<Seller>,
   ) {}
 
   async createReview(userId: string, dto: CreateReviewDto) {
@@ -147,6 +151,74 @@ export class ReviewService {
       },
       data: reviews.map((review) => ({
         reviewId: review.reviewId,
+        rating: review.rating,
+        comment: review.comment,
+        customerName: review.customer.user.fullName,
+        createdAt: review.createdAt,
+      })),
+    };
+  }
+
+  async getSellerReviews(userId: string, query: SellerReviewQueryDto) {
+    const seller = await this.sellerRepository
+      .createQueryBuilder('seller')
+      .leftJoinAndSelect('seller.shop', 'shop')
+      .where('seller.userId = :userId', { userId })
+      .getOne();
+
+    if (!seller) {
+      throw new NotFoundException('Seller profile not found');
+    }
+
+    if (!seller.shop) {
+      throw new NotFoundException('Shop not found');
+    }
+
+    const summaryRaw = await this.reviewRepository
+      .createQueryBuilder('review')
+      .innerJoin('review.product', 'product')
+      .select('COALESCE(AVG(review.rating), 0)', 'averageRating')
+      .addSelect('COUNT(review.reviewId)', 'totalReviews')
+      .where('product.shopId = :shopId', { shopId: seller.shop.shopId })
+      .andWhere('review.status = :status', { status: ReviewStatus.ACTIVE })
+      .getRawOne<{ averageRating: string; totalReviews: string }>();
+
+    const reviewQuery = this.reviewRepository
+      .createQueryBuilder('review')
+      .innerJoinAndSelect('review.product', 'product')
+      .innerJoinAndSelect('review.customer', 'customer')
+      .innerJoinAndSelect('customer.user', 'user')
+      .where('product.shopId = :shopId', { shopId: seller.shop.shopId })
+      .andWhere('review.status = :status', { status: ReviewStatus.ACTIVE });
+
+    if (query.rating !== undefined) {
+      reviewQuery.andWhere('review.rating = :rating', { rating: query.rating });
+    }
+
+    if (query.productId) {
+      reviewQuery.andWhere('review.productId = :productId', {
+        productId: query.productId,
+      });
+    }
+
+    const reviews = await reviewQuery
+      .orderBy('review.createdAt', 'DESC')
+      .addOrderBy('review.reviewId', 'DESC')
+      .getMany();
+
+    const averageRating = Number(summaryRaw?.averageRating ?? 0);
+
+    return {
+      summary: {
+        averageRating: Math.round(averageRating * 100) / 100,
+        totalReviews: Number(summaryRaw?.totalReviews ?? 0),
+      },
+      data: reviews.map((review) => ({
+        reviewId: review.reviewId,
+        productId: review.productId,
+        productName: review.product.name,
+        productImageUrl: review.product.imageUrl,
+        orderId: review.orderId,
         rating: review.rating,
         comment: review.comment,
         customerName: review.customer.user.fullName,

@@ -448,6 +448,15 @@
 .order-detail-product > div a:hover { color: var(--market-primary-strong); }
 .order-detail-product small { color: var(--market-muted); font-size: 0.62rem; }
 .order-detail-product > strong { font-size: 0.72rem; font-variant-numeric: tabular-nums; }
+.order-detail-product .order-detail-product__content { align-content: center; }
+.order-detail-product .order-detail-product__actions { min-width: 8.5rem; justify-items: end; align-content: center; gap: 0.45rem; }
+.order-detail-product__actions > strong { font-size: 0.72rem; font-variant-numeric: tabular-nums; }
+.order-detail-product__actions button { padding: 0.4rem 0.55rem; color: var(--market-primary-strong); background: #fff7ed; border: 1px solid #fdba74; border-radius: 0.38rem; font-size: 0.62rem; font-weight: 800; cursor: pointer; }
+.order-detail-product__actions button:hover { color: #fff; background: var(--market-primary); border-color: var(--market-primary); }
+.order-item-review { display: grid; gap: 0.18rem; margin-top: 0.32rem; padding: 0.42rem 0.5rem; background: #fffbeb; border-left: 2px solid #f59e0b; border-radius: 0 0.32rem 0.32rem 0; }
+.order-item-review__stars { color: #f59e0b; font-size: 0.66rem; letter-spacing: 0.03em; }
+.order-item-review p { margin: 0; color: #4b5563; font-size: 0.64rem; line-height: 1.45; }
+.order-item-review small { color: #92400e; }
 
 .order-detail-card__lower { display: grid; grid-template-columns: 1.35fr 1fr; border-top: 1px solid var(--market-border); }
 .order-shipping,
@@ -577,7 +586,7 @@
   .order-cancel-button { margin-top: 0.35rem; }
   .order-received-button { margin-top: 0.35rem; }
   .order-detail-product { grid-template-columns: 3rem minmax(0, 1fr); }
-  .order-detail-product > strong { grid-column: 2; justify-self: end; }
+  .order-detail-product .order-detail-product__actions { grid-column: 2; min-width: 0; justify-items: start; }
   .order-detail-error > div { flex-direction: column; }
 }
 
