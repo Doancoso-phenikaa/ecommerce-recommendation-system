@@ -27,6 +27,7 @@ export function AdminLayout() {
           <NavLink to="/admin/categories" onClick={closeNavigation}><span aria-hidden="true">▦</span>Danh mục</NavLink>
           <NavLink to="/admin/products" onClick={closeNavigation}><span aria-hidden="true">▣</span>Sản phẩm</NavLink>
           <NavLink to="/admin/orders" onClick={closeNavigation}><span aria-hidden="true">▤</span>Đơn hàng</NavLink>
+          <NavLink to="/admin/discounts" onClick={closeNavigation}><span aria-hidden="true">%</span>Mã giảm giá</NavLink>
           <NavLink to="/admin/users" onClick={closeNavigation}><span aria-hidden="true">◎</span>Người dùng</NavLink>
           <NavLink to="/admin/statistics" onClick={closeNavigation}><span aria-hidden="true">↗</span>Thống kê</NavLink>
         </nav>

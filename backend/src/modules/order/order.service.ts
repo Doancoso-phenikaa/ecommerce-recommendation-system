@@ -565,8 +565,11 @@ export class OrderService {
     const isOnlinePaid =
       payment.paymentMethod === PaymentMethod.ONLINE &&
       payment.status === PaymentStatus.PAID;
+    const isZeroValuePaid =
+      payment.status === PaymentStatus.PAID &&
+      this.isZeroAmount(payment.amount);
 
-    if (!isCodPending && !isOnlinePaid) {
+    if (!isCodPending && !isOnlinePaid && !isZeroValuePaid) {
       throw new ConflictException(
         'Payment is not ready for order confirmation',
       );
@@ -596,7 +599,10 @@ export class OrderService {
     orderGroup.totalAmount = total?.totalAmount ?? '0.00';
     await manager.getRepository(OrderGroup).save(orderGroup);
 
-    if (payment) {
+    if (
+      payment?.paymentMethod === PaymentMethod.COD &&
+      payment.status === PaymentStatus.PENDING
+    ) {
       payment.amount = orderGroup.totalAmount;
       await manager.getRepository(Payment).save(payment);
     }
@@ -677,6 +683,10 @@ export class OrderService {
     }
 
     return quantitiesByProductId;
+  }
+
+  private isZeroAmount(amount: string): boolean {
+    return /^0+(?:\.0+)?$/.test(amount.trim());
   }
 
   private async lockInventories(
