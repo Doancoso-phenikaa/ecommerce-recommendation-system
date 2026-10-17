@@ -71,15 +71,56 @@ export class AdminUserService {
       });
     }
 
-    const [users, totalItems] = await userQuery
-      .orderBy('user.createdAt', 'DESC')
-      .addOrderBy('user.userId', 'DESC')
-      .skip((page - 1) * limit)
-      .take(limit)
-      .getManyAndCount();
+    const summaryQuery = this.userRepository
+      .createQueryBuilder('user')
+      .select('COUNT(user.userId)', 'totalUsers')
+      .addSelect(
+        'COUNT(user.userId) FILTER (WHERE user.role = :customerRole)',
+        'totalCustomers',
+      )
+      .addSelect(
+        'COUNT(user.userId) FILTER (WHERE user.role = :sellerRole)',
+        'totalSellers',
+      )
+      .addSelect(
+        'COUNT(user.userId) FILTER (WHERE user.role = :adminRole)',
+        'totalAdmins',
+      )
+      .addSelect(
+        'COUNT(user.userId) FILTER (WHERE user.isActive = false)',
+        'inactiveUsers',
+      )
+      .setParameters({
+        customerRole: UserRole.CUSTOMER,
+        sellerRole: UserRole.SELLER,
+        adminRole: UserRole.ADMIN,
+      });
+
+    const [[users, totalItems], summary] = await Promise.all([
+      userQuery
+        .orderBy('user.createdAt', 'DESC')
+        .addOrderBy('user.userId', 'DESC')
+        .skip((page - 1) * limit)
+        .take(limit)
+        .getManyAndCount(),
+      summaryQuery.getRawOne<{
+        totalUsers: string;
+        totalCustomers: string;
+        totalSellers: string;
+        totalAdmins: string;
+        inactiveUsers: string;
+      }>(),
+    ]);
 
     return {
       data: users.map((user) => this.buildUserResponse(user)),
+      summary: {
+        totalUsers: Number(summary?.totalUsers ?? 0),
+        totalCustomers: Number(summary?.totalCustomers ?? 0),
+        totalSellers: Number(summary?.totalSellers ?? 0),
+        totalAdmins: Number(summary?.totalAdmins ?? 0),
+        inactiveUsers: Number(summary?.inactiveUsers ?? 0),
+      },
       pagination: {
         page,
         limit,

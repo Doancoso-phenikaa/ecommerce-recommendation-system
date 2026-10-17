@@ -30,6 +30,8 @@ import { AdminProductDetailPage } from './pages/admin/AdminProductDetailPage';
 import { AdminOrderPage } from './pages/admin/AdminOrderPage';
 import { AdminOrderDetailPage } from './pages/admin/AdminOrderDetailPage';
 import { AdminStatisticsPage } from './pages/admin/AdminStatisticsPage';
+import { AdminUserPage } from './pages/admin/AdminUserPage';
+import { AdminUserDetailPage } from './pages/admin/AdminUserDetailPage';
 import { GuestRoute } from './routes/GuestRoute';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { RoleRoute } from './routes/RoleRoute';
@@ -77,6 +79,8 @@ function App() {
           <Route path="products/:productId" element={<AdminProductDetailPage />} />
           <Route path="orders" element={<AdminOrderPage />} />
           <Route path="orders/:orderId" element={<AdminOrderDetailPage />} />
+          <Route path="users" element={<AdminUserPage />} />
+          <Route path="users/:userId" element={<AdminUserDetailPage />} />
           <Route path="statistics" element={<AdminStatisticsPage />} />
         </Route>
       </Route>

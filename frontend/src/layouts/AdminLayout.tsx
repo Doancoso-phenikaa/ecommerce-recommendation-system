@@ -3,10 +3,6 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import './admin-layout.css';
 
-const futureNavigation = [
-  { label: 'Người dùng', icon: '◎' },
-];
-
 export function AdminLayout() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -31,12 +27,8 @@ export function AdminLayout() {
           <NavLink to="/admin/categories" onClick={closeNavigation}><span aria-hidden="true">▦</span>Danh mục</NavLink>
           <NavLink to="/admin/products" onClick={closeNavigation}><span aria-hidden="true">▣</span>Sản phẩm</NavLink>
           <NavLink to="/admin/orders" onClick={closeNavigation}><span aria-hidden="true">▤</span>Đơn hàng</NavLink>
+          <NavLink to="/admin/users" onClick={closeNavigation}><span aria-hidden="true">◎</span>Người dùng</NavLink>
           <NavLink to="/admin/statistics" onClick={closeNavigation}><span aria-hidden="true">↗</span>Thống kê</NavLink>
-          {futureNavigation.map((item) => (
-            <span className="admin-navigation__disabled" aria-disabled="true" key={item.label}>
-              <span aria-hidden="true">{item.icon}</span>{item.label}<small>Sắp có</small>
-            </span>
-          ))}
         </nav>
         <div className="admin-sidebar__account">
           <div className="admin-account-avatar" aria-hidden="true">{user?.fullName.charAt(0).toLocaleUpperCase('vi')}</div>
