@@ -26,6 +26,8 @@ import { AdminShopDetailPage } from './pages/admin/AdminShopDetailPage';
 import { AdminCategoryPage } from './pages/admin/AdminCategoryPage';
 import { AdminProductPage } from './pages/admin/AdminProductPage';
 import { AdminProductDetailPage } from './pages/admin/AdminProductDetailPage';
+import { AdminOrderPage } from './pages/admin/AdminOrderPage';
+import { AdminOrderDetailPage } from './pages/admin/AdminOrderDetailPage';
 import { GuestRoute } from './routes/GuestRoute';
 import { ProtectedRoute } from './routes/ProtectedRoute';
 import { RoleRoute } from './routes/RoleRoute';
@@ -70,6 +72,8 @@ function App() {
           <Route path="categories" element={<AdminCategoryPage />} />
           <Route path="products" element={<AdminProductPage />} />
           <Route path="products/:productId" element={<AdminProductDetailPage />} />
+          <Route path="orders" element={<AdminOrderPage />} />
+          <Route path="orders/:orderId" element={<AdminOrderDetailPage />} />
         </Route>
       </Route>
     </Route>

@@ -5,7 +5,6 @@ import './admin-layout.css';
 
 const futureNavigation = [
   { label: 'Người dùng', icon: '◎' },
-  { label: 'Đơn hàng', icon: '▤' },
   { label: 'Thống kê', icon: '↗' },
 ];
 
@@ -32,6 +31,7 @@ export function AdminLayout() {
           <NavLink to="/admin/shops" onClick={closeNavigation}><span aria-hidden="true">◇</span>Gian hàng</NavLink>
           <NavLink to="/admin/categories" onClick={closeNavigation}><span aria-hidden="true">▦</span>Danh mục</NavLink>
           <NavLink to="/admin/products" onClick={closeNavigation}><span aria-hidden="true">▣</span>Sản phẩm</NavLink>
+          <NavLink to="/admin/orders" onClick={closeNavigation}><span aria-hidden="true">▤</span>Đơn hàng</NavLink>
           {futureNavigation.map((item) => (
             <span className="admin-navigation__disabled" aria-disabled="true" key={item.label}>
               <span aria-hidden="true">{item.icon}</span>{item.label}<small>Sắp có</small>
