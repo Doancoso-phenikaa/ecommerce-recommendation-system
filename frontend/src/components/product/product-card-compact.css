@@ -1,0 +1,22 @@
+.listing-grid .product-card__media {
+  aspect-ratio: 4 / 3;
+}
+
+.listing-grid .product-card__body {
+  padding: 0.62rem;
+}
+
+.listing-grid .product-card h3 {
+  min-height: 2.25rem;
+  font-size: 0.8rem;
+}
+
+.listing-grid .product-card__price {
+  margin-top: 0.42rem;
+  font-size: 0.92rem;
+}
+
+.listing-grid .product-card__stock {
+  margin: 0.28rem 0 0;
+  font-size: 0.62rem;
+}

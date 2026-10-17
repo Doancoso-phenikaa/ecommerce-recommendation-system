@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom';
 import type { PublicProduct } from '../../types/product';
 import { formatCurrency } from '../../utils/format-currency';
 import './product-card.css';
+import './product-card-link.css';
+import './product-card-compact.css';
 
 interface ProductCardProps {
   product: PublicProduct;
@@ -12,8 +14,8 @@ export function ProductCard({ product }: ProductCardProps) {
   const isInStock = availableQuantity > 0;
 
   return (
-    <article className="product-card">
-      <Link className="product-card__media" to={`/products/${product.productId}`} aria-label={`Xem ${product.name}`}>
+    <Link className="product-card" to={`/products/${product.productId}`} aria-label={`Xem ${product.name}`}>
+      <div className="product-card__media">
         {product.imageUrl ? (
           <img src={product.imageUrl} alt={product.name} loading="lazy" />
         ) : (
@@ -22,18 +24,15 @@ export function ProductCard({ product }: ProductCardProps) {
             <small>Chưa có hình ảnh</small>
           </div>
         )}
-      </Link>
+      </div>
 
       <div className="product-card__body">
-        <h3><Link to={`/products/${product.productId}`}>{product.name}</Link></h3>
+        <h3>{product.name}</h3>
         <strong className="product-card__price">{formatCurrency(product.price)}</strong>
         <p className={`product-card__stock${isInStock ? '' : ' product-card__stock--empty'}`}>
           {isInStock ? `Còn ${availableQuantity} sản phẩm` : 'Tạm hết hàng'}
         </p>
-        <Link className="product-card__action" to={`/products/${product.productId}`} aria-label={`Xem chi tiết ${product.name}`}>
-          Xem chi tiết
-        </Link>
       </div>
-    </article>
+    </Link>
   );
 }

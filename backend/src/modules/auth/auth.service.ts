@@ -24,6 +24,8 @@ import type { AuthenticationTokenPayload } from './interfaces/authentication-tok
 const PASSWORD_SALT_ROUNDS = 12;
 const POSTGRES_UNIQUE_VIOLATION = '23505';
 const INVALID_CREDENTIALS_MESSAGE = 'Email or password incorrect';
+const INACTIVE_ACCOUNT_MESSAGE =
+  'Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.';
 const INVALID_REFRESH_TOKEN_MESSAGE = 'Invalid or expired refresh token';
 
 interface PostgresDriverError {
@@ -50,8 +52,12 @@ export class AuthService {
 
     const passwordMatches = await compare(loginDto.password, user.password);
 
-    if (!passwordMatches || !user.isActive) {
+    if (!passwordMatches) {
       throw new UnauthorizedException(INVALID_CREDENTIALS_MESSAGE);
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedException(INACTIVE_ACCOUNT_MESSAGE);
     }
 
     const [accessToken, refreshToken] = await Promise.all([

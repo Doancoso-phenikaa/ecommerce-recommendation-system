@@ -79,6 +79,7 @@ export class OrderService {
       .leftJoinAndSelect('orderGroup.orders', 'order')
       .leftJoinAndSelect('order.shop', 'shop')
       .leftJoinAndSelect('order.items', 'orderItem')
+      .leftJoinAndSelect('orderItem.product', 'product')
       .leftJoinAndSelect(
         'order.reviews',
         'review',
@@ -135,6 +136,7 @@ export class OrderService {
               orderItemId: orderItem.orderItemId,
               productId: orderItem.productId,
               productName: orderItem.productName,
+              imageUrl: orderItem.product.imageUrl,
               quantity: orderItem.quantity,
               unitPrice: orderItem.unitPrice,
               subtotal: orderItem.subtotal,
@@ -173,6 +175,9 @@ export class OrderService {
       .getRepository(Order)
       .createQueryBuilder('order')
       .leftJoinAndSelect('order.items', 'orderItem')
+      .leftJoinAndSelect('orderItem.product', 'product')
+      .leftJoinAndSelect('order.orderGroup', 'orderGroup')
+      .leftJoinAndSelect('orderGroup.payment', 'payment')
       .where('order.orderId = :orderId', { orderId })
       .andWhere('order.shopId = :shopId', { shopId: shop.shopId })
       .orderBy('orderItem.orderItemId', 'ASC')
@@ -188,10 +193,20 @@ export class OrderService {
         orderItemId: orderItem.orderItemId,
         productId: orderItem.productId,
         productName: orderItem.productName,
+        imageUrl: orderItem.product.imageUrl,
         quantity: orderItem.quantity,
         unitPrice: orderItem.unitPrice,
         subtotal: orderItem.subtotal,
       })),
+      payment: order.orderGroup.payment
+        ? {
+            paymentId: order.orderGroup.payment.paymentId,
+            paymentMethod: order.orderGroup.payment.paymentMethod,
+            amount: order.orderGroup.payment.amount,
+            status: order.orderGroup.payment.status,
+            paidAt: order.orderGroup.payment.paidAt,
+          }
+        : null,
     };
   }
 
@@ -228,6 +243,55 @@ export class OrderService {
         updatedAt: cancelledOrder.updatedAt,
         message: 'Order cancelled successfully',
       };
+    });
+  }
+
+  async confirmOrderReceived(userId: string, orderId: string) {
+    return this.dataSource.transaction(async (manager) => {
+      const customer = await manager
+        .getRepository(Customer)
+        .findOneBy({ userId });
+
+      if (!customer) {
+        throw new NotFoundException('Customer profile not found');
+      }
+
+      const order = await manager
+        .getRepository(Order)
+        .createQueryBuilder('order')
+        .innerJoin('order.orderGroup', 'orderGroup')
+        .setLock('pessimistic_write')
+        .where('order.orderId = :orderId', { orderId })
+        .andWhere('orderGroup.customerId = :customerId', {
+          customerId: customer.customerId,
+        })
+        .getOne();
+
+      if (!order) {
+        throw new NotFoundException('Order not found');
+      }
+
+      if (order.status !== OrderStatus.SHIPPING) {
+        throw new ConflictException(
+          'Only shipping orders can be confirmed as received',
+        );
+      }
+
+      order.status = OrderStatus.COMPLETED;
+      const completedOrder = await manager.getRepository(Order).save(order);
+
+      await this.lockOrderGroup(manager, order.orderGroupId);
+      const payment = await this.lockPayment(manager, order.orderGroupId);
+      await this.completeCodPaymentIfEligible(
+        manager,
+        order.orderGroupId,
+        payment,
+      );
+
+      return this.buildOrderStatusResponse(
+        completedOrder,
+        'Order receipt confirmed successfully',
+      );
     });
   }
 
@@ -268,32 +332,6 @@ export class OrderService {
       OrderStatus.SHIPPING,
       'Order shipping started successfully',
     );
-  }
-
-  async completeOrder(userId: string, orderId: string) {
-    return this.dataSource.transaction(async (manager) => {
-      const shop = await this.findSellerShopInTransaction(manager, userId);
-      const order = await this.findAndLockSellerOrder(
-        manager,
-        orderId,
-        shop.shopId,
-      );
-
-      if (order.status !== OrderStatus.SHIPPING) {
-        throw new ConflictException('Only shipping orders can be completed');
-      }
-
-      const orderItems = await this.findOrderItems(manager, order.orderId);
-      await this.updateInventoryForFinalStatus(manager, orderItems, true);
-
-      order.status = OrderStatus.COMPLETED;
-      const completedOrder = await manager.getRepository(Order).save(order);
-
-      return this.buildOrderStatusResponse(
-        completedOrder,
-        'Order completed successfully',
-      );
-    });
   }
 
   async cancelOrderBySeller(userId: string, orderId: string) {
@@ -428,8 +466,6 @@ export class OrderService {
       throw new ConflictException('Only pending orders can be cancelled');
     }
 
-    this.validatePaymentAllowsCancellation(payment);
-
     const orderItems = await this.findOrderItems(manager, order.orderId);
     await this.updateInventoryForFinalStatus(manager, orderItems, false);
 
@@ -441,8 +477,49 @@ export class OrderService {
       orderGroup,
       payment,
     );
+    await this.completeCodPaymentIfEligible(
+      manager,
+      order.orderGroupId,
+      payment,
+    );
 
     return cancelledOrder;
+  }
+
+  private async completeCodPaymentIfEligible(
+    manager: EntityManager,
+    orderGroupId: string,
+    payment: Payment | null,
+  ): Promise<void> {
+    if (
+      !payment ||
+      payment.paymentMethod !== PaymentMethod.COD ||
+      payment.status !== PaymentStatus.PENDING
+    ) {
+      return;
+    }
+
+    const orders = await manager.getRepository(Order).find({
+      select: {
+        orderId: true,
+        status: true,
+      },
+      where: { orderGroupId },
+    });
+    const activeOrders = orders.filter(
+      (order) => order.status !== OrderStatus.CANCELLED,
+    );
+
+    if (
+      activeOrders.length === 0 ||
+      activeOrders.some((order) => order.status !== OrderStatus.COMPLETED)
+    ) {
+      return;
+    }
+
+    payment.status = PaymentStatus.PAID;
+    payment.paidAt = new Date();
+    await manager.getRepository(Payment).save(payment);
   }
 
   private async lockOrderGroup(
@@ -493,29 +570,6 @@ export class OrderService {
       throw new ConflictException(
         'Payment is not ready for order confirmation',
       );
-    }
-  }
-
-  private validatePaymentAllowsCancellation(payment: Payment | null): void {
-    if (!payment) {
-      return;
-    }
-
-    if (
-      payment.paymentMethod === PaymentMethod.ONLINE &&
-      payment.status === PaymentStatus.PAID
-    ) {
-      throw new ConflictException(
-        'Paid online orders cannot be cancelled because refunds are not supported',
-      );
-    }
-
-    const isCodPending =
-      payment.paymentMethod === PaymentMethod.COD &&
-      payment.status === PaymentStatus.PENDING;
-
-    if (!isCodPending && payment.status !== PaymentStatus.FAILED) {
-      throw new ConflictException('Payment does not allow order cancellation');
     }
   }
 

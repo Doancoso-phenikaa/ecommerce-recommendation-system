@@ -20,6 +20,7 @@ import { SellerProductQueryDto } from './dto/seller-product-query.dto.js';
 import { UpdateInventoryDto } from './dto/update-inventory.dto.js';
 import { UpdateProductDto } from './dto/update-product.dto.js';
 import { Product } from './entities/product.entity.js';
+import { ProductSort } from './enums/product-sort.enum.js';
 import { ProductStatus } from './enums/product-status.enum.js';
 
 @Injectable()
@@ -37,8 +38,17 @@ export class ProductService {
   ) {}
 
   async getProducts(productQueryDto: ProductQueryDto) {
-    const { search, categoryId, shopId, minPrice, maxPrice, page, limit } =
-      productQueryDto;
+    const {
+      search,
+      categoryId,
+      shopId,
+      minPrice,
+      maxPrice,
+      sort,
+      inStock,
+      page,
+      limit,
+    } = productQueryDto;
 
     if (
       minPrice !== undefined &&
@@ -54,11 +64,15 @@ export class ProductService {
       .createQueryBuilder('product')
       .innerJoinAndSelect('product.shop', 'shop')
       .innerJoinAndSelect('product.inventory', 'inventory')
+      .innerJoin('product.category', 'category')
       .where('product.status = :productStatus', {
         productStatus: ProductStatus.APPROVED,
       })
       .andWhere('shop.status = :shopStatus', {
         shopStatus: ShopStatus.ACTIVE,
+      })
+      .andWhere('category.status = :categoryStatus', {
+        categoryStatus: CategoryStatus.ACTIVE,
       });
 
     if (search) {
@@ -85,11 +99,32 @@ export class ProductService {
       queryBuilder.andWhere('product.price <= :maxPrice', { maxPrice });
     }
 
-    queryBuilder
-      .orderBy('product.createdAt', 'DESC')
-      .addOrderBy('product.productId', 'DESC')
-      .skip((page - 1) * limit)
-      .take(limit);
+    if (inStock === true) {
+      queryBuilder.andWhere(
+        'inventory.quantity > inventory.reservedQuantity',
+      );
+    }
+
+    switch (sort) {
+      case ProductSort.PRICE_ASC:
+        queryBuilder
+          .orderBy('product.price', 'ASC')
+          .addOrderBy('product.productId', 'ASC');
+        break;
+      case ProductSort.PRICE_DESC:
+        queryBuilder
+          .orderBy('product.price', 'DESC')
+          .addOrderBy('product.productId', 'DESC');
+        break;
+      case ProductSort.NEWEST:
+      default:
+        queryBuilder
+          .orderBy('product.createdAt', 'DESC')
+          .addOrderBy('product.productId', 'DESC');
+        break;
+    }
+
+    queryBuilder.skip((page - 1) * limit).take(limit);
 
     const [products, totalItems] = await queryBuilder.getManyAndCount();
 
@@ -109,12 +144,16 @@ export class ProductService {
       .createQueryBuilder('product')
       .innerJoinAndSelect('product.shop', 'shop')
       .innerJoinAndSelect('product.inventory', 'inventory')
+      .innerJoin('product.category', 'category')
       .where('product.productId = :productId', { productId })
       .andWhere('product.status = :productStatus', {
         productStatus: ProductStatus.APPROVED,
       })
       .andWhere('shop.status = :shopStatus', {
         shopStatus: ShopStatus.ACTIVE,
+      })
+      .andWhere('category.status = :categoryStatus', {
+        categoryStatus: CategoryStatus.ACTIVE,
       })
       .getOne();
 

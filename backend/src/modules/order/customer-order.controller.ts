@@ -34,4 +34,12 @@ export class CustomerOrderController {
   ) {
     return this.orderService.cancelMyOrder(userId, params.orderId);
   }
+
+  @Patch(':orderId/received')
+  confirmOrderReceived(
+    @CurrentUser('userId') userId: string,
+    @Param() params: OrderIdParamDto,
+  ) {
+    return this.orderService.confirmOrderReceived(userId, params.orderId);
+  }
 }

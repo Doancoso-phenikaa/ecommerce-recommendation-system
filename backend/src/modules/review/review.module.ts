@@ -5,12 +5,13 @@ import { Customer } from '../customer/entities/customer.entity.js';
 import { OrderItem } from '../order/entities/order-item.entity.js';
 import { Order } from '../order/entities/order.entity.js';
 import { Review } from './entities/review.entity.js';
+import { Seller } from '../seller/entities/seller.entity.js';
 import { ReviewController } from './review.controller.js';
 import { ReviewService } from './review.service.js';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Customer, Order, OrderItem, Review]),
+    TypeOrmModule.forFeature([Customer, Order, OrderItem, Review, Seller]),
     AuthModule,
   ],
   controllers: [ReviewController],

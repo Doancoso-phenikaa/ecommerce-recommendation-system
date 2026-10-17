@@ -20,6 +20,7 @@ import { CreateShopDto } from './dto/create-shop.dto.js';
 import { UpdateShopDto } from './dto/update-shop.dto.js';
 import { Shop } from './entities/shop.entity.js';
 import { ShopStatus } from './enums/shop-status.enum.js';
+import type { PublicShopListResponse } from './interfaces/public-shop-list-response.interface.js';
 
 const POSTGRES_UNIQUE_VIOLATION = '23505';
 
@@ -36,6 +37,23 @@ export class ShopService {
     private readonly sellerRepository: Repository<Seller>,
     private readonly dataSource: DataSource,
   ) {}
+
+  async getActiveShops(): Promise<PublicShopListResponse> {
+    const shops = await this.shopRepository
+      .createQueryBuilder('shop')
+      .select(['shop.shopId', 'shop.name'])
+      .where('shop.status = :status', { status: ShopStatus.ACTIVE })
+      .orderBy('shop.name', 'ASC')
+      .addOrderBy('shop.shopId', 'ASC')
+      .getMany();
+
+    return {
+      data: shops.map((shop) => ({
+        shopId: shop.shopId,
+        name: shop.name,
+      })),
+    };
+  }
 
   async getMyShop(userId: string) {
     const shop = await this.findMyShop(userId);

@@ -55,6 +55,9 @@ export class AdminOrderService {
             .where('CAST(order.orderId AS TEXT) ILIKE :search', {
               search: `%${query.search}%`,
             })
+            .orWhere('CAST(order.orderGroupId AS TEXT) ILIKE :search', {
+              search: `%${query.search}%`,
+            })
             .orWhere('shop.name ILIKE :search', {
               search: `%${query.search}%`,
             })
@@ -116,6 +119,7 @@ export class AdminOrderService {
       .innerJoinAndSelect('order.shop', 'shop')
       .leftJoinAndSelect('orderGroup.payment', 'payment')
       .leftJoinAndSelect('order.items', 'orderItem')
+      .leftJoinAndSelect('orderItem.product', 'product')
       .select([
         'order.orderId',
         'order.orderGroupId',
@@ -147,6 +151,8 @@ export class AdminOrderService {
         'orderItem.quantity',
         'orderItem.unitPrice',
         'orderItem.subtotal',
+        'product.productId',
+        'product.imageUrl',
       ])
       .where('order.orderId = :orderId', { orderId })
       .orderBy('orderItem.orderItemId', 'ASC')
@@ -231,6 +237,7 @@ export class AdminOrderService {
         orderItemId: item.orderItemId,
         productId: item.productId,
         productName: item.productName,
+        imageUrl: item.product.imageUrl,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         subtotal: item.subtotal,
