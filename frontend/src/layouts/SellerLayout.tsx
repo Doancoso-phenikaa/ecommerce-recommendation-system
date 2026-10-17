@@ -3,10 +3,6 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import './seller-layout.css';
 
-const futureNavigation = [
-  { label: 'Thống kê', icon: '↗' },
-];
-
 export function SellerLayout() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -42,12 +38,9 @@ export function SellerLayout() {
           <NavLink to="/seller/reviews" onClick={closeNavigation}>
             <span aria-hidden="true">★</span>Đánh giá
           </NavLink>
-          {futureNavigation.map((item) => (
-            <span className="seller-navigation__disabled" aria-disabled="true" key={item.label}>
-              <span aria-hidden="true">{item.icon}</span>
-              {item.label}<small>Sắp có</small>
-            </span>
-          ))}
+          <NavLink to="/seller/statistics" onClick={closeNavigation}>
+            <span aria-hidden="true">↗</span>Thống kê
+          </NavLink>
         </nav>
 
         <div className="seller-sidebar__account">

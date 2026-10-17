@@ -18,6 +18,7 @@ import { SellerProductPage } from './pages/seller/SellerProductPage';
 import { SellerOrderPage } from './pages/seller/SellerOrderPage';
 import { SellerOrderDetailPage } from './pages/seller/SellerOrderDetailPage';
 import { SellerReviewPage } from './pages/seller/SellerReviewPage';
+import { SellerStatisticsPage } from './pages/seller/SellerStatisticsPage';
 import { CustomerLayout } from './layouts/CustomerLayout';
 import { SellerLayout } from './layouts/SellerLayout';
 import { AdminLayout } from './layouts/AdminLayout';
@@ -62,6 +63,7 @@ function App() {
           <Route path="orders" element={<SellerOrderPage />} />
           <Route path="orders/:orderId" element={<SellerOrderDetailPage />} />
           <Route path="reviews" element={<SellerReviewPage />} />
+          <Route path="statistics" element={<SellerStatisticsPage />} />
         </Route>
       </Route>
       <Route element={<RoleRoute allowedRoles={['ADMIN']} />}>

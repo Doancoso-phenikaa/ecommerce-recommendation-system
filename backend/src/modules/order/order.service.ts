@@ -280,6 +280,14 @@ export class OrderService {
       order.status = OrderStatus.COMPLETED;
       const completedOrder = await manager.getRepository(Order).save(order);
 
+      await this.lockOrderGroup(manager, order.orderGroupId);
+      const payment = await this.lockPayment(manager, order.orderGroupId);
+      await this.completeCodPaymentIfEligible(
+        manager,
+        order.orderGroupId,
+        payment,
+      );
+
       return this.buildOrderStatusResponse(
         completedOrder,
         'Order receipt confirmed successfully',
@@ -469,8 +477,49 @@ export class OrderService {
       orderGroup,
       payment,
     );
+    await this.completeCodPaymentIfEligible(
+      manager,
+      order.orderGroupId,
+      payment,
+    );
 
     return cancelledOrder;
+  }
+
+  private async completeCodPaymentIfEligible(
+    manager: EntityManager,
+    orderGroupId: string,
+    payment: Payment | null,
+  ): Promise<void> {
+    if (
+      !payment ||
+      payment.paymentMethod !== PaymentMethod.COD ||
+      payment.status !== PaymentStatus.PENDING
+    ) {
+      return;
+    }
+
+    const orders = await manager.getRepository(Order).find({
+      select: {
+        orderId: true,
+        status: true,
+      },
+      where: { orderGroupId },
+    });
+    const activeOrders = orders.filter(
+      (order) => order.status !== OrderStatus.CANCELLED,
+    );
+
+    if (
+      activeOrders.length === 0 ||
+      activeOrders.some((order) => order.status !== OrderStatus.COMPLETED)
+    ) {
+      return;
+    }
+
+    payment.status = PaymentStatus.PAID;
+    payment.paidAt = new Date();
+    await manager.getRepository(Payment).save(payment);
   }
 
   private async lockOrderGroup(
