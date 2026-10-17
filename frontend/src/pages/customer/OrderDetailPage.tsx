@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
-import { cancelCustomerOrder, getCustomerOrderDetail } from '../../api/order.api';
+import {
+  cancelCustomerOrder,
+  confirmCustomerOrderReceived,
+  getCustomerOrderDetail,
+} from '../../api/order.api';
 import type {
   CustomerOrderDetailOrder,
   CustomerOrderDetailResponse,
@@ -30,9 +34,11 @@ export function OrderDetailPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [orderToCancel, setOrderToCancel] = useState<CustomerOrderDetailOrder | null>(null);
+  const [orderToReceive, setOrderToReceive] = useState<CustomerOrderDetailOrder | null>(null);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
-  const [cancelError, setCancelError] = useState('');
-  const [cancelSuccess, setCancelSuccess] = useState('');
+  const [receivingOrderId, setReceivingOrderId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState('');
+  const [actionSuccess, setActionSuccess] = useState('');
   const requestIdRef = useRef(0);
 
   const loadOrderDetail = useCallback(async (showLoading = true) => {
@@ -82,22 +88,44 @@ export function OrderDetailPage() {
 
     const targetOrder = orderToCancel;
     setCancellingOrderId(targetOrder.orderId);
-    setCancelError('');
-    setCancelSuccess('');
+    setActionError('');
+    setActionSuccess('');
 
     try {
       await cancelCustomerOrder(targetOrder.orderId);
       setOrderToCancel(null);
-      setCancelSuccess(`Đã hủy đơn hàng #${targetOrder.orderId}.`);
+      setActionSuccess(`Đã hủy đơn hàng #${targetOrder.orderId}.`);
       await loadOrderDetail(false);
     } catch (error: unknown) {
       setOrderToCancel(null);
-      setCancelError(getApiErrorMessage(error, 'Không thể hủy đơn hàng.'));
+      setActionError(getApiErrorMessage(error, 'Không thể hủy đơn hàng.'));
       // Refresh even after rejection: the seller may have changed the status
       // while this customer was viewing a stale PENDING order.
       await loadOrderDetail(false);
     } finally {
       setCancellingOrderId(null);
+    }
+  };
+
+  const handleConfirmReceived = async () => {
+    if (!orderToReceive || receivingOrderId) return;
+
+    const targetOrder = orderToReceive;
+    setReceivingOrderId(targetOrder.orderId);
+    setActionError('');
+    setActionSuccess('');
+
+    try {
+      await confirmCustomerOrderReceived(targetOrder.orderId);
+      setOrderToReceive(null);
+      setActionSuccess(`Đã xác nhận nhận đơn hàng #${targetOrder.orderId}.`);
+      await loadOrderDetail(false);
+    } catch (error: unknown) {
+      setOrderToReceive(null);
+      setActionError(getApiErrorMessage(error, 'Không thể xác nhận đã nhận hàng.'));
+      await loadOrderDetail(false);
+    } finally {
+      setReceivingOrderId(null);
     }
   };
 
@@ -135,17 +163,17 @@ export function OrderDetailPage() {
         </div>
       )}
 
-      {cancelSuccess && (
+      {actionSuccess && (
         <div className="order-action-message is-success" role="status">
-          <span aria-hidden="true">✓</span><p>{cancelSuccess}</p>
-          <button type="button" onClick={() => setCancelSuccess('')} aria-label="Đóng thông báo">×</button>
+          <span aria-hidden="true">✓</span><p>{actionSuccess}</p>
+          <button type="button" onClick={() => setActionSuccess('')} aria-label="Đóng thông báo">×</button>
         </div>
       )}
 
-      {cancelError && (
+      {actionError && (
         <div className="order-action-message is-error" role="alert">
-          <span aria-hidden="true">!</span><div><strong>Không thể hủy đơn hàng</strong><p>{cancelError}</p></div>
-          <button type="button" onClick={() => setCancelError('')} aria-label="Đóng thông báo">×</button>
+          <span aria-hidden="true">!</span><div><strong>Không thể xử lý đơn hàng</strong><p>{actionError}</p></div>
+          <button type="button" onClick={() => setActionError('')} aria-label="Đóng thông báo">×</button>
         </div>
       )}
 
@@ -156,7 +184,9 @@ export function OrderDetailPage() {
               order={order}
               isFocused={focusOrderId === order.orderId}
               isCancelling={cancellingOrderId === order.orderId}
+              isReceiving={receivingOrderId === order.orderId}
               onRequestCancel={setOrderToCancel}
+              onRequestReceived={setOrderToReceive}
               key={order.orderId}
             />
           ))}
@@ -194,6 +224,17 @@ export function OrderDetailPage() {
           onConfirm={() => void handleCancelOrder()}
         />
       )}
+
+      {orderToReceive && (
+        <ReceiveOrderModal
+          order={orderToReceive}
+          isSubmitting={receivingOrderId === orderToReceive.orderId}
+          onClose={() => {
+            if (!receivingOrderId) setOrderToReceive(null);
+          }}
+          onConfirm={() => void handleConfirmReceived()}
+        />
+      )}
     </main>
   );
 }
@@ -221,12 +262,16 @@ function OrderDetailCard({
   order,
   isFocused,
   isCancelling,
+  isReceiving,
   onRequestCancel,
+  onRequestReceived,
 }: {
   order: CustomerOrderDetailOrder;
   isFocused: boolean;
   isCancelling: boolean;
+  isReceiving: boolean;
   onRequestCancel: (order: CustomerOrderDetailOrder) => void;
+  onRequestReceived: (order: CustomerOrderDetailOrder) => void;
 }) {
   return (
     <article className={`order-detail-card${isFocused ? ' is-focused' : ''}`} id={`order-${order.orderId}`}>
@@ -247,6 +292,16 @@ function OrderDetailCard({
               disabled={isCancelling}
             >
               {isCancelling ? 'Đang hủy...' : 'Hủy đơn hàng'}
+            </button>
+          )}
+          {order.status === 'SHIPPING' && (
+            <button
+              className="order-received-button"
+              type="button"
+              onClick={() => onRequestReceived(order)}
+              disabled={isReceiving}
+            >
+              {isReceiving ? 'Đang xác nhận...' : 'Đã nhận được hàng'}
             </button>
           )}
         </div>
@@ -290,6 +345,7 @@ function OrderDetailCard({
       </div>
 
       {order.status === 'PENDING' && <footer className="order-detail-card__notice">Bạn chỉ có thể hủy đơn hàng này khi gian hàng chưa xác nhận.</footer>}
+      {order.status === 'SHIPPING' && <footer className="order-detail-card__notice is-received">Chỉ xác nhận khi bạn đã nhận và kiểm tra đúng đơn hàng từ gian hàng này.</footer>}
     </article>
   );
 }
@@ -328,6 +384,46 @@ function CancelOrderModal({
         <div className="order-cancel-modal__actions">
           <button type="button" onClick={onClose} disabled={isSubmitting}>Quay lại</button>
           <button type="button" onClick={onConfirm} disabled={isSubmitting}>{isSubmitting ? 'Đang hủy...' : 'Xác nhận hủy'}</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ReceiveOrderModal({
+  order,
+  isSubmitting,
+  onClose,
+  onConfirm,
+}: {
+  order: CustomerOrderDetailOrder;
+  isSubmitting: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isSubmitting) onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isSubmitting, onClose]);
+
+  return (
+    <div className="order-modal-backdrop" role="presentation" onMouseDown={(event) => {
+      if (event.target === event.currentTarget && !isSubmitting) onClose();
+    }}>
+      <section className="order-cancel-modal order-received-modal" role="dialog" aria-modal="true" aria-labelledby="receive-order-title">
+        <span className="order-cancel-modal__mark" aria-hidden="true">✓</span>
+        <h2 id="receive-order-title">Xác nhận đã nhận hàng?</h2>
+        <p>Hãy chỉ xác nhận sau khi bạn đã nhận và kiểm tra đơn hàng. Sau bước này, đơn sẽ được đánh dấu hoàn thành.</p>
+        <dl>
+          <div><dt>Gian hàng</dt><dd>{order.shopName}</dd></div>
+          <div><dt>Mã đơn hàng</dt><dd>#{order.orderId}</dd></div>
+        </dl>
+        <div className="order-cancel-modal__actions">
+          <button type="button" onClick={onClose} disabled={isSubmitting}>Quay lại</button>
+          <button type="button" onClick={onConfirm} disabled={isSubmitting}>{isSubmitting ? 'Đang xác nhận...' : 'Xác nhận đã nhận'}</button>
         </div>
       </section>
     </div>

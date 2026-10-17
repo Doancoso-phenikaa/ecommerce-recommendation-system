@@ -396,6 +396,22 @@
 .order-cancel-button:active:not(:disabled) { transform: translateY(1px); }
 .order-cancel-button:disabled { opacity: 0.55; cursor: not-allowed; }
 
+.order-received-button {
+  margin-top: 0.25rem;
+  padding: 0.42rem 0.62rem;
+  color: #fff;
+  background: #15803d;
+  border: 1px solid #15803d;
+  border-radius: 0.38rem;
+  font-size: 0.63rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+.order-received-button:hover:not(:disabled) { background: #166534; border-color: #166534; }
+.order-received-button:active:not(:disabled) { transform: translateY(1px); }
+.order-received-button:disabled { opacity: 0.55; cursor: not-allowed; }
+
 .order-timeline {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -449,6 +465,7 @@
 .order-totals dl > div:last-child { padding-top: 0.5rem; border-top: 1px solid var(--market-border); font-size: 0.75rem; }
 .order-totals dl > div:last-child dd { color: var(--market-primary-strong); }
 .order-detail-card__notice { padding: 0.65rem 1rem; color: #92400e; background: #fffbeb; border-top: 1px solid #fde68a; font-size: 0.64rem; }
+.order-detail-card__notice.is-received { color: #166534; background: #f0fdf4; border-top-color: #bbf7d0; }
 
 .order-detail-summary { position: sticky; top: 5.6rem; display: grid; gap: 0.75rem; }
 .order-detail-summary > section { padding: 1rem; background: #fff; border: 1px solid var(--market-border); border-radius: 0.65rem; }
@@ -517,6 +534,10 @@
 .order-cancel-modal__actions button:last-child:hover:not(:disabled) { background: #b91c1c; border-color: #b91c1c; }
 .order-cancel-modal__actions button:disabled { opacity: 0.55; cursor: not-allowed; }
 
+.order-received-modal .order-cancel-modal__mark { color: #166534; background: #dcfce7; }
+.order-received-modal .order-cancel-modal__actions button:last-child { background: #15803d; border-color: #15803d; }
+.order-received-modal .order-cancel-modal__actions button:last-child:hover:not(:disabled) { background: #166534; border-color: #166534; }
+
 @keyframes order-pulse { from { opacity: 0.52; } to { opacity: 1; } }
 
 @media (max-width: 900px) {
@@ -554,6 +575,7 @@
   .order-detail-card > header { flex-direction: column; }
   .order-detail-card__meta { justify-items: start; }
   .order-cancel-button { margin-top: 0.35rem; }
+  .order-received-button { margin-top: 0.35rem; }
   .order-detail-product { grid-template-columns: 3rem minmax(0, 1fr); }
   .order-detail-product > strong { grid-column: 2; justify-self: end; }
   .order-detail-error > div { flex-direction: column; }

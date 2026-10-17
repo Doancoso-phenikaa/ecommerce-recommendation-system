@@ -1,5 +1,5 @@
 import type {
-  CancelCustomerOrderResponse,
+  CustomerOrderStatusResponse,
   CustomerOrderDetailResponse,
   CustomerOrderHistoryResponse,
 } from '../types/order';
@@ -12,8 +12,15 @@ export async function getCustomerOrders(): Promise<CustomerOrderHistoryResponse>
 
 export async function cancelCustomerOrder(
   orderId: string,
-): Promise<CancelCustomerOrderResponse> {
-  const response = await api.patch<CancelCustomerOrderResponse>(`/orders/${orderId}/cancel`);
+): Promise<CustomerOrderStatusResponse> {
+  const response = await api.patch<CustomerOrderStatusResponse>(`/orders/${orderId}/cancel`);
+  return response.data;
+}
+
+export async function confirmCustomerOrderReceived(
+  orderId: string,
+): Promise<CustomerOrderStatusResponse> {
+  const response = await api.patch<CustomerOrderStatusResponse>(`/orders/${orderId}/received`);
   return response.data;
 }
 

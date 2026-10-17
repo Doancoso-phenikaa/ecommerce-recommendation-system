@@ -4,7 +4,6 @@ import { useAuth } from '../hooks/useAuth';
 import './seller-layout.css';
 
 const futureNavigation = [
-  { label: 'Đơn hàng', icon: '▤' },
   { label: 'Thống kê', icon: '↗' },
 ];
 
@@ -36,6 +35,9 @@ export function SellerLayout() {
           </NavLink>
           <NavLink to="/seller/products" onClick={closeNavigation}>
             <span aria-hidden="true">▦</span>Sản phẩm
+          </NavLink>
+          <NavLink to="/seller/orders" onClick={closeNavigation}>
+            <span aria-hidden="true">▤</span>Đơn hàng
           </NavLink>
           {futureNavigation.map((item) => (
             <span className="seller-navigation__disabled" aria-disabled="true" key={item.label}>

@@ -42,14 +42,6 @@ export class SellerOrderController {
     return this.orderService.startShipping(userId, params.orderId);
   }
 
-  @Patch(':orderId/complete')
-  completeOrder(
-    @CurrentUser('userId') userId: string,
-    @Param() params: OrderIdParamDto,
-  ) {
-    return this.orderService.completeOrder(userId, params.orderId);
-  }
-
   @Patch(':orderId/cancel')
   cancelOrderBySeller(
     @CurrentUser('userId') userId: string,

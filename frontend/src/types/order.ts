@@ -69,7 +69,7 @@ export interface CustomerOrderDetailOrder {
   items: CustomerOrderDetailItem[];
 }
 
-export interface CustomerOrderDetailPayment {
+export interface OrderDetailPayment {
   paymentId: string;
   paymentMethod: PaymentMethod;
   amount: string;
@@ -81,11 +81,51 @@ export interface CustomerOrderDetailResponse {
   orderGroupId: string;
   totalAmount: string;
   createdAt: string;
-  payment: CustomerOrderDetailPayment | null;
+  payment: OrderDetailPayment | null;
   orders: CustomerOrderDetailOrder[];
 }
 
-export interface CancelCustomerOrderResponse {
+export interface CustomerOrderStatusResponse {
+  orderId: string;
+  status: OrderStatus;
+  updatedAt: string;
+  message: string;
+}
+
+export interface SellerOrderListItem {
+  orderId: string;
+  orderGroupId: string;
+  subtotal: string;
+  discountAmount: string;
+  shippingFee: string;
+  totalAmount: string;
+  shippingAddress: string;
+  shippingMethod: string | null;
+  status: OrderStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SellerOrderListResponse {
+  data: SellerOrderListItem[];
+}
+
+export interface SellerOrderItem {
+  orderItemId: string;
+  productId: string;
+  productName: string;
+  imageUrl: string | null;
+  quantity: number;
+  unitPrice: string;
+  subtotal: string;
+}
+
+export interface SellerOrderDetailResponse extends SellerOrderListItem {
+  items: SellerOrderItem[];
+  payment: OrderDetailPayment | null;
+}
+
+export interface SellerOrderStatusResponse {
   orderId: string;
   status: OrderStatus;
   updatedAt: string;

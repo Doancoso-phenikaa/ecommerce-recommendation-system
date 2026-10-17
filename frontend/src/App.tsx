@@ -15,6 +15,8 @@ import { OrderDetailPage } from './pages/customer/OrderDetailPage';
 import { WishlistPage } from './pages/customer/WishlistPage';
 import { SellerDashboardPage } from './pages/seller/SellerDashboardPage';
 import { SellerProductPage } from './pages/seller/SellerProductPage';
+import { SellerOrderPage } from './pages/seller/SellerOrderPage';
+import { SellerOrderDetailPage } from './pages/seller/SellerOrderDetailPage';
 import { CustomerLayout } from './layouts/CustomerLayout';
 import { SellerLayout } from './layouts/SellerLayout';
 import { AdminLayout } from './layouts/AdminLayout';
@@ -54,6 +56,8 @@ function App() {
           <Route index element={<SellerDashboardPage />} />
           <Route path="shop" element={<SellerDashboardPage />} />
           <Route path="products" element={<SellerProductPage />} />
+          <Route path="orders" element={<SellerOrderPage />} />
+          <Route path="orders/:orderId" element={<SellerOrderDetailPage />} />
         </Route>
       </Route>
       <Route element={<RoleRoute allowedRoles={['ADMIN']} />}>
