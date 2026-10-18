@@ -16,9 +16,9 @@ const RANGE_OPTIONS: { value: SellerStatisticsRange; label: string }[] = [
 const STATUS_META = [
   { key: 'pending', label: 'Chờ xác nhận', color: '#f59e0b' },
   { key: 'confirmed', label: 'Đã xác nhận', color: '#3b82f6' },
-  { key: 'shipping', label: 'Đang giao', color: '#8b5cf6' },
+  { key: 'shipping', label: 'Đang giao', color: '#dc2626' },
   { key: 'completed', label: 'Hoàn thành', color: '#16a34a' },
-  { key: 'cancelled', label: 'Đã hủy', color: '#ef4444' },
+  { key: 'cancelled', label: 'Đã hủy', color: '#64748b' },
 ] as const;
 
 export function SellerStatisticsPage() {
@@ -79,7 +79,7 @@ export function SellerStatisticsPage() {
     <main className="seller-statistics-page">
       <header className="seller-statistics-heading">
         <div>
-          <span>Hiệu quả kinh doanh</span>
+          <span>KÊNH NGƯỜI BÁN</span>
           <h1>Thống kê gian hàng</h1>
           <p>Theo dõi doanh thu và hiệu quả bán hàng của gian hàng.</p>
         </div>
@@ -173,7 +173,7 @@ export function SellerStatisticsPage() {
                       <article key={product.productId}>
                         <strong className="seller-top-products__rank">{String(index + 1).padStart(2, '0')}</strong>
                         <div className="seller-top-products__image">
-                          {product.imageUrl ? <img src={product.imageUrl} alt="" /> : <span aria-hidden="true">{product.productName.charAt(0).toLocaleUpperCase('vi')}</span>}
+                          {product.imageUrl ? <img src={product.imageUrl} alt={product.productName} /> : <span aria-hidden="true">{product.productName.charAt(0).toLocaleUpperCase('vi')}</span>}
                         </div>
                         <div className="seller-top-products__identity"><h3>{product.productName}</h3><p>Đã bán {product.quantitySold} sản phẩm</p></div>
                         <strong className="seller-top-products__revenue">{formatCurrency(product.revenue)}</strong>
@@ -191,7 +191,7 @@ export function SellerStatisticsPage() {
 }
 
 function MetricCard({ label, value, note, accent }: { label: string; value: string; note: string; accent: string }) {
-  return <article className={`seller-statistics-card is-${accent}`}><span>{label}</span><strong>{value}</strong><small>{note}</small></article>;
+  return <article className={`seller-statistics-card is-${accent}`}><div><span>{label}</span><i aria-hidden="true"><StatisticsMetricIcon type={accent} /></i></div><strong>{value}</strong><small>{note}</small></article>;
 }
 
 function PanelEmpty({ message }: { message: string }) {
@@ -205,6 +205,13 @@ function SellerStatisticsSkeleton() {
       <div><article /><aside /></div>
     </div>
   );
+}
+
+function StatisticsMetricIcon({ type }: { type: string }) {
+  if (type === 'orders') return <svg viewBox="0 0 24 24"><path d="M6 3h12l1 18H5L6 3Z" /><path d="M9 8a3 3 0 0 0 6 0" /></svg>;
+  if (type === 'completed') return <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" /></svg>;
+  if (type === 'processing') return <svg viewBox="0 0 24 24"><path d="M3 7h11v10H3zM14 10h4l3 3v4h-7z" /><circle cx="7" cy="18" r="2" /><circle cx="17" cy="18" r="2" /></svg>;
+  return <svg viewBox="0 0 24 24"><path d="M5 18V9M10 18V5M15 18v-6M20 18V3" /></svg>;
 }
 
 function formatShortDate(value: string): string {
