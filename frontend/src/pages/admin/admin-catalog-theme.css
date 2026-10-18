@@ -1,0 +1,302 @@
+/* MarketNest palette for Admin shop, category and product management. */
+
+.admin-shell .admin-page-eyebrow,
+.admin-shell .admin-category-heading > div > span,
+.admin-shell .admin-product-heading > div:first-child > span {
+  color: var(--admin-accent);
+}
+
+.admin-shell .admin-shop-panel,
+.admin-shell .admin-category-panel,
+.admin-shell .admin-product-panel,
+.admin-shell .admin-page-count,
+.admin-shell .admin-category-metrics article,
+.admin-shell .admin-detail-hero,
+.admin-shell .admin-detail-card,
+.admin-shell .admin-product-review-hero,
+.admin-shell .admin-product-detail-card {
+  border-color: var(--admin-border);
+}
+
+.admin-shell .admin-status-tabs button:hover,
+.admin-shell .admin-status-tabs button.is-active,
+.admin-shell .admin-category-filters button:hover,
+.admin-shell .admin-category-filters button.is-active {
+  color: var(--admin-accent-strong);
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.admin-shell .admin-shop-search input:focus,
+.admin-shell .admin-category-search input:focus,
+.admin-shell .admin-category-modal input:focus,
+.admin-shell .admin-category-modal textarea:focus,
+.admin-shell .admin-product-toolbar input:focus,
+.admin-shell .admin-product-toolbar select:focus,
+.admin-shell .admin-product-modal textarea:focus,
+.admin-shell .admin-modal textarea:focus {
+  border-color: var(--admin-accent);
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+}
+
+.admin-shell .admin-shop-table tbody tr:hover,
+.admin-shell .admin-category-table tbody tr:hover,
+.admin-shell .admin-product-table tbody tr:hover {
+  background: #fff7f7;
+}
+
+.admin-shell .admin-shop-detail-link,
+.admin-shell .admin-product-detail-link,
+.admin-shell .admin-back-link:hover,
+.admin-shell .admin-product-back:hover,
+.admin-shell .admin-product-review-hero > div > strong {
+  color: var(--admin-accent-strong);
+}
+
+.admin-shell .admin-category-add,
+.admin-shell .admin-category-modal footer button.is-primary,
+.admin-shell .admin-action--primary {
+  color: #fff !important;
+  background: var(--admin-accent) !important;
+  border-color: var(--admin-accent) !important;
+}
+
+.admin-shell .admin-category-add:hover,
+.admin-shell .admin-category-modal footer button.is-primary:hover,
+.admin-shell .admin-action--primary:hover {
+  background: var(--admin-accent-strong) !important;
+  border-color: var(--admin-accent-strong) !important;
+}
+
+.admin-shell .admin-category-metrics article::after,
+.admin-shell .admin-detail-card__heading > span,
+.admin-shell .admin-product-detail-card > header > span {
+  color: var(--admin-accent-strong);
+  background: #fef2f2;
+}
+
+.admin-shell .admin-category-modal > header span,
+.admin-shell .admin-category-confirm__icon,
+.admin-shell .admin-modal__icon {
+  color: var(--admin-accent-strong);
+}
+
+.admin-shell .admin-category-confirm__icon,
+.admin-shell .admin-modal__icon {
+  background: #fee2e2;
+}
+
+/* Approval is a success action; rejection remains destructive red. */
+.admin-shell .admin-product-review-actions .is-approve,
+.admin-shell .admin-product-modal footer .is-primary {
+  color: #fff;
+  background: #047857;
+  border-color: #047857;
+}
+
+.admin-shell .admin-product-review-actions .is-approve:hover,
+.admin-shell .admin-product-modal footer .is-primary:hover {
+  background: #03694e;
+  border-color: #03694e;
+}
+
+/* Consistent interaction feedback across catalog management actions. */
+.admin-shell .admin-status-tabs button,
+.admin-shell .admin-shop-search button,
+.admin-shell .admin-pagination button,
+.admin-shell .admin-shop-state button,
+.admin-shell .admin-action,
+.admin-shell .admin-modal__actions button,
+.admin-shell .admin-category-add,
+.admin-shell .admin-category-filters button,
+.admin-shell .admin-category-search button,
+.admin-shell .admin-category-actions button,
+.admin-shell .admin-category-pagination button,
+.admin-shell .admin-category-state button,
+.admin-shell .admin-category-modal button,
+.admin-shell .admin-product-toolbar form button,
+.admin-shell .admin-product-pagination button,
+.admin-shell .admin-product-state button,
+.admin-shell .admin-product-review-actions button,
+.admin-shell .admin-product-modal footer button,
+.admin-shell .admin-shop-detail-link,
+.admin-shell .admin-product-detail-link,
+.admin-shell .admin-back-link,
+.admin-shell .admin-product-back {
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.admin-shell .admin-shop-search button,
+.admin-shell .admin-category-search button,
+.admin-shell .admin-product-toolbar form button {
+  color: #fff;
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+.admin-shell .admin-shop-search button:hover,
+.admin-shell .admin-category-search button:hover,
+.admin-shell .admin-product-toolbar form button:hover {
+  background: #b91c1c;
+  border-color: #b91c1c;
+  box-shadow: 0 0.35rem 0.8rem rgba(220, 38, 38, 0.16);
+}
+
+.admin-shell .admin-pagination button:hover:not(:disabled),
+.admin-shell .admin-shop-state button:hover:not(:disabled),
+.admin-shell .admin-category-pagination button:hover:not(:disabled),
+.admin-shell .admin-category-state button:hover:not(:disabled),
+.admin-shell .admin-product-pagination button:hover:not(:disabled),
+.admin-shell .admin-product-state button:hover:not(:disabled) {
+  color: var(--admin-accent-strong);
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.admin-shell .admin-category-actions button:hover:not(:disabled),
+.admin-shell .admin-modal__actions button:hover:not(:disabled),
+.admin-shell .admin-category-modal footer button:not(.is-primary):not(.is-danger):hover:not(:disabled),
+.admin-shell .admin-product-modal footer button:not(.is-primary):not(.is-danger):hover:not(:disabled) {
+  color: var(--admin-text);
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.admin-shell .admin-action--danger:hover:not(:disabled),
+.admin-shell .admin-category-actions button.is-danger:hover:not(:disabled),
+.admin-shell .admin-category-modal footer button.is-danger:hover:not(:disabled),
+.admin-shell .admin-product-review-actions .is-reject:hover:not(:disabled),
+.admin-shell .admin-product-modal footer .is-danger:hover:not(:disabled) {
+  color: #fff !important;
+  background: #b91c1c !important;
+  border-color: #b91c1c !important;
+}
+
+.admin-shell .admin-action--warning:hover:not(:disabled) {
+  color: #78350f;
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+
+.admin-shell .admin-shop-detail-link:hover,
+.admin-shell .admin-product-detail-link:hover,
+.admin-shell .admin-back-link:hover,
+.admin-shell .admin-product-back:hover {
+  color: var(--admin-accent);
+}
+
+.admin-shell .admin-status-tabs button:active:not(:disabled),
+.admin-shell .admin-shop-search button:active:not(:disabled),
+.admin-shell .admin-pagination button:active:not(:disabled),
+.admin-shell .admin-shop-state button:active:not(:disabled),
+.admin-shell .admin-action:active:not(:disabled),
+.admin-shell .admin-modal__actions button:active:not(:disabled),
+.admin-shell .admin-category-add:active:not(:disabled),
+.admin-shell .admin-category-filters button:active:not(:disabled),
+.admin-shell .admin-category-search button:active:not(:disabled),
+.admin-shell .admin-category-actions button:active:not(:disabled),
+.admin-shell .admin-category-pagination button:active:not(:disabled),
+.admin-shell .admin-category-state button:active:not(:disabled),
+.admin-shell .admin-category-modal button:active:not(:disabled),
+.admin-shell .admin-product-toolbar form button:active:not(:disabled),
+.admin-shell .admin-product-pagination button:active:not(:disabled),
+.admin-shell .admin-product-state button:active:not(:disabled),
+.admin-shell .admin-product-review-actions button:active:not(:disabled),
+.admin-shell .admin-product-modal footer button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.admin-shell .admin-status-tabs button:focus-visible,
+.admin-shell .admin-shop-search button:focus-visible,
+.admin-shell .admin-pagination button:focus-visible,
+.admin-shell .admin-shop-state button:focus-visible,
+.admin-shell .admin-action:focus-visible,
+.admin-shell .admin-modal__actions button:focus-visible,
+.admin-shell .admin-category-add:focus-visible,
+.admin-shell .admin-category-filters button:focus-visible,
+.admin-shell .admin-category-search button:focus-visible,
+.admin-shell .admin-category-actions button:focus-visible,
+.admin-shell .admin-category-pagination button:focus-visible,
+.admin-shell .admin-category-state button:focus-visible,
+.admin-shell .admin-category-modal button:focus-visible,
+.admin-shell .admin-product-toolbar form button:focus-visible,
+.admin-shell .admin-product-pagination button:focus-visible,
+.admin-shell .admin-product-state button:focus-visible,
+.admin-shell .admin-product-review-actions button:focus-visible,
+.admin-shell .admin-product-modal footer button:focus-visible,
+.admin-shell .admin-shop-detail-link:focus-visible,
+.admin-shell .admin-product-detail-link:focus-visible,
+.admin-shell .admin-back-link:focus-visible,
+.admin-shell .admin-product-back:focus-visible {
+  outline: 2px solid var(--admin-accent);
+  outline-offset: 2px;
+}
+
+.admin-shell button:disabled {
+  box-shadow: none;
+  transform: none;
+}
+
+/* Keep every Product filter on the same baseline and at the same height. */
+.admin-shell .admin-product-toolbar {
+  grid-template-columns: minmax(18rem, 1.35fr) repeat(3, minmax(9.5rem, 1fr));
+  align-items: stretch;
+}
+
+.admin-shell .admin-product-toolbar > form,
+.admin-shell .admin-product-toolbar > label {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: 1rem 2.5rem;
+  align-content: end;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.admin-shell .admin-product-toolbar label,
+.admin-shell .admin-product-toolbar form > label {
+  margin: 0;
+  line-height: 1rem;
+}
+
+.admin-shell .admin-product-toolbar form > div {
+  height: 2.5rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.admin-shell .admin-product-toolbar input,
+.admin-shell .admin-product-toolbar select {
+  height: 2.5rem;
+  min-height: 2.5rem;
+  display: block;
+}
+
+.admin-shell .admin-product-toolbar form button {
+  min-height: 2.5rem;
+}
+
+@media (max-width: 1100px) {
+  .admin-shell .admin-product-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-shell .admin-product-toolbar > form {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-shell .admin-product-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-shell .admin-product-toolbar > form {
+    grid-column: auto;
+  }
+}
