@@ -42,6 +42,17 @@ export class UpdateProductDto {
   price?: string;
 
   @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim() || null : value,
+  )
+  @ValidateIf((_object, value) => value !== undefined && value !== null)
+  @IsString()
+  @Matches(/^(?=.*[1-9])\d{1,10}(?:\.\d{1,2})?$/, {
+    message:
+      'originalPrice must be a positive decimal with at most 2 decimal places',
+  })
+  originalPrice?: string | null;
+
+  @Transform(({ value }) =>
     typeof value === 'string' ? value.trim() : value,
   )
   @ValidateIf((_object, value) => value !== undefined)

@@ -525,6 +525,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+.seller-product-original-price {
+  display: block;
+  margin-top: 0.2rem;
+  color: #94a3b8;
+  font-size: 0.58rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .seller-product-stock--empty {
   color: #dc2626 !important;
 }

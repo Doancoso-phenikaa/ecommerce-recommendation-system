@@ -8,6 +8,7 @@ import { CartPage } from './pages/customer/CartPage';
 import { ProductDetailPage } from './pages/customer/ProductDetailPage';
 import { CategoryProductPage } from './pages/customer/CategoryProductPage';
 import { ProductSearchPage } from './pages/customer/ProductSearchPage';
+import { RecommendationPage } from './pages/customer/RecommendationPage';
 import { CheckoutPage } from './pages/customer/CheckoutPage';
 import { PaymentResultPage } from './pages/customer/PaymentResultPage';
 import { OrderHistoryPage } from './pages/customer/OrderHistoryPage';
@@ -54,6 +55,7 @@ function App() {
           <Route path="/products/:productId" element={<ProductDetailPage />} />
           <Route path="/categories/:categoryId" element={<CategoryProductPage />} />
           <Route path="/search" element={<ProductSearchPage />} />
+          <Route path="/recommendations" element={<RecommendationPage />} />
           <Route path="/wishlist" element={<WishlistPage />} />
           <Route path="/cart" element={<CartPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
