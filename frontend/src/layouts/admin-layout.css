@@ -165,6 +165,12 @@
   font-weight: 700;
 }
 
+span.admin-account-avatar {
+  padding-top: 0.04rem;
+  line-height: 1;
+  text-align: center;
+}
+
 .admin-workspace {
   min-height: 100dvh;
   margin-left: 15rem;
