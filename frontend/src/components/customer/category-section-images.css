@@ -1,11 +1,11 @@
 .category-item > .category-item__image {
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 3.15rem;
+  height: 3.15rem;
   display: block;
-  border: 1px solid #fed7aa;
-  border-radius: 0.65rem;
+  border: 1px solid #eee8e9;
+  border-radius: 50%;
   object-fit: cover;
-  background: #fff7ed;
+  background: #f8f4f4;
 }
 
 .category-item {
@@ -21,7 +21,7 @@
 
 .category-item--selected > .category-item__image {
   border-color: var(--market-primary);
-  box-shadow: 0 0 0 2px #ffedd5;
+  box-shadow: 0 0 0 2px #fee2e2;
 }
 
 .category-section__message {

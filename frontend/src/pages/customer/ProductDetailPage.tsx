@@ -15,6 +15,7 @@ import type { ProductReviewsResponse } from '../../types/review';
 import { formatCurrency } from '../../utils/format-currency';
 import { getApiErrorMessage } from '../../utils/auth';
 import { formatOrderDate } from '../../utils/order';
+import { getProductDiscountPercentage } from '../../utils/product-price';
 import './product-detail.css';
 
 export function ProductDetailPage() {
@@ -128,6 +129,10 @@ function ProductDetailContent({ product, categoryName, relatedProducts }: { prod
   const [reviewReloadKey, setReviewReloadKey] = useState(0);
   const availableQuantity = Math.max(product.inventory.availableQuantity, 0);
   const isOutOfStock = availableQuantity === 0;
+  const discountPercentage = getProductDiscountPercentage(
+    product.price,
+    product.originalPrice,
+  );
 
   useEffect(() => {
     let isCurrent = true;
@@ -304,7 +309,15 @@ function ProductDetailContent({ product, categoryName, relatedProducts }: { prod
               <span>Chưa có đánh giá</span>
             )}
           </div>
-          <strong className="product-detail-price">{formatCurrency(product.price)}</strong>
+          <div className="product-detail-pricing">
+            <strong className="product-detail-price">{formatCurrency(product.price)}</strong>
+            {discountPercentage !== null && product.originalPrice && (
+              <div>
+                <del>{formatCurrency(product.originalPrice)}</del>
+                <span>-{discountPercentage}%</span>
+              </div>
+            )}
+          </div>
           <div className={`product-detail-stock${isOutOfStock ? ' product-detail-stock--empty' : ''}`}>
             <span aria-hidden="true" />{isOutOfStock ? 'Hết hàng' : `Còn ${availableQuantity} sản phẩm`}
           </div>

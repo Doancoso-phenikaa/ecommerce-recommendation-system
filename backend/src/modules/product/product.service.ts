@@ -293,6 +293,9 @@ export class ProductService {
   async createProduct(userId: string, createProductDto: CreateProductDto) {
     const shop = await this.findActiveSellerShop(userId);
     const category = await this.findActiveCategory(createProductDto.categoryId);
+    const originalPrice = createProductDto.originalPrice ?? null;
+
+    this.validateOriginalPrice(createProductDto.price, originalPrice);
 
     return this.dataSource.transaction(async (manager) => {
       const productRepository = manager.getRepository(Product);
@@ -305,6 +308,7 @@ export class ProductService {
           name: createProductDto.name.trim(),
           description: createProductDto.description?.trim() || null,
           price: createProductDto.price,
+          originalPrice,
           imageUrl: createProductDto.imageUrl?.trim() || null,
           status: ProductStatus.PENDING,
           rejectionReason: null,
@@ -346,6 +350,14 @@ export class ProductService {
       );
       let hasChanges = false;
 
+      const nextPrice = updateProductDto.price?.trim() ?? product.price;
+      const nextOriginalPrice =
+        updateProductDto.originalPrice !== undefined
+          ? updateProductDto.originalPrice
+          : product.originalPrice;
+
+      this.validateOriginalPrice(nextPrice, nextOriginalPrice);
+
       if (updateProductDto.categoryId !== undefined) {
         const category = await this.findActiveCategoryInTransaction(
           manager,
@@ -381,6 +393,15 @@ export class ProductService {
 
         if (product.price !== price) {
           product.price = price;
+          hasChanges = true;
+        }
+      }
+
+      if (updateProductDto.originalPrice !== undefined) {
+        const originalPrice = updateProductDto.originalPrice;
+
+        if (product.originalPrice !== originalPrice) {
+          product.originalPrice = originalPrice;
           hasChanges = true;
         }
       }
@@ -732,6 +753,7 @@ export class ProductService {
       name: product.name,
       description: product.description,
       price: product.price,
+      originalPrice: product.originalPrice,
       imageUrl: product.imageUrl,
       status: product.status,
       rejectionReason: product.rejectionReason,
@@ -759,6 +781,7 @@ export class ProductService {
       name: product.name,
       description: product.description,
       price: product.price,
+      originalPrice: product.originalPrice,
       imageUrl: product.imageUrl,
       approvedAt: product.approvedAt,
       inventory: {
@@ -784,6 +807,7 @@ export class ProductService {
       name: product.name,
       description: product.description,
       price: product.price,
+      originalPrice: product.originalPrice,
       imageUrl: product.imageUrl,
       status: product.status,
       rejectionReason: product.rejectionReason,
@@ -824,5 +848,19 @@ export class ProductService {
   private decimalToCents(value: string): bigint {
     const [wholePart, fractionPart = ''] = value.split('.');
     return BigInt(wholePart) * 100n + BigInt(fractionPart.padEnd(2, '0'));
+  }
+
+  private validateOriginalPrice(
+    price: string,
+    originalPrice: string | null,
+  ): void {
+    if (
+      originalPrice !== null &&
+      this.decimalToCents(originalPrice) <= this.decimalToCents(price)
+    ) {
+      throw new BadRequestException(
+        'originalPrice must be greater than price',
+      );
+    }
   }
 }

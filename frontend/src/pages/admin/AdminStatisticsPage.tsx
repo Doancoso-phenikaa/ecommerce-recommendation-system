@@ -16,9 +16,9 @@ const RANGE_OPTIONS: { value: AdminStatisticsRange; label: string }[] = [
 const STATUS_META = [
   { key: 'pending', label: 'Chờ xác nhận', color: '#f59e0b' },
   { key: 'confirmed', label: 'Đã xác nhận', color: '#2563eb' },
-  { key: 'shipping', label: 'Đang giao', color: '#8b5cf6' },
+  { key: 'shipping', label: 'Đang giao', color: '#dc2626' },
   { key: 'completed', label: 'Hoàn thành', color: '#16a34a' },
-  { key: 'cancelled', label: 'Đã hủy', color: '#ef4444' },
+  { key: 'cancelled', label: 'Đã hủy', color: '#64748b' },
 ] as const;
 
 export function AdminStatisticsPage() {
@@ -74,7 +74,7 @@ export function AdminStatisticsPage() {
   return (
     <main className="admin-statistics-page">
       <header className="admin-statistics-heading">
-        <div><span>Marketplace analytics</span><h1>Thống kê toàn sàn</h1><p>Theo dõi doanh thu và hoạt động tổng thể của hệ thống.</p></div>
+        <div><span>TRUNG TÂM QUẢN TRỊ</span><h1>Thống kê toàn sàn</h1><p>Theo dõi doanh thu và hoạt động tổng thể của hệ thống.</p></div>
         <div className="admin-statistics-range" aria-label="Khoảng thời gian thống kê">
           {RANGE_OPTIONS.map((option) => (
             <button className={range === option.value ? 'is-active' : ''} disabled={isLoading || isRefreshing} key={option.value} type="button" onClick={() => setRange(option.value)}>{option.label}</button>
@@ -142,7 +142,7 @@ export function AdminStatisticsPage() {
               <header><div><span>Hiệu suất sản phẩm</span><h2>Sản phẩm bán chạy</h2></div></header>
               {statistics.topProducts.length === 0 ? <PanelEmpty message="Chưa có sản phẩm phát sinh doanh thu." /> : (
                 <div className="admin-top-products">
-                  {statistics.topProducts.map((product, index) => <article key={product.productId}><strong>{String(index + 1).padStart(2, '0')}</strong><div className="admin-top-products__image">{product.imageUrl ? <img src={product.imageUrl} alt="" /> : <span aria-hidden="true">{product.productName.charAt(0).toLocaleUpperCase('vi')}</span>}</div><div><h3>{product.productName}</h3><p>{product.shopName} · Đã bán {product.quantitySold}</p></div><span>{formatCurrency(product.revenue)}</span></article>)}
+                  {statistics.topProducts.map((product, index) => <article key={product.productId}><strong>{String(index + 1).padStart(2, '0')}</strong><div className="admin-top-products__image">{product.imageUrl ? <img src={product.imageUrl} alt={product.productName} /> : <span aria-hidden="true">{product.productName.charAt(0).toLocaleUpperCase('vi')}</span>}</div><div><h3>{product.productName}</h3><p>{product.shopName} · Đã bán {product.quantitySold}</p></div><span>{formatCurrency(product.revenue)}</span></article>)}
                 </div>
               )}
             </section>
@@ -154,7 +154,7 @@ export function AdminStatisticsPage() {
 }
 
 function MetricCard({ label, value, accent }: { label: string; value: string; accent: string }) {
-  return <article className={`admin-statistics-card is-${accent}`}><span>{label}</span><strong>{value}</strong></article>;
+  return <article className={`admin-statistics-card is-${accent}`}><div><span>{label}</span><i aria-hidden="true"><AdminMetricIcon type={accent} /></i></div><strong>{value}</strong></article>;
 }
 
 function PanelEmpty({ message }: { message: string }) {
@@ -163,6 +163,16 @@ function PanelEmpty({ message }: { message: string }) {
 
 function AdminStatisticsSkeleton() {
   return <div className="admin-statistics-loading" aria-label="Đang tải thống kê" aria-busy="true"><section>{Array.from({ length: 8 }, (_, index) => <div key={index}><i /><i /></div>)}</section><div><article /><aside /></div></div>;
+}
+
+function AdminMetricIcon({ type }: { type: string }) {
+  if (type === 'orders') return <svg viewBox="0 0 24 24"><path d="M6 3h12l1 18H5L6 3Z" /><path d="M9 8a3 3 0 0 0 6 0" /></svg>;
+  if (type === 'completed') return <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" /></svg>;
+  if (type === 'processing') return <svg viewBox="0 0 24 24"><path d="M3 7h11v10H3zM14 10h4l3 3v4h-7z" /><circle cx="7" cy="18" r="2" /><circle cx="17" cy="18" r="2" /></svg>;
+  if (type === 'users' || type === 'sellers') return <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>;
+  if (type === 'shops') return <svg viewBox="0 0 24 24"><path d="M4 10h16M5 10l1-6h12l1 6v10H5V10Z" /><path d="M9 20v-6h6v6" /></svg>;
+  if (type === 'products') return <svg viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z" /><path d="m4 7.5 8 4.5 8-4.5M12 12v9" /></svg>;
+  return <svg viewBox="0 0 24 24"><path d="M5 18V9M10 18V5M15 18v-6M20 18V3" /></svg>;
 }
 
 function formatShortDate(value: string): string {

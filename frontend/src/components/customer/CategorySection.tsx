@@ -14,7 +14,10 @@ export function CategorySection({ categories, isLoading = false, error = '' }: C
   return (
     <section className="category-section" aria-labelledby="category-title">
       <div className="market-section-heading">
-        <h2 id="category-title">Danh mục</h2>
+        <div>
+          <span>Khám phá theo nhu cầu</span>
+          <h2 id="category-title">Danh mục ngành hàng</h2>
+        </div>
       </div>
       {isLoading ? (
         <div className="category-strip category-strip--loading" aria-label="Đang tải danh mục" aria-busy="true">

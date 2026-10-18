@@ -188,7 +188,7 @@ export function SellerOrderDetailPage() {
           <section className="seller-order-actions-card">
             <span className="seller-order-actions-card__eyebrow">Trạng thái hiện tại</span>
             <h2>{ORDER_STATUS_LABELS[order.status]}</h2>
-            <p>Backend sẽ kiểm tra lại trạng thái và Payment trước khi cho phép chuyển bước.</p>
+            <p>Hãy xử lý đơn hàng theo đúng trình tự để đảm bảo quá trình giao hàng diễn ra thuận lợi.</p>
             <SellerOrderActions order={order} isBusy={isTransitioning} onSelect={setSelectedAction} />
           </section>
 

@@ -19,6 +19,7 @@ import type {
 import type { Shop } from '../../types/shop';
 import { getApiErrorMessage } from '../../utils/auth';
 import { formatCurrency } from '../../utils/format-currency';
+import { isOriginalPriceGreaterThanPrice } from '../../utils/product-price';
 import './seller-product.css';
 import './seller-product-skeleton.css';
 
@@ -86,6 +87,7 @@ export function SellerProductPage() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
+  const [originalPrice, setOriginalPrice] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [formCategoryId, setFormCategoryId] = useState('');
   const [quantity, setQuantity] = useState('0');
@@ -176,6 +178,7 @@ export function SellerProductPage() {
     setName('');
     setDescription('');
     setPrice('');
+    setOriginalPrice('');
     setImageUrl('');
     setFormCategoryId('');
     setQuantity('0');
@@ -198,6 +201,7 @@ export function SellerProductPage() {
       setName(product.name);
       setDescription(product.description ?? '');
       setPrice(product.price);
+      setOriginalPrice(product.originalPrice ?? '');
       setImageUrl(product.imageUrl ?? '');
       setFormCategoryId(product.categoryId);
       setFormMode('edit');
@@ -257,6 +261,15 @@ export function SellerProductPage() {
     if (name.trim().length > 180) return 'Tên sản phẩm không được vượt quá 180 ký tự.';
     if (!formCategoryId) return 'Vui lòng chọn danh mục.';
     if (!PRICE_PATTERN.test(price.trim())) return 'Giá phải lớn hơn 0 và có tối đa 2 chữ số thập phân.';
+    if (originalPrice.trim() && !PRICE_PATTERN.test(originalPrice.trim())) {
+      return 'Giá gốc phải lớn hơn 0 và có tối đa 2 chữ số thập phân.';
+    }
+    if (
+      originalPrice.trim() &&
+      !isOriginalPriceGreaterThanPrice(price.trim(), originalPrice.trim())
+    ) {
+      return 'Giá gốc phải lớn hơn giá bán.';
+    }
     if (formMode === 'create' && (!/^\d+$/.test(quantity) || Number(quantity) < 0)) {
       return 'Số lượng tồn kho phải là số nguyên không âm.';
     }
@@ -282,6 +295,7 @@ export function SellerProductPage() {
           name: name.trim(),
           description: description.trim() || undefined,
           price: price.trim(),
+          originalPrice: originalPrice.trim() || null,
           imageUrl: imageUrl.trim() || undefined,
           quantity: Number(quantity),
         });
@@ -296,6 +310,7 @@ export function SellerProductPage() {
           name: name.trim(),
           description: description.trim(),
           price: price.trim(),
+          originalPrice: originalPrice.trim() || null,
           imageUrl: imageUrl.trim(),
         });
         setSuccessMessage(
@@ -439,8 +454,11 @@ export function SellerProductPage() {
                 </label>
               </form>
               <label>
-                <span>Danh mục</span>
-                <select value={categoryId} onChange={(event) => changeCategory(event.target.value)}>
+                <select
+                  aria-label="Lọc theo danh mục"
+                  value={categoryId}
+                  onChange={(event) => changeCategory(event.target.value)}
+                >
                   <option value="">Tất cả danh mục</option>
                   {categories.map((category) => <option value={category.categoryId} key={category.categoryId}>{category.name}</option>)}
                 </select>
@@ -493,7 +511,7 @@ export function SellerProductPage() {
                               </div>
                             </td>
                             <td data-label="Danh mục">{product.category?.name ?? 'Không xác định'}</td>
-                            <td data-label="Giá niêm yết"><strong className="seller-product-price">{formatCurrency(product.price)}</strong></td>
+                            <td data-label="Giá niêm yết"><strong className="seller-product-price">{formatCurrency(product.price)}</strong>{product.originalPrice && <del className="seller-product-original-price">{formatCurrency(product.originalPrice)}</del>}</td>
                             <td data-label="Kho khả dụng">
                               <strong className={availableQuantity === 0 ? 'seller-product-stock--empty' : ''}>{availableQuantity}</strong>
                               <small>{product.inventory?.quantity ?? 0} tổng · {product.inventory?.reservedQuantity ?? 0} giữ chỗ</small>
@@ -533,6 +551,7 @@ export function SellerProductPage() {
           name={name}
           description={description}
           price={price}
+          originalPrice={originalPrice}
           imageUrl={imageUrl}
           categoryId={formCategoryId}
           quantity={quantity}
@@ -541,6 +560,7 @@ export function SellerProductPage() {
           onNameChange={setName}
           onDescriptionChange={setDescription}
           onPriceChange={setPrice}
+          onOriginalPriceChange={setOriginalPrice}
           onImageUrlChange={setImageUrl}
           onCategoryChange={setFormCategoryId}
           onQuantityChange={setQuantity}
@@ -630,6 +650,7 @@ interface ProductFormModalProps {
   name: string;
   description: string;
   price: string;
+  originalPrice: string;
   imageUrl: string;
   categoryId: string;
   quantity: string;
@@ -638,6 +659,7 @@ interface ProductFormModalProps {
   onNameChange: (value: string) => void;
   onDescriptionChange: (value: string) => void;
   onPriceChange: (value: string) => void;
+  onOriginalPriceChange: (value: string) => void;
   onImageUrlChange: (value: string) => void;
   onCategoryChange: (value: string) => void;
   onQuantityChange: (value: string) => void;
@@ -656,6 +678,7 @@ function ProductFormModal(props: ProductFormModalProps) {
             <label>Tên sản phẩm <b>*</b><input value={props.name} maxLength={180} onChange={(event) => props.onNameChange(event.target.value)} /></label>
             <label>Danh mục <b>*</b><select value={props.categoryId} onChange={(event) => props.onCategoryChange(event.target.value)}><option value="">Chọn danh mục</option>{currentCategoryIsInactive && props.editingProduct?.category && <option value={props.editingProduct.categoryId}>{props.editingProduct.category.name} (đã tạm ngưng)</option>}{props.categories.map((category) => <option value={category.categoryId} key={category.categoryId}>{category.name}</option>)}</select></label>
             <label>Giá bán <b>*</b><input inputMode="decimal" value={props.price} placeholder="Ví dụ: 250000" onChange={(event) => props.onPriceChange(event.target.value)} /></label>
+            <label>Giá gốc <small>Không bắt buộc</small><input inputMode="decimal" value={props.originalPrice} placeholder="Ví dụ: 350000" onChange={(event) => props.onOriginalPriceChange(event.target.value)} /><small>Giá gốc được dùng để hiển thị giá trước khi giảm.</small></label>
             {props.mode === 'create' && <label>Số lượng ban đầu <b>*</b><input type="number" min="0" step="1" value={props.quantity} onChange={(event) => props.onQuantityChange(event.target.value)} /></label>}
             <label className="is-wide">URL hình ảnh <small>Không bắt buộc</small><input type="url" value={props.imageUrl} placeholder="https://..." onChange={(event) => props.onImageUrlChange(event.target.value)} /></label>
             <label className="is-wide">Mô tả <small>Không bắt buộc</small><textarea rows={5} value={props.description} onChange={(event) => props.onDescriptionChange(event.target.value)} /></label>

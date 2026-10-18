@@ -11,6 +11,7 @@ export interface PublicProduct {
   name: string;
   description: string | null;
   price: string;
+  originalPrice: string | null;
   imageUrl: string | null;
   approvedAt: string | null;
   inventory: ProductInventory;
@@ -57,6 +58,7 @@ export interface SellerProduct {
   name: string;
   description: string | null;
   price: string;
+  originalPrice: string | null;
   imageUrl: string | null;
   status: ProductStatus;
   rejectionReason: string | null;
@@ -85,6 +87,7 @@ export interface CreateSellerProductRequest {
   name: string;
   description?: string;
   price: string;
+  originalPrice?: string | null;
   imageUrl?: string;
   quantity: number;
 }
@@ -94,6 +97,7 @@ export interface UpdateSellerProductRequest {
   name?: string;
   description?: string;
   price?: string;
+  originalPrice?: string | null;
   imageUrl?: string;
 }
 
@@ -104,6 +108,7 @@ export interface ProductMutationResponse {
   name: string;
   description: string | null;
   price: string;
+  originalPrice: string | null;
   imageUrl: string | null;
   status: ProductStatus;
   rejectionReason: string | null;
