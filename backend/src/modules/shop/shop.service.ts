@@ -12,6 +12,8 @@ import {
   QueryFailedError,
   Repository,
 } from 'typeorm';
+import { Review } from '../review/entities/review.entity.js';
+import { ReviewStatus } from '../review/enums/review-status.enum.js';
 import { Seller } from '../seller/entities/seller.entity.js';
 import { SellerStatus } from '../seller/enums/seller-status.enum.js';
 import { User } from '../user/entities/user.entity.js';
@@ -35,6 +37,8 @@ export class ShopService {
     private readonly shopRepository: Repository<Shop>,
     @InjectRepository(Seller)
     private readonly sellerRepository: Repository<Seller>,
+    @InjectRepository(Review)
+    private readonly reviewRepository: Repository<Review>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -212,8 +216,17 @@ export class ShopService {
       .take(limit)
       .getManyAndCount();
 
+    const ratingsByShopId = await this.getActiveReviewRatingsByShopIds(
+      shops.map((shop) => shop.shopId),
+    );
+
     return {
-      data: shops.map((shop) => this.buildAdminShopListResponse(shop)),
+      data: shops.map((shop) =>
+        this.buildAdminShopListResponse(
+          shop,
+          ratingsByShopId.get(shop.shopId) ?? '0',
+        ),
+      ),
       pagination: {
         page,
         limit,
@@ -253,7 +266,14 @@ export class ShopService {
       throw new NotFoundException('Shop not found');
     }
 
-    return this.buildAdminShopDetailResponse(shop);
+    const ratingsByShopId = await this.getActiveReviewRatingsByShopIds([
+      shop.shopId,
+    ]);
+
+    return this.buildAdminShopDetailResponse(
+      shop,
+      ratingsByShopId.get(shop.shopId) ?? '0',
+    );
   }
 
   async approveShop(shopId: string) {
@@ -413,13 +433,35 @@ export class ShopService {
     }
   }
 
-  private buildAdminShopListResponse(shop: Shop) {
+  private async getActiveReviewRatingsByShopIds(
+    shopIds: string[],
+  ): Promise<Map<string, string>> {
+    if (shopIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.reviewRepository
+      .createQueryBuilder('review')
+      .innerJoin('review.product', 'product')
+      .select('product.shopId', 'shopId')
+      .addSelect('ROUND(AVG(review.rating)::numeric, 2)', 'rating')
+      .where('product.shopId IN (:...shopIds)', { shopIds })
+      .andWhere('review.status = :reviewStatus', {
+        reviewStatus: ReviewStatus.ACTIVE,
+      })
+      .groupBy('product.shopId')
+      .getRawMany<{ shopId: string; rating: string }>();
+
+    return new Map(rows.map((row) => [row.shopId, row.rating]));
+  }
+
+  private buildAdminShopListResponse(shop: Shop, rating: string) {
     return {
       shopId: shop.shopId,
       name: shop.name,
       description: shop.description,
       logoUrl: shop.logoUrl,
-      rating: shop.rating,
+      rating,
       status: shop.status,
       rejectionReason: shop.rejectionReason,
       createdAt: shop.createdAt,
@@ -432,13 +474,13 @@ export class ShopService {
     };
   }
 
-  private buildAdminShopDetailResponse(shop: Shop) {
+  private buildAdminShopDetailResponse(shop: Shop, rating: string) {
     return {
       shopId: shop.shopId,
       name: shop.name,
       description: shop.description,
       logoUrl: shop.logoUrl,
-      rating: shop.rating,
+      rating,
       status: shop.status,
       rejectionReason: shop.rejectionReason,
       createdAt: shop.createdAt,
