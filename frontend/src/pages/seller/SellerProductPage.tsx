@@ -439,8 +439,11 @@ export function SellerProductPage() {
                 </label>
               </form>
               <label>
-                <span>Danh mục</span>
-                <select value={categoryId} onChange={(event) => changeCategory(event.target.value)}>
+                <select
+                  aria-label="Lọc theo danh mục"
+                  value={categoryId}
+                  onChange={(event) => changeCategory(event.target.value)}
+                >
                   <option value="">Tất cả danh mục</option>
                   {categories.map((category) => <option value={category.categoryId} key={category.categoryId}>{category.name}</option>)}
                 </select>

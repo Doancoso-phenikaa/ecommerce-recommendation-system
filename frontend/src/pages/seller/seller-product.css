@@ -339,13 +339,19 @@
   height: 100%;
   padding: 0 0.75rem;
   color: #fff;
-  background: #1e1e24;
+  background: #dc2626;
   border: 0;
   border-radius: 0 0.42rem 0.42rem 0;
   font-family: var(--font-body);
   font-size: 0.61rem;
   font-weight: 600;
   cursor: pointer;
+  transition: background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.seller-product-search button:hover {
+  background: #b91c1c;
+  box-shadow: 0 3px 10px rgba(220, 38, 38, 0.2);
 }
 
 .seller-product-toolbar select {

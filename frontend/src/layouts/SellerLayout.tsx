@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import './seller-layout.css';
+import '../pages/seller/seller-management-readability.css';
 
 export function SellerLayout() {
   const navigate = useNavigate();
