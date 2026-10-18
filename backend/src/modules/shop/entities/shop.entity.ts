@@ -28,6 +28,9 @@ export class Shop {
   @Column({ name: 'description', type: 'text', nullable: true })
   description: string | null;
 
+  @Column({ name: 'logo_url', type: 'text', nullable: true })
+  logoUrl: string | null;
+
   @Column({
     name: 'rating',
     type: 'numeric',

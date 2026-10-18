@@ -43,12 +43,6 @@ export function SellerLayout() {
           </NavLink>
         </nav>
 
-        <div className="seller-sidebar__account">
-          <div className="seller-account-avatar" aria-hidden="true">
-            {user?.fullName.charAt(0).toLocaleUpperCase('vi')}
-          </div>
-          <div><strong>{user?.fullName}</strong><span>Tài khoản người bán</span></div>
-        </div>
       </aside>
 
       {isNavigationOpen && (
@@ -58,11 +52,45 @@ export function SellerLayout() {
       <div className="seller-workspace">
         <header className="seller-topbar">
           <button className="seller-menu-button" type="button" aria-label="Mở menu" aria-expanded={isNavigationOpen} onClick={() => setIsNavigationOpen((current) => !current)}>☰</button>
-          <div><span>Kênh người bán</span><strong>{user?.fullName}</strong></div>
+          <NavLink className="seller-topbar-profile" to="/seller/profile" aria-label="Hồ sơ cá nhân">
+            <SellerAccountAvatar
+              key={user?.avatarUrl ?? 'fallback'}
+              avatarUrl={user?.avatarUrl ?? null}
+              fullName={user?.fullName ?? ''}
+            />
+            <span className="seller-topbar-profile__identity">
+              <span>Kênh người bán</span>
+              <strong>{user?.fullName}</strong>
+            </span>
+          </NavLink>
           <button className="seller-logout" type="button" onClick={handleLogout}>Đăng xuất</button>
         </header>
         <Outlet />
       </div>
     </div>
+  );
+}
+
+function SellerAccountAvatar({
+  avatarUrl,
+  fullName,
+}: {
+  avatarUrl: string | null;
+  fullName: string;
+}) {
+  const [hasImageError, setHasImageError] = useState(false);
+  const initial = fullName.trim().charAt(0).toLocaleUpperCase('vi') || 'M';
+
+  if (!avatarUrl || hasImageError) {
+    return <span className="seller-account-avatar" aria-hidden="true">{initial}</span>;
+  }
+
+  return (
+    <img
+      className="seller-account-avatar"
+      src={avatarUrl}
+      alt=""
+      onError={() => setHasImageError(true)}
+    />
   );
 }

@@ -14,6 +14,9 @@ export interface AuthContextValue {
   refreshToken: string | null;
   isAuthenticated: boolean;
   login: (data: LoginResponse) => void;
+  updateUser: (
+    data: Pick<AuthUser, 'fullName' | 'phone' | 'avatarUrl'>,
+  ) => void;
   logout: () => void;
 }
 
@@ -58,6 +61,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setRefreshToken(data.refreshToken);
   }, []);
 
+  const updateUser = useCallback(
+    (data: Pick<AuthUser, 'fullName' | 'phone' | 'avatarUrl'>) => {
+      setUser((currentUser) => {
+        if (!currentUser) return currentUser;
+
+        const updatedUser = { ...currentUser, ...data };
+        localStorage.setItem(
+          AUTH_STORAGE_KEYS.user,
+          JSON.stringify(updatedUser),
+        );
+        return updatedUser;
+      });
+    },
+    [],
+  );
+
   const logout = useCallback(() => {
     Object.values(AUTH_STORAGE_KEYS).forEach((key) => {
       localStorage.removeItem(key);
@@ -75,9 +94,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       refreshToken,
       isAuthenticated: Boolean(user && accessToken),
       login,
+      updateUser,
       logout,
     }),
-    [accessToken, login, logout, refreshToken, user],
+    [accessToken, login, logout, refreshToken, updateUser, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

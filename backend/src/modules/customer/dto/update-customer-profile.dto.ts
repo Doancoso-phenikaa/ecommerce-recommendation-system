@@ -1,5 +1,11 @@
 import { Transform } from 'class-transformer';
-import { IsNotEmpty, IsString, MaxLength, ValidateIf } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsUrl,
+  MaxLength,
+  ValidateIf,
+} from 'class-validator';
 
 const trimString = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
@@ -17,6 +23,12 @@ export class UpdateCustomerProfileDto {
   @IsString()
   @MaxLength(20)
   phone?: string;
+
+  @Transform(trimString)
+  @ValidateIf((_object, value) => value !== undefined && value !== '')
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
+  @MaxLength(2048)
+  avatarUrl?: string;
 
   @Transform(trimString)
   @ValidateIf((_object, value) => value !== undefined)
