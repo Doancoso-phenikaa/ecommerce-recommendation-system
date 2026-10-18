@@ -16,7 +16,6 @@ import {
   PAYMENT_STATUS_LABELS,
 } from '../../utils/order';
 import './seller-order.css';
-import './seller-order-detail.css';
 
 type SellerOrderAction = 'confirm' | 'shipping' | 'cancel';
 
@@ -253,7 +252,7 @@ function SellerOrderActionModal({ action, orderId, isSubmitting, onClose, onConf
 }
 
 function SellerOrderDetailHeading({ orderId, isRefreshing = false }: { orderId: string; isRefreshing?: boolean }) {
-  return <header className="seller-order-heading seller-order-detail-heading"><div><span>Đơn hàng #{orderId || '—'}</span><h1>Chi tiết đơn hàng</h1><p>{isRefreshing ? 'Đang cập nhật trạng thái mới nhất...' : 'Kiểm tra thông tin và xử lý đơn theo đúng trạng thái.'}</p></div><Link to="/seller/orders">Quay lại danh sách</Link></header>;
+  return <header className="seller-order-heading seller-order-detail-heading"><div><span>KÊNH NGƯỜI BÁN · ĐƠN HÀNG #{orderId || '—'}</span><h1>Chi tiết đơn hàng</h1><p>{isRefreshing ? 'Đang cập nhật trạng thái mới nhất...' : 'Kiểm tra thông tin và xử lý đơn theo đúng trạng thái.'}</p></div><Link to="/seller/orders">← Quay lại danh sách</Link></header>;
 }
 
 function SellerOrderDetailSkeleton() {
