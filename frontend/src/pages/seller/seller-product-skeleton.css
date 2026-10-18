@@ -5,7 +5,7 @@
 
 .seller-product-initial-skeleton__summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.7rem;
 }
 
@@ -43,8 +43,17 @@
 }
 
 @media (max-width: 760px) {
-  .seller-product-initial-skeleton__summary,
+  .seller-product-initial-skeleton__summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .seller-product-initial-skeleton__toolbar {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .seller-product-initial-skeleton__summary {
     grid-template-columns: 1fr;
   }
 }

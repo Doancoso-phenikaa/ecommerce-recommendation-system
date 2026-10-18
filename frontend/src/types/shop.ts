@@ -3,6 +3,7 @@ export type ShopStatus = 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED';
 export interface PublicShop {
   shopId: string;
   name: string;
+  logoUrl: string | null;
 }
 
 export interface PublicShopListResponse {
@@ -14,6 +15,7 @@ export interface Shop {
   sellerId: string;
   name: string;
   description: string | null;
+  logoUrl: string | null;
   rating: string;
   status: ShopStatus;
   rejectionReason: string | null;
@@ -24,11 +26,13 @@ export interface Shop {
 export interface CreateShopRequest {
   name: string;
   description?: string;
+  logoUrl?: string;
 }
 
 export interface UpdateShopRequest {
   name?: string;
   description?: string;
+  logoUrl?: string;
 }
 
 export interface AdminShopSellerSummary {
@@ -41,6 +45,7 @@ export interface AdminShopListItem {
   shopId: string;
   name: string;
   description: string | null;
+  logoUrl: string | null;
   rating: string;
   status: ShopStatus;
   rejectionReason: string | null;

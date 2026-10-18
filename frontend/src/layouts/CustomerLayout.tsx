@@ -46,10 +46,17 @@ export function CustomerLayout() {
             <Link className="customer-action" to="/cart" aria-label="Giỏ hàng" data-count="">
               <span aria-hidden="true">▢</span><small>Giỏ hàng</small>
             </Link>
-            <div className="customer-account__identity">
+            <Link className="customer-account-link" to="/profile" aria-label="Hồ sơ của tôi">
+              <CustomerHeaderAvatar
+                key={user?.avatarUrl ?? 'fallback'}
+                avatarUrl={user?.avatarUrl ?? null}
+                fullName={user?.fullName ?? ''}
+              />
+              <span className="customer-account__identity">
               <span>Xin chào</span>
               <strong>{user?.fullName}</strong>
-            </div>
+              </span>
+            </Link>
             <button className="customer-logout" type="button" onClick={handleLogout}>Đăng xuất</button>
           </div>
         </div>
@@ -57,6 +64,30 @@ export function CustomerLayout() {
       <Outlet />
       <CustomerFooter />
     </div>
+  );
+}
+
+function CustomerHeaderAvatar({
+  avatarUrl,
+  fullName,
+}: {
+  avatarUrl: string | null;
+  fullName: string;
+}) {
+  const [hasImageError, setHasImageError] = useState(false);
+  const initial = fullName.trim().charAt(0).toLocaleUpperCase('vi') || 'M';
+
+  if (!avatarUrl || hasImageError) {
+    return <span className="customer-account-avatar" aria-hidden="true">{initial}</span>;
+  }
+
+  return (
+    <img
+      className="customer-account-avatar"
+      src={avatarUrl}
+      alt=""
+      onError={() => setHasImageError(true)}
+    />
   );
 }
 

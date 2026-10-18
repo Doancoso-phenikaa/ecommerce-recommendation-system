@@ -77,6 +77,10 @@ export class CustomerService {
           user.phone = phone;
         }
 
+        if (updateCustomerProfileDto.avatarUrl !== undefined) {
+          user.avatarUrl = updateCustomerProfileDto.avatarUrl.trim() || null;
+        }
+
         if (updateCustomerProfileDto.shippingAddress !== undefined) {
           customer.shippingAddress =
             updateCustomerProfileDto.shippingAddress.trim() || null;
@@ -103,6 +107,7 @@ export class CustomerService {
       fullName: user.fullName,
       email: user.email,
       phone: user.phone,
+      avatarUrl: user.avatarUrl,
       shippingAddress: customer.shippingAddress,
       isActive: user.isActive,
       createdAt: user.createdAt,

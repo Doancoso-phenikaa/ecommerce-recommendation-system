@@ -13,12 +13,15 @@ import { PaymentResultPage } from './pages/customer/PaymentResultPage';
 import { OrderHistoryPage } from './pages/customer/OrderHistoryPage';
 import { OrderDetailPage } from './pages/customer/OrderDetailPage';
 import { WishlistPage } from './pages/customer/WishlistPage';
+import { CustomerProfilePage } from './pages/customer/CustomerProfilePage';
 import { SellerDashboardPage } from './pages/seller/SellerDashboardPage';
+import { SellerShopPage } from './pages/seller/SellerShopPage';
 import { SellerProductPage } from './pages/seller/SellerProductPage';
 import { SellerOrderPage } from './pages/seller/SellerOrderPage';
 import { SellerOrderDetailPage } from './pages/seller/SellerOrderDetailPage';
 import { SellerReviewPage } from './pages/seller/SellerReviewPage';
 import { SellerStatisticsPage } from './pages/seller/SellerStatisticsPage';
+import { SellerProfilePage } from './pages/seller/SellerProfilePage';
 import { CustomerLayout } from './layouts/CustomerLayout';
 import { SellerLayout } from './layouts/SellerLayout';
 import { AdminLayout } from './layouts/AdminLayout';
@@ -57,17 +60,19 @@ function App() {
           <Route path="/checkout/payment/result" element={<PaymentResultPage />} />
           <Route path="/orders" element={<OrderHistoryPage />} />
           <Route path="/orders/:orderGroupId" element={<OrderDetailPage />} />
+          <Route path="/profile" element={<CustomerProfilePage />} />
         </Route>
       </Route>
       <Route element={<RoleRoute allowedRoles={['SELLER']} />}>
         <Route path="/seller" element={<SellerLayout />}>
           <Route index element={<SellerDashboardPage />} />
-          <Route path="shop" element={<SellerDashboardPage />} />
+          <Route path="shop" element={<SellerShopPage />} />
           <Route path="products" element={<SellerProductPage />} />
           <Route path="orders" element={<SellerOrderPage />} />
           <Route path="orders/:orderId" element={<SellerOrderDetailPage />} />
           <Route path="reviews" element={<SellerReviewPage />} />
           <Route path="statistics" element={<SellerStatisticsPage />} />
+          <Route path="profile" element={<SellerProfilePage />} />
         </Route>
       </Route>
       <Route element={<RoleRoute allowedRoles={['ADMIN']} />}>

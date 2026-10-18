@@ -41,7 +41,7 @@ export class ShopService {
   async getActiveShops(): Promise<PublicShopListResponse> {
     const shops = await this.shopRepository
       .createQueryBuilder('shop')
-      .select(['shop.shopId', 'shop.name'])
+      .select(['shop.shopId', 'shop.name', 'shop.logoUrl'])
       .where('shop.status = :status', { status: ShopStatus.ACTIVE })
       .orderBy('shop.name', 'ASC')
       .addOrderBy('shop.shopId', 'ASC')
@@ -51,6 +51,7 @@ export class ShopService {
       data: shops.map((shop) => ({
         shopId: shop.shopId,
         name: shop.name,
+        logoUrl: shop.logoUrl,
       })),
     };
   }
@@ -80,6 +81,10 @@ export class ShopService {
 
       if (updateShopDto.description !== undefined) {
         shop.description = updateShopDto.description.trim() || null;
+      }
+
+      if (updateShopDto.logoUrl !== undefined) {
+        shop.logoUrl = updateShopDto.logoUrl.trim() || null;
       }
 
       const updatedShop = await manager.getRepository(Shop).save(shop);
@@ -147,6 +152,7 @@ export class ShopService {
           sellerId: seller.sellerId,
           name: createShopDto.name,
           description: createShopDto.description?.trim() || null,
+          logoUrl: createShopDto.logoUrl?.trim() || null,
           rating: '0',
           status: ShopStatus.PENDING,
         }),
@@ -172,6 +178,7 @@ export class ShopService {
         'shop.shopId',
         'shop.name',
         'shop.description',
+        'shop.logoUrl',
         'shop.rating',
         'shop.status',
         'shop.rejectionReason',
@@ -225,6 +232,7 @@ export class ShopService {
         'shop.shopId',
         'shop.name',
         'shop.description',
+        'shop.logoUrl',
         'shop.rating',
         'shop.status',
         'shop.rejectionReason',
@@ -410,6 +418,7 @@ export class ShopService {
       shopId: shop.shopId,
       name: shop.name,
       description: shop.description,
+      logoUrl: shop.logoUrl,
       rating: shop.rating,
       status: shop.status,
       rejectionReason: shop.rejectionReason,
@@ -428,6 +437,7 @@ export class ShopService {
       shopId: shop.shopId,
       name: shop.name,
       description: shop.description,
+      logoUrl: shop.logoUrl,
       rating: shop.rating,
       status: shop.status,
       rejectionReason: shop.rejectionReason,
@@ -453,6 +463,7 @@ export class ShopService {
       sellerId: shop.sellerId,
       name: shop.name,
       description: shop.description,
+      logoUrl: shop.logoUrl,
       rating: shop.rating,
       status: shop.status,
       rejectionReason: shop.rejectionReason,

@@ -40,6 +40,9 @@ export class User {
   })
   phone: string | null;
 
+  @Column({ name: 'avatar_url', type: 'text', nullable: true })
+  avatarUrl: string | null;
+
   @Column({
     name: 'role',
     type: 'enum',
