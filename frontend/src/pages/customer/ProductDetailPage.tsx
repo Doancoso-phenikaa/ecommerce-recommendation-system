@@ -479,6 +479,26 @@ function ProductDetailContent({ product, categoryName, relatedProducts }: { prod
                       {'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}
                     </span>
                     {review.comment && <p>{review.comment}</p>}
+                    {review.sellerReply && (
+                      <div className="review-shop-response">
+                        {product.shop?.logoUrl ? (
+                          <img src={product.shop.logoUrl} alt={`Logo ${product.shop.name}`} loading="lazy" />
+                        ) : (
+                          <span aria-hidden="true">
+                            {(product.shop?.name ?? 'M').charAt(0).toLocaleUpperCase('vi')}
+                          </span>
+                        )}
+                        <div>
+                          <div className="review-shop-response__heading">
+                            <strong>Phản hồi từ cửa hàng</strong>
+                            {review.sellerRepliedAt && (
+                              <time dateTime={review.sellerRepliedAt}>{formatOrderDate(review.sellerRepliedAt)}</time>
+                            )}
+                          </div>
+                          <p>{review.sellerReply}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </article>
               ))}

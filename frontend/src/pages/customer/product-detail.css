@@ -69,6 +69,66 @@
 .product-review-state button { margin-top: .25rem; padding: .42rem .65rem; color: #fff; background: #f97316; border: 1px solid #f97316; border-radius: .4rem; font-size: .68rem; font-weight: 750; cursor: pointer; }
 .product-review-state button:hover { background: #ea580c; border-color: #ea580c; }
 
+.review-shop-response {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: .65rem;
+  margin-top: .65rem;
+  padding: .7rem .75rem;
+  background: #f8f5f5;
+  border-left: 3px solid #dc2626;
+  border-radius: 0 .5rem .5rem 0;
+}
+
+.review-shop-response > img,
+.review-shop-response > span {
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  object-fit: cover;
+  color: #fff;
+  background: #dc2626;
+  border-radius: .42rem;
+  font-family: var(--font-heading);
+  font-size: .72rem;
+  font-weight: 700;
+}
+
+.review-shop-response__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.review-shop-response__heading strong {
+  color: #991b1b;
+  font-size: .68rem;
+  font-weight: 650;
+}
+
+.review-shop-response__heading time {
+  color: #9ca3af;
+  font-size: .6rem;
+}
+
+.review-list article .review-shop-response p {
+  margin: .25rem 0 0;
+  color: #4b5563;
+  font-size: .72rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 430px) {
+  .review-shop-response__heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: .12rem;
+  }
+}
+
 /* Shop summary: public-safe data only, aligned with the marketplace reference. */
 .shop-information {
   display: grid;

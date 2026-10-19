@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getSellerReviews } from '../../api/seller-review.api';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { getSellerReviews, replyToSellerReview } from '../../api/seller-review.api';
 import type {
   ProductReviewSummary,
   SellerReviewItem,
@@ -45,6 +45,10 @@ export function SellerReviewPage() {
   const [selectedProductId, setSelectedProductId] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+  const [replyTarget, setReplyTarget] = useState<SellerReviewItem | null>(null);
+  const [replyDraft, setReplyDraft] = useState('');
+  const [replyError, setReplyError] = useState('');
+  const [isReplySubmitting, setIsReplySubmitting] = useState(false);
   const requestIdRef = useRef(0);
 
   const filters = useMemo(() => ({
@@ -105,6 +109,52 @@ export function SellerReviewPage() {
   const clearFilters = () => {
     setSelectedRating(0);
     setSelectedProductId('');
+  };
+
+  const openReplyModal = (review: SellerReviewItem) => {
+    setReplyTarget(review);
+    setReplyDraft(review.sellerReply ?? '');
+    setReplyError('');
+  };
+
+  const closeReplyModal = () => {
+    if (isReplySubmitting) return;
+    setReplyTarget(null);
+    setReplyDraft('');
+    setReplyError('');
+  };
+
+  const handleReplySubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!replyTarget || isReplySubmitting) return;
+
+    const reply = replyDraft.trim();
+    if (!reply) {
+      setReplyError('Vui lòng nhập nội dung phản hồi.');
+      return;
+    }
+
+    setIsReplySubmitting(true);
+    setReplyError('');
+
+    try {
+      const updatedReview = await replyToSellerReview(replyTarget.reviewId, { reply });
+      setReviews((currentReviews) => currentReviews.map((review) =>
+        review.reviewId === replyTarget.reviewId
+          ? {
+              ...review,
+              sellerReply: updatedReview.sellerReply,
+              sellerRepliedAt: updatedReview.sellerRepliedAt,
+            }
+          : review,
+      ));
+      setReplyTarget(null);
+      setReplyDraft('');
+    } catch (error: unknown) {
+      setReplyError(getApiErrorMessage(error, 'Không thể lưu phản hồi.'));
+    } finally {
+      setIsReplySubmitting(false);
+    }
   };
 
   return (
@@ -209,16 +259,71 @@ export function SellerReviewPage() {
                   <span>Sản phẩm</span>
                   <span>Khách hàng</span>
                   <span>Đánh giá</span>
-                  <span>Nội dung phản hồi</span>
+                  <span>Nội dung & phản hồi</span>
                   <span>Đơn hàng / Ngày</span>
                 </div>
                 <section className="seller-review-list">
-                  {reviews.map((review) => <SellerReviewRow review={review} key={review.reviewId} />)}
+                  {reviews.map((review) => (
+                    <SellerReviewRow
+                      review={review}
+                      onReply={openReplyModal}
+                      key={review.reviewId}
+                    />
+                  ))}
                 </section>
               </div>
             )}
           </section>
         </>
+      )}
+
+      {replyTarget && (
+        <div
+          className="seller-review-reply-modal"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeReplyModal();
+          }}
+        >
+          <section role="dialog" aria-modal="true" aria-labelledby="seller-reply-title">
+            <header>
+              <div>
+                <span>Đánh giá của {replyTarget.customerName}</span>
+                <h2 id="seller-reply-title">
+                  {replyTarget.sellerReply ? 'Chỉnh sửa phản hồi' : 'Phản hồi khách hàng'}
+                </h2>
+              </div>
+              <button type="button" onClick={closeReplyModal} disabled={isReplySubmitting} aria-label="Đóng">×</button>
+            </header>
+            <div className="seller-review-reply-modal__context">
+              <strong>{replyTarget.productName}</strong>
+              <p>{replyTarget.comment || 'Khách hàng không để lại nhận xét.'}</p>
+            </div>
+            <form onSubmit={(event) => void handleReplySubmit(event)}>
+              <label htmlFor="seller-review-reply">
+                <span>Phản hồi của cửa hàng</span>
+                <textarea
+                  id="seller-review-reply"
+                  value={replyDraft}
+                  onChange={(event) => setReplyDraft(event.target.value)}
+                  maxLength={1000}
+                  rows={5}
+                  autoFocus
+                  disabled={isReplySubmitting}
+                  placeholder="Cảm ơn bạn đã tin tưởng và ủng hộ gian hàng..."
+                />
+              </label>
+              <div className="seller-review-reply-modal__counter">{replyDraft.length}/1000</div>
+              {replyError && <p role="alert">{replyError}</p>}
+              <footer>
+                <button type="button" onClick={closeReplyModal} disabled={isReplySubmitting}>Hủy</button>
+                <button type="submit" disabled={isReplySubmitting || !replyDraft.trim()}>
+                  {isReplySubmitting ? 'Đang gửi...' : 'Gửi phản hồi'}
+                </button>
+              </footer>
+            </form>
+          </section>
+        </div>
       )}
     </main>
   );
@@ -241,7 +346,13 @@ function ReviewSummaryCard({ label, value, suffix, helper, tone, icon }: {
   );
 }
 
-function SellerReviewRow({ review }: { review: SellerReviewItem }) {
+function SellerReviewRow({
+  review,
+  onReply,
+}: {
+  review: SellerReviewItem;
+  onReply: (review: SellerReviewItem) => void;
+}) {
   return (
     <article className="seller-review-row">
       <div className="seller-review-product" data-label="Sản phẩm">
@@ -264,9 +375,23 @@ function SellerReviewRow({ review }: { review: SellerReviewItem }) {
         </span>
         <strong>{review.rating}.0 / 5</strong>
       </div>
-      <p className="seller-review-comment" data-label="Nội dung phản hồi">
-        {review.comment || 'Khách hàng không để lại nhận xét.'}
-      </p>
+      <div className="seller-review-feedback" data-label="Nội dung & phản hồi">
+        <p className="seller-review-comment">
+          {review.comment || 'Khách hàng không để lại nhận xét.'}
+        </p>
+        {review.sellerReply && (
+          <div className="seller-review-shop-reply">
+            <strong>Phản hồi của cửa hàng</strong>
+            <p>{review.sellerReply}</p>
+            {review.sellerRepliedAt && (
+              <time dateTime={review.sellerRepliedAt}>{formatOrderDate(review.sellerRepliedAt)}</time>
+            )}
+          </div>
+        )}
+        <button type="button" onClick={() => onReply(review)}>
+          {review.sellerReply ? 'Chỉnh sửa phản hồi' : 'Phản hồi'}
+        </button>
+      </div>
       <div className="seller-review-meta" data-label="Đơn hàng / Ngày">
         <strong>Đơn hàng #{review.orderId}</strong>
         <time dateTime={review.createdAt}>{formatOrderDate(review.createdAt)}</time>

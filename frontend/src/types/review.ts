@@ -6,6 +6,8 @@ export interface Review {
   orderId: string;
   rating: number;
   comment: string | null;
+  sellerReply: string | null;
+  sellerRepliedAt: string | null;
   status: ReviewStatus;
   createdAt: string;
   updatedAt: string;
@@ -33,6 +35,8 @@ export interface PublicProductReview {
   rating: number;
   comment: string | null;
   customerName: string;
+  sellerReply: string | null;
+  sellerRepliedAt: string | null;
   createdAt: string;
 }
 
@@ -55,7 +59,13 @@ export interface SellerReviewItem {
   rating: number;
   comment: string | null;
   customerName: string;
+  sellerReply: string | null;
+  sellerRepliedAt: string | null;
   createdAt: string;
+}
+
+export interface SellerReplyReviewRequest {
+  reply: string;
 }
 
 export interface SellerReviewResponse {
