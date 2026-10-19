@@ -68,3 +68,215 @@
 .product-review-state.is-error { color: #991b1b; background: #fef2f2; border-color: #fecaca; }
 .product-review-state button { margin-top: .25rem; padding: .42rem .65rem; color: #fff; background: #f97316; border: 1px solid #f97316; border-radius: .4rem; font-size: .68rem; font-weight: 750; cursor: pointer; }
 .product-review-state button:hover { background: #ea580c; border-color: #ea580c; }
+
+/* Shop summary: public-safe data only, aligned with the marketplace reference. */
+.shop-information {
+  display: grid;
+  grid-template-columns: minmax(19rem, 1.25fr) minmax(28rem, 1fr);
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1.2rem 1.35rem;
+  border-color: #ece7e7;
+  border-radius: .7rem;
+  box-shadow: 0 .45rem 1.4rem rgba(30, 30, 36, .035);
+}
+
+.shop-information__identity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: .9rem;
+  padding-right: 1.5rem;
+  border-right: 1px solid #ece7e7;
+}
+
+.shop-information__avatar {
+  width: 5.25rem;
+  height: 5.25rem;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  object-fit: cover;
+  color: #fff;
+  background: #dc2626;
+  border: 1px solid #ece7e7;
+  border-radius: .55rem;
+  font-family: var(--font-heading);
+  font-size: 1.35rem;
+  font-weight: 750;
+}
+
+.shop-information__copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .18rem;
+}
+
+.shop-information__copy h2 {
+  display: flex;
+  align-items: center;
+  gap: .38rem;
+  overflow: hidden;
+  font-family: var(--font-heading);
+  font-size: 1.05rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shop-information__verified {
+  width: 1rem;
+  height: 1rem;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: #fff;
+  background: #dc2626;
+  border-radius: 50%;
+  font-family: var(--font-body);
+  font-size: .62rem;
+  font-weight: 700;
+}
+
+.shop-information__copy .shop-status {
+  margin-top: 0;
+  font-size: .72rem;
+}
+
+.shop-information__copy > small {
+  display: block;
+  margin-top: .3rem;
+  color: #8b8490;
+  font-size: .68rem;
+}
+
+.shop-information__view-button {
+  width: fit-content;
+  min-height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  gap: .38rem;
+  margin-top: .2rem;
+  padding: .38rem .68rem;
+  color: #3f3a42;
+  background: #f5f3f3;
+  border: 1px solid #e7e2e2;
+  border-radius: .38rem;
+  font-family: var(--font-body);
+  font-size: .68rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: color 160ms ease, background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.shop-information__view-button:hover {
+  color: #dc2626;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.shop-information__view-button:active {
+  transform: translateY(1px);
+}
+
+.shop-information__view-button:focus-visible {
+  outline: 2px solid rgba(220, 38, 38, .35);
+  outline-offset: 2px;
+}
+
+.shop-information__metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .8rem;
+}
+
+.shop-information__metrics > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.shop-information__metrics span {
+  color: #6b6570;
+  font-size: .62rem;
+  font-weight: 700;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.shop-information__metrics strong {
+  margin-top: .25rem;
+  color: #1e1e24;
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+
+.shop-information__metrics > div:first-child strong {
+  color: #dc2626;
+}
+
+.shop-information__metrics small {
+  max-width: 9rem;
+  margin-top: .18rem;
+  color: #9a949d;
+  font-size: .62rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 850px) {
+  .shop-information {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .shop-information__identity {
+    padding: 0 0 1rem;
+    border-right: 0;
+    border-bottom: 1px solid #ece7e7;
+  }
+}
+
+@media (max-width: 520px) {
+  .shop-information {
+    padding: 1rem;
+  }
+
+  .shop-information__avatar {
+    width: 4.35rem;
+    height: 4.35rem;
+  }
+
+  .shop-information__metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .shop-information__metrics > div {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: .15rem .75rem;
+    padding: .65rem 0;
+    border-bottom: 1px solid #f0ecec;
+    text-align: left;
+  }
+
+  .shop-information__metrics > div:last-child {
+    border-bottom: 0;
+  }
+
+  .shop-information__metrics strong {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    margin: 0;
+  }
+
+  .shop-information__metrics small {
+    margin: 0;
+  }
+}

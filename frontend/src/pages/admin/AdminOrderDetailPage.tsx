@@ -156,9 +156,13 @@ export function AdminOrderDetailPage() {
             <h2>Giá trị đơn hàng</h2>
             <dl>
               <div><dt>Tạm tính</dt><dd>{formatCurrency(order.subtotal)}</dd></div>
-              <div><dt>Giảm giá</dt><dd>− {formatCurrency(order.discountAmount)}</dd></div>
-              <div><dt>Phí giao hàng</dt><dd>{formatCurrency(order.shippingFee)}</dd></div>
-              <div><dt>Tổng cộng</dt><dd>{formatCurrency(order.totalAmount)}</dd></div>
+              <div><dt>Giảm giá sản phẩm</dt><dd>− {formatCurrency(order.discountAmount)}</dd></div>
+              <div><dt>Tổng tiền sản phẩm</dt><dd>{formatCurrency(order.totalAmount)}</dd></div>
+              <div><dt>Tạm tính nhóm đơn</dt><dd>{formatCurrency(order.orderGroupSummary.subtotal)}</dd></div>
+              <div><dt>Giảm sản phẩm nhóm đơn</dt><dd>− {formatCurrency(order.orderGroupSummary.productDiscountAmount)}</dd></div>
+              <div><dt>Phí vận chuyển nền tảng</dt><dd>{formatCurrency(order.orderGroupSummary.shippingFee)}</dd></div>
+              <div><dt>Giảm phí vận chuyển</dt><dd>− {formatCurrency(order.orderGroupSummary.shippingDiscountAmount)}</dd></div>
+              <div><dt>Tổng nhóm đơn</dt><dd>{formatCurrency(order.orderGroupSummary.totalAmount)}</dd></div>
             </dl>
           </section>
         </aside>

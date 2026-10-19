@@ -15,6 +15,15 @@ import { Payment } from '../../payment/entities/payment.entity.js';
 import { Order } from './order.entity.js';
 
 @Check('CHK_order_groups_total_amount_non_negative', '"total_amount" >= 0')
+@Check('CHK_order_groups_shipping_fee_non_negative', '"shipping_fee" >= 0')
+@Check(
+  'CHK_order_groups_shipping_discount_non_negative',
+  '"shipping_discount_amount" >= 0',
+)
+@Check(
+  'CHK_order_groups_shipping_discount_not_above_fee',
+  '"shipping_discount_amount" <= "shipping_fee"',
+)
 @Entity({ name: 'order_groups' })
 export class OrderGroup {
   @PrimaryGeneratedColumn({ name: 'order_group_id', type: 'bigint' })
@@ -25,6 +34,24 @@ export class OrderGroup {
 
   @Column({ name: 'total_amount', type: 'numeric', precision: 14, scale: 2 })
   totalAmount: string;
+
+  @Column({
+    name: 'shipping_fee',
+    type: 'numeric',
+    precision: 14,
+    scale: 2,
+    default: 0,
+  })
+  shippingFee: string;
+
+  @Column({
+    name: 'shipping_discount_amount',
+    type: 'numeric',
+    precision: 14,
+    scale: 2,
+    default: 0,
+  })
+  shippingDiscountAmount: string;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

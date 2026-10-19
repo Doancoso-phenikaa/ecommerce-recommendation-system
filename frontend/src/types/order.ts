@@ -52,7 +52,6 @@ export interface CustomerOrderDetailOrder {
   shopName: string;
   subtotal: string;
   discountAmount: string;
-  shippingFee: string;
   totalAmount: string;
   shippingAddress: string;
   shippingMethod: string | null;
@@ -71,6 +70,10 @@ export interface OrderDetailPayment {
 
 export interface CustomerOrderDetailResponse {
   orderGroupId: string;
+  subtotal: string;
+  productDiscountAmount: string;
+  shippingFee: string;
+  shippingDiscountAmount: string;
   totalAmount: string;
   createdAt: string;
   payment: OrderDetailPayment | null;
@@ -89,7 +92,6 @@ export interface SellerOrderListItem {
   orderGroupId: string;
   subtotal: string;
   discountAmount: string;
-  shippingFee: string;
   totalAmount: string;
   shippingAddress: string;
   shippingMethod: string | null;

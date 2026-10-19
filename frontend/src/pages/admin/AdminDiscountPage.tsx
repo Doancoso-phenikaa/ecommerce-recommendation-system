@@ -149,11 +149,12 @@ export function AdminDiscountPage() {
       {isLoading ? <div className="admin-discount-skeleton" aria-label="Đang tải">{Array.from({ length: 6 }, (_, index) => <span key={index} />)}</div>
         : error ? <div className="admin-discount-state admin-discount-state--error"><strong>Không thể tải danh sách.</strong><p>{error}</p><button type="button" onClick={() => void loadDiscounts()}>Thử lại</button></div>
         : !filteredDiscounts.length ? <div className="admin-discount-state"><span aria-hidden="true">%</span><strong>Không tìm thấy mã giảm giá.</strong><p>Hãy thay đổi bộ lọc hoặc tạo voucher đầu tiên.</p></div>
-        : <div className="admin-discount-table-wrap"><table className="admin-discount-table"><thead><tr><th>Mã giảm giá</th><th>Giá trị</th><th>Đơn tối thiểu</th><th>Thời gian áp dụng</th><th>Lượt dùng</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
+        : <div className="admin-discount-table-wrap"><table className="admin-discount-table"><thead><tr><th>Mã giảm giá</th><th>Loại ưu đãi</th><th>Giá trị</th><th>Đơn tối thiểu</th><th>Thời gian áp dụng</th><th>Lượt dùng</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
           {filteredDiscounts.map((discount) => {
             const validity = getValidity(discount);
             return <tr key={discount.discountId}>
               <td data-label="Mã"><strong className="admin-discount-code">{discount.code}</strong><small>#{discount.discountId} · {discount.type === 'PERCENT' ? 'Phần trăm' : 'Cố định'}</small></td>
+              <td data-label="Loại ưu đãi"><span className={`discount-target discount-target--${discount.target.toLowerCase()}`}>{discount.target === 'PRODUCT' ? 'Giảm giá sản phẩm' : 'Giảm phí vận chuyển'}</span></td>
               <td data-label="Giá trị"><strong>{discount.type === 'PERCENT' ? `${Number(discount.value).toLocaleString('vi-VN')}%` : formatCurrency(discount.value)}</strong></td>
               <td data-label="Đơn tối thiểu">{Number(discount.minOrderAmount) > 0 ? formatCurrency(discount.minOrderAmount) : 'Không yêu cầu'}</td>
               <td data-label="Thời gian"><span>{formatDateTime(discount.startDate)}</span><span>đến {formatDateTime(discount.endDate)}</span><em className={`discount-validity discount-validity--${validity.modifier}`}>{validity.label}</em></td>

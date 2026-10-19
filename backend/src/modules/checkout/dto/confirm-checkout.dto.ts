@@ -20,5 +20,11 @@ export class ConfirmCheckoutDto {
   @ValidateIf((_object, value) => value !== undefined)
   @IsString()
   @MaxLength(50)
-  discountCode?: string;
+  productDiscountCode?: string;
+
+  @Transform(trimString)
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsString()
+  @MaxLength(50)
+  shippingDiscountCode?: string;
 }

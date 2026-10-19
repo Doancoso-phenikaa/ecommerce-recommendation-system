@@ -62,6 +62,7 @@ export class DiscountService {
     const discount = this.discountRepository.create({
       code,
       type: values.type,
+      target: createDiscountDto.target,
       value: values.value,
       minOrderAmount: createDiscountDto.minOrderAmount ?? '0',
       startDate: values.startDate,
@@ -138,6 +139,9 @@ export class DiscountService {
         this.validateBusinessRules(values);
 
         discount.type = values.type;
+        if (updateDiscountDto.target !== undefined) {
+          discount.target = updateDiscountDto.target;
+        }
         discount.value = values.value;
         discount.startDate = values.startDate;
         discount.endDate = values.endDate;
@@ -238,6 +242,7 @@ export class DiscountService {
       discountId: discount.discountId,
       code: discount.code,
       type: discount.type,
+      target: discount.target,
       value: discount.value,
       minOrderAmount: discount.minOrderAmount,
       startDate: discount.startDate,

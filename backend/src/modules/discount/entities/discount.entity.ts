@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { Order } from '../../order/entities/order.entity.js';
 import { DiscountStatus } from '../enums/discount-status.enum.js';
+import { DiscountTarget } from '../enums/discount-target.enum.js';
 import { DiscountType } from '../enums/discount-type.enum.js';
 
 @Entity({ name: 'discounts' })
@@ -46,6 +47,15 @@ export class Discount {
     enumName: 'discount_type_enum',
   })
   type: DiscountType;
+
+  @Column({
+    name: 'target',
+    type: 'enum',
+    enum: DiscountTarget,
+    enumName: 'discount_target_enum',
+    default: DiscountTarget.PRODUCT,
+  })
+  target: DiscountTarget;
 
   @Column({ name: 'value', type: 'numeric', precision: 12, scale: 2 })
   value: string;
