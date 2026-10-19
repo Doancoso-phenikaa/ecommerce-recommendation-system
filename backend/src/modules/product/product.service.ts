@@ -6,19 +6,28 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { Category } from '../category/entities/category.entity.js';
 import { CategoryStatus } from '../category/enums/category-status.enum.js';
 import { Inventory } from '../inventory/entities/inventory.entity.js';
 import { Seller } from '../seller/entities/seller.entity.js';
 import { Shop } from '../shop/entities/shop.entity.js';
 import { ShopStatus } from '../shop/enums/shop-status.enum.js';
+import { AdminProductQueryDto } from './dto/admin-product-query.dto.js';
 import { CreateProductDto } from './dto/create-product.dto.js';
 import { ProductQueryDto } from './dto/product-query.dto.js';
+import { SellerProductQueryDto } from './dto/seller-product-query.dto.js';
 import { UpdateInventoryDto } from './dto/update-inventory.dto.js';
 import { UpdateProductDto } from './dto/update-product.dto.js';
 import { Product } from './entities/product.entity.js';
+import { ProductSort } from './enums/product-sort.enum.js';
 import { ProductStatus } from './enums/product-status.enum.js';
+import { ReviewStatus } from '../review/enums/review-status.enum.js';
+
+interface PublicShopStatistics {
+  productCount: number;
+  reviewCount: number;
+}
 
 @Injectable()
 export class ProductService {
@@ -31,14 +40,21 @@ export class ProductService {
     private readonly categoryRepository: Repository<Category>,
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
-    @InjectRepository(Inventory)
-    private readonly inventoryRepository: Repository<Inventory>,
     private readonly dataSource: DataSource,
   ) {}
 
   async getProducts(productQueryDto: ProductQueryDto) {
-    const { search, categoryId, shopId, minPrice, maxPrice, page, limit } =
-      productQueryDto;
+    const {
+      search,
+      categoryId,
+      shopId,
+      minPrice,
+      maxPrice,
+      sort,
+      inStock,
+      page,
+      limit,
+    } = productQueryDto;
 
     if (
       minPrice !== undefined &&
@@ -54,11 +70,15 @@ export class ProductService {
       .createQueryBuilder('product')
       .innerJoinAndSelect('product.shop', 'shop')
       .innerJoinAndSelect('product.inventory', 'inventory')
+      .innerJoin('product.category', 'category')
       .where('product.status = :productStatus', {
         productStatus: ProductStatus.APPROVED,
       })
       .andWhere('shop.status = :shopStatus', {
         shopStatus: ShopStatus.ACTIVE,
+      })
+      .andWhere('category.status = :categoryStatus', {
+        categoryStatus: CategoryStatus.ACTIVE,
       });
 
     if (search) {
@@ -85,11 +105,37 @@ export class ProductService {
       queryBuilder.andWhere('product.price <= :maxPrice', { maxPrice });
     }
 
-    queryBuilder
-      .orderBy('product.createdAt', 'DESC')
-      .addOrderBy('product.productId', 'DESC')
-      .skip((page - 1) * limit)
-      .take(limit);
+    if (inStock === true) {
+      queryBuilder.andWhere(
+        'inventory.quantity > inventory.reservedQuantity',
+      );
+    }
+
+    switch (sort) {
+      case ProductSort.PRICE_ASC:
+        queryBuilder
+          .orderBy('product.price', 'ASC')
+          .addOrderBy('product.productId', 'ASC');
+        break;
+      case ProductSort.PRICE_DESC:
+        queryBuilder
+          .orderBy('product.price', 'DESC')
+          .addOrderBy('product.productId', 'DESC');
+        break;
+      case ProductSort.LATEST_APPROVED:
+        queryBuilder
+          .orderBy('product.approvedAt', 'DESC', 'NULLS LAST')
+          .addOrderBy('product.productId', 'DESC');
+        break;
+      case ProductSort.NEWEST:
+      default:
+        queryBuilder
+          .orderBy('product.createdAt', 'DESC')
+          .addOrderBy('product.productId', 'DESC');
+        break;
+    }
+
+    queryBuilder.skip((page - 1) * limit).take(limit);
 
     const [products, totalItems] = await queryBuilder.getManyAndCount();
 
@@ -109,6 +155,7 @@ export class ProductService {
       .createQueryBuilder('product')
       .innerJoinAndSelect('product.shop', 'shop')
       .innerJoinAndSelect('product.inventory', 'inventory')
+      .innerJoin('product.category', 'category')
       .where('product.productId = :productId', { productId })
       .andWhere('product.status = :productStatus', {
         productStatus: ProductStatus.APPROVED,
@@ -116,18 +163,152 @@ export class ProductService {
       .andWhere('shop.status = :shopStatus', {
         shopStatus: ShopStatus.ACTIVE,
       })
+      .andWhere('category.status = :categoryStatus', {
+        categoryStatus: CategoryStatus.ACTIVE,
+      })
       .getOne();
 
     if (!product) {
       throw new NotFoundException('Product not found');
     }
 
-    return this.buildPublicProductResponse(product);
+    const shopStatistics = await this.getPublicShopStatistics(product.shopId);
+
+    return this.buildPublicProductResponse(product, shopStatistics);
+  }
+
+  async getSellerProducts(userId: string, query: SellerProductQueryDto) {
+    const shop = await this.findSellerShop(userId);
+    const productQuery = this.productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.inventory', 'inventory')
+      .leftJoinAndSelect('product.category', 'category')
+      .where('product.shopId = :shopId', { shopId: shop.shopId });
+
+    if (query.search) {
+      productQuery.andWhere('product.name ILIKE :search', {
+        search: `%${query.search}%`,
+      });
+    }
+
+    if (query.status !== undefined) {
+      productQuery.andWhere('product.status = :status', {
+        status: query.status,
+      });
+    }
+
+    if (query.categoryId !== undefined) {
+      productQuery.andWhere('product.categoryId = :categoryId', {
+        categoryId: query.categoryId,
+      });
+    }
+
+    const [products, totalItems] = await productQuery
+      .orderBy('product.createdAt', 'DESC')
+      .addOrderBy('product.productId', 'DESC')
+      .skip((query.page - 1) * query.limit)
+      .take(query.limit)
+      .getManyAndCount();
+
+    return {
+      data: products.map((product) => this.buildSellerProductResponse(product)),
+      pagination: {
+        page: query.page,
+        limit: query.limit,
+        totalItems,
+        totalPages: Math.ceil(totalItems / query.limit),
+      },
+    };
+  }
+
+  async getSellerProductDetail(userId: string, productId: string) {
+    const shop = await this.findSellerShop(userId);
+    const product = await this.productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.inventory', 'inventory')
+      .leftJoinAndSelect('product.category', 'category')
+      .where('product.productId = :productId', { productId })
+      .andWhere('product.shopId = :shopId', { shopId: shop.shopId })
+      .getOne();
+
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    return this.buildSellerProductResponse(product);
+  }
+
+  async getAdminProducts(query: AdminProductQueryDto) {
+    const productQuery = this.productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.inventory', 'inventory')
+      .leftJoinAndSelect('product.category', 'category')
+      .leftJoinAndSelect('product.shop', 'shop');
+
+    if (query.search) {
+      productQuery.andWhere('product.name ILIKE :search', {
+        search: `%${query.search}%`,
+      });
+    }
+
+    if (query.status !== undefined) {
+      productQuery.andWhere('product.status = :status', {
+        status: query.status,
+      });
+    }
+
+    if (query.categoryId !== undefined) {
+      productQuery.andWhere('product.categoryId = :categoryId', {
+        categoryId: query.categoryId,
+      });
+    }
+
+    if (query.shopId !== undefined) {
+      productQuery.andWhere('product.shopId = :shopId', {
+        shopId: query.shopId,
+      });
+    }
+
+    const [products, totalItems] = await productQuery
+      .orderBy('product.createdAt', 'DESC')
+      .addOrderBy('product.productId', 'DESC')
+      .skip((query.page - 1) * query.limit)
+      .take(query.limit)
+      .getManyAndCount();
+
+    return {
+      data: products.map((product) => this.buildAdminProductResponse(product)),
+      pagination: {
+        page: query.page,
+        limit: query.limit,
+        totalItems,
+        totalPages: Math.ceil(totalItems / query.limit),
+      },
+    };
+  }
+
+  async getAdminProductDetail(productId: string) {
+    const product = await this.productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.inventory', 'inventory')
+      .leftJoinAndSelect('product.category', 'category')
+      .leftJoinAndSelect('product.shop', 'shop')
+      .where('product.productId = :productId', { productId })
+      .getOne();
+
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    return this.buildAdminProductResponse(product);
   }
 
   async createProduct(userId: string, createProductDto: CreateProductDto) {
     const shop = await this.findActiveSellerShop(userId);
     const category = await this.findActiveCategory(createProductDto.categoryId);
+    const originalPrice = createProductDto.originalPrice ?? null;
+
+    this.validateOriginalPrice(createProductDto.price, originalPrice);
 
     return this.dataSource.transaction(async (manager) => {
       const productRepository = manager.getRepository(Product);
@@ -140,6 +321,7 @@ export class ProductService {
           name: createProductDto.name.trim(),
           description: createProductDto.description?.trim() || null,
           price: createProductDto.price,
+          originalPrice,
           imageUrl: createProductDto.imageUrl?.trim() || null,
           status: ProductStatus.PENDING,
           rejectionReason: null,
@@ -164,70 +346,101 @@ export class ProductService {
     productId: string,
     updateProductDto: UpdateProductDto,
   ) {
-    const shop = await this.findActiveSellerShop(userId);
-    const product = await this.findOwnedProduct(productId, shop.shopId);
-    const inventory = await this.findInventoryOrFail(productId);
-    let hasChanges = false;
-
-    if (updateProductDto.categoryId !== undefined) {
-      const category = await this.findActiveCategory(
-        updateProductDto.categoryId,
+    return this.dataSource.transaction(async (manager) => {
+      const shop = await this.findActiveSellerShopInTransaction(
+        manager,
+        userId,
       );
+      const product = await this.findAndLockProduct(manager, productId);
 
-      if (product.categoryId !== category.categoryId) {
-        product.categoryId = category.categoryId;
-        hasChanges = true;
+      if (product.shopId !== shop.shopId) {
+        throw new ForbiddenException('Product does not belong to your shop');
       }
-    }
 
-    if (updateProductDto.name !== undefined) {
-      const name = updateProductDto.name.trim();
+      const inventory = await this.findInventoryOrFailInTransaction(
+        manager,
+        productId,
+      );
+      let hasChanges = false;
 
-      if (product.name !== name) {
-        product.name = name;
-        hasChanges = true;
+      const nextPrice = updateProductDto.price?.trim() ?? product.price;
+      const nextOriginalPrice =
+        updateProductDto.originalPrice !== undefined
+          ? updateProductDto.originalPrice
+          : product.originalPrice;
+
+      this.validateOriginalPrice(nextPrice, nextOriginalPrice);
+
+      if (updateProductDto.categoryId !== undefined) {
+        const category = await this.findActiveCategoryInTransaction(
+          manager,
+          updateProductDto.categoryId,
+        );
+
+        if (product.categoryId !== category.categoryId) {
+          product.categoryId = category.categoryId;
+          hasChanges = true;
+        }
       }
-    }
 
-    if (updateProductDto.description !== undefined) {
-      const description = updateProductDto.description.trim() || null;
+      if (updateProductDto.name !== undefined) {
+        const name = updateProductDto.name.trim();
 
-      if (product.description !== description) {
-        product.description = description;
-        hasChanges = true;
+        if (product.name !== name) {
+          product.name = name;
+          hasChanges = true;
+        }
       }
-    }
 
-    if (updateProductDto.price !== undefined) {
-      const price = updateProductDto.price.trim();
+      if (updateProductDto.description !== undefined) {
+        const description = updateProductDto.description.trim() || null;
 
-      if (product.price !== price) {
-        product.price = price;
-        hasChanges = true;
+        if (product.description !== description) {
+          product.description = description;
+          hasChanges = true;
+        }
       }
-    }
 
-    if (updateProductDto.imageUrl !== undefined) {
-      const imageUrl = updateProductDto.imageUrl.trim() || null;
+      if (updateProductDto.price !== undefined) {
+        const price = updateProductDto.price.trim();
 
-      if (product.imageUrl !== imageUrl) {
-        product.imageUrl = imageUrl;
-        hasChanges = true;
+        if (product.price !== price) {
+          product.price = price;
+          hasChanges = true;
+        }
       }
-    }
 
-    if (!hasChanges) {
-      return this.buildProductResponse(product, inventory);
-    }
+      if (updateProductDto.originalPrice !== undefined) {
+        const originalPrice = updateProductDto.originalPrice;
 
-    if (product.status === ProductStatus.APPROVED) {
-      product.status = ProductStatus.PENDING;
-      product.rejectionReason = null;
-      product.approvedAt = null;
-    }
+        if (product.originalPrice !== originalPrice) {
+          product.originalPrice = originalPrice;
+          hasChanges = true;
+        }
+      }
 
-    const updatedProduct = await this.productRepository.save(product);
-    return this.buildProductResponse(updatedProduct, inventory);
+      if (updateProductDto.imageUrl !== undefined) {
+        const imageUrl = updateProductDto.imageUrl.trim() || null;
+
+        if (product.imageUrl !== imageUrl) {
+          product.imageUrl = imageUrl;
+          hasChanges = true;
+        }
+      }
+
+      if (!hasChanges) {
+        return this.buildProductResponse(product, inventory);
+      }
+
+      if (product.status === ProductStatus.APPROVED) {
+        product.status = ProductStatus.PENDING;
+        product.rejectionReason = null;
+        product.approvedAt = null;
+      }
+
+      const updatedProduct = await manager.getRepository(Product).save(product);
+      return this.buildProductResponse(updatedProduct, inventory);
+    });
   }
 
   async updateInventory(
@@ -235,85 +448,127 @@ export class ProductService {
     productId: string,
     updateInventoryDto: UpdateInventoryDto,
   ) {
-    const shop = await this.findActiveSellerShop(userId);
-    await this.findOwnedProduct(productId, shop.shopId);
-
-    const inventory = await this.inventoryRepository.findOneBy({ productId });
-
-    if (!inventory) {
-      throw new NotFoundException('Inventory not found');
-    }
-
-    if (updateInventoryDto.quantity < inventory.reservedQuantity) {
-      throw new BadRequestException(
-        'Quantity cannot be less than reserved quantity',
+    return this.dataSource.transaction(async (manager) => {
+      const shop = await this.findActiveSellerShopInTransaction(
+        manager,
+        userId,
       );
-    }
+      await this.findOwnedProductInTransaction(manager, productId, shop.shopId);
 
-    inventory.quantity = updateInventoryDto.quantity;
-    const updatedInventory = await this.inventoryRepository.save(inventory);
+      const inventoryRepository = manager.getRepository(Inventory);
+      const inventory = await inventoryRepository
+        .createQueryBuilder('inventory')
+        .setLock('pessimistic_write')
+        .where('inventory.productId = :productId', { productId })
+        .getOne();
 
-    return {
-      productId,
-      quantity: updatedInventory.quantity,
-      reservedQuantity: updatedInventory.reservedQuantity,
-      updatedAt: updatedInventory.updatedAt,
-    };
+      if (!inventory) {
+        throw new NotFoundException('Inventory not found');
+      }
+
+      if (updateInventoryDto.quantity < inventory.reservedQuantity) {
+        throw new ConflictException(
+          'Inventory quantity cannot be lower than reserved quantity',
+        );
+      }
+
+      inventory.quantity = updateInventoryDto.quantity;
+      const updatedInventory = await inventoryRepository.save(inventory);
+
+      return {
+        productId,
+        quantity: updatedInventory.quantity,
+        reservedQuantity: updatedInventory.reservedQuantity,
+        updatedAt: updatedInventory.updatedAt,
+      };
+    });
   }
 
   async approveProduct(productId: string) {
-    const product = await this.findProductOrFail(productId);
+    return this.dataSource.transaction(async (manager) => {
+      const product = await this.findAndLockProduct(manager, productId);
 
-    if (product.status !== ProductStatus.PENDING) {
-      throw new ConflictException('Only pending products can be approved');
-    }
+      if (product.status !== ProductStatus.PENDING) {
+        throw new ConflictException('Only pending products can be approved');
+      }
 
-    const inventory = await this.findInventoryOrFail(productId);
-    product.status = ProductStatus.APPROVED;
-    product.rejectionReason = null;
-    product.approvedAt = new Date();
+      await this.revalidateProductApproval(manager, product);
 
-    const approvedProduct = await this.productRepository.save(product);
-    return this.buildProductResponse(approvedProduct, inventory);
+      const inventory = await this.findInventoryOrFailInTransaction(
+        manager,
+        productId,
+      );
+      product.status = ProductStatus.APPROVED;
+      product.rejectionReason = null;
+      product.approvedAt = new Date();
+
+      const approvedProduct = await manager
+        .getRepository(Product)
+        .save(product);
+      return this.buildProductResponse(approvedProduct, inventory);
+    });
   }
 
   async rejectProduct(productId: string, rejectionReasonInput: string) {
-    const product = await this.findProductOrFail(productId);
+    return this.dataSource.transaction(async (manager) => {
+      const product = await this.findAndLockProduct(manager, productId);
 
-    if (product.status !== ProductStatus.PENDING) {
-      throw new ConflictException('Only pending products can be rejected');
-    }
+      if (product.status !== ProductStatus.PENDING) {
+        throw new ConflictException('Only pending products can be rejected');
+      }
 
-    const rejectionReason = rejectionReasonInput.trim();
+      const rejectionReason = rejectionReasonInput.trim();
 
-    if (!rejectionReason) {
-      throw new BadRequestException('Rejection reason must not be empty');
-    }
+      if (!rejectionReason) {
+        throw new BadRequestException('Rejection reason must not be empty');
+      }
 
-    const inventory = await this.findInventoryOrFail(productId);
-    product.status = ProductStatus.REJECTED;
-    product.rejectionReason = rejectionReason;
-    product.approvedAt = null;
+      const inventory = await this.findInventoryOrFailInTransaction(
+        manager,
+        productId,
+      );
+      product.status = ProductStatus.REJECTED;
+      product.rejectionReason = rejectionReason;
+      product.approvedAt = null;
 
-    const rejectedProduct = await this.productRepository.save(product);
-    return this.buildProductResponse(rejectedProduct, inventory);
+      const rejectedProduct = await manager
+        .getRepository(Product)
+        .save(product);
+      return this.buildProductResponse(rejectedProduct, inventory);
+    });
   }
 
   async resubmitProduct(userId: string, productId: string) {
-    const shop = await this.findActiveSellerShop(userId);
-    const product = await this.findOwnedProduct(productId, shop.shopId);
+    return this.dataSource.transaction(async (manager) => {
+      const shop = await this.findActiveSellerShopInTransaction(
+        manager,
+        userId,
+      );
+      const product = await this.findAndLockProduct(manager, productId);
 
-    if (product.status !== ProductStatus.REJECTED) {
-      throw new ConflictException('Only rejected products can be resubmitted');
-    }
+      if (product.shopId !== shop.shopId) {
+        throw new ForbiddenException('Product does not belong to your shop');
+      }
 
-    const inventory = await this.findInventoryOrFail(productId);
-    product.status = ProductStatus.PENDING;
-    product.rejectionReason = null;
-    product.approvedAt = null;
+      if (product.status !== ProductStatus.REJECTED) {
+        throw new ConflictException(
+          'Only rejected products can be resubmitted',
+        );
+      }
 
-    const resubmittedProduct = await this.productRepository.save(product);
-    return this.buildProductResponse(resubmittedProduct, inventory);
+      const inventory = await this.findInventoryOrFailInTransaction(
+        manager,
+        productId,
+      );
+      product.status = ProductStatus.PENDING;
+      product.rejectionReason = null;
+      product.approvedAt = null;
+
+      const resubmittedProduct = await manager
+        .getRepository(Product)
+        .save(product);
+      return this.buildProductResponse(resubmittedProduct, inventory);
+    });
   }
 
   private async findActiveSellerShop(userId: string): Promise<Shop> {
@@ -338,11 +593,64 @@ export class ProductService {
     return shop;
   }
 
-  private async findOwnedProduct(
+  private async findSellerShop(userId: string): Promise<Shop> {
+    const seller = await this.sellerRepository.findOneBy({ userId });
+
+    if (!seller) {
+      throw new NotFoundException('Seller profile not found');
+    }
+
+    const shop = await this.shopRepository.findOneBy({
+      sellerId: seller.sellerId,
+    });
+
+    if (!shop) {
+      throw new NotFoundException('Shop not found');
+    }
+
+    return shop;
+  }
+
+  private async findActiveSellerShopInTransaction(
+    manager: EntityManager,
+    userId: string,
+  ): Promise<Shop> {
+    const seller = await manager.getRepository(Seller).findOneBy({ userId });
+
+    if (!seller) {
+      throw new NotFoundException('Seller profile not found');
+    }
+
+    const shop = await manager
+      .getRepository(Shop)
+      .createQueryBuilder('shop')
+      .setLock('pessimistic_write')
+      .where('shop.sellerId = :sellerId', { sellerId: seller.sellerId })
+      .getOne();
+
+    if (!shop) {
+      throw new NotFoundException('Shop not found');
+    }
+
+    if (shop.status !== ShopStatus.ACTIVE) {
+      throw new ForbiddenException('Shop must be active to manage products');
+    }
+
+    return shop;
+  }
+
+  private async findOwnedProductInTransaction(
+    manager: EntityManager,
     productId: string,
     shopId: string,
   ): Promise<Product> {
-    const product = await this.findProductOrFail(productId);
+    const product = await manager.getRepository(Product).findOneBy({
+      productId,
+    });
+
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
 
     if (product.shopId !== shopId) {
       throw new ForbiddenException('Product does not belong to your shop');
@@ -351,8 +659,16 @@ export class ProductService {
     return product;
   }
 
-  private async findProductOrFail(productId: string): Promise<Product> {
-    const product = await this.productRepository.findOneBy({ productId });
+  private async findAndLockProduct(
+    manager: EntityManager,
+    productId: string,
+  ): Promise<Product> {
+    const product = await manager
+      .getRepository(Product)
+      .createQueryBuilder('product')
+      .setLock('pessimistic_write')
+      .where('product.productId = :productId', { productId })
+      .getOne();
 
     if (!product) {
       throw new NotFoundException('Product not found');
@@ -361,14 +677,71 @@ export class ProductService {
     return product;
   }
 
-  private async findInventoryOrFail(productId: string): Promise<Inventory> {
-    const inventory = await this.inventoryRepository.findOneBy({ productId });
+  private async revalidateProductApproval(
+    manager: EntityManager,
+    product: Product,
+  ): Promise<void> {
+    const shop = await manager.getRepository(Shop).findOneBy({
+      shopId: product.shopId,
+    });
+
+    if (!shop) {
+      throw new NotFoundException('Shop not found');
+    }
+
+    if (shop.status !== ShopStatus.ACTIVE) {
+      throw new ConflictException(
+        'Product cannot be approved because the shop is not active',
+      );
+    }
+
+    const category = await manager.getRepository(Category).findOneBy({
+      categoryId: product.categoryId,
+    });
+
+    if (!category) {
+      throw new NotFoundException('Category not found');
+    }
+
+    if (category.status !== CategoryStatus.ACTIVE) {
+      throw new ConflictException(
+        'Product cannot be approved because the category is not active',
+      );
+    }
+  }
+
+  private async findInventoryOrFailInTransaction(
+    manager: EntityManager,
+    productId: string,
+  ): Promise<Inventory> {
+    const inventory = await manager
+      .getRepository(Inventory)
+      .findOneBy({ productId });
 
     if (!inventory) {
       throw new NotFoundException('Inventory not found');
     }
 
     return inventory;
+  }
+
+  private async findActiveCategoryInTransaction(
+    manager: EntityManager,
+    categoryId: string,
+  ): Promise<Category> {
+    const category = await manager
+      .getRepository(Category)
+      .findOneBy({ categoryId });
+
+    if (!category) {
+      throw new NotFoundException('Category not found');
+    }
+
+    if (category.status !== CategoryStatus.ACTIVE) {
+      throw new ConflictException('Category is not active');
+    }
+
+    return category;
   }
 
   private async findActiveCategory(categoryId: string): Promise<Category> {
@@ -393,6 +766,7 @@ export class ProductService {
       name: product.name,
       description: product.description,
       price: product.price,
+      originalPrice: product.originalPrice,
       imageUrl: product.imageUrl,
       status: product.status,
       rejectionReason: product.rejectionReason,
@@ -406,7 +780,10 @@ export class ProductService {
     };
   }
 
-  private buildPublicProductResponse(product: Product) {
+  private buildPublicProductResponse(
+    product: Product,
+    shopStatistics?: PublicShopStatistics,
+  ) {
     const inventory = product.inventory;
 
     if (!inventory) {
@@ -416,10 +793,19 @@ export class ProductService {
     return {
       productId: product.productId,
       shopId: product.shopId,
+      shop: product.shop
+        ? {
+            shopId: product.shop.shopId,
+            name: product.shop.name,
+            logoUrl: product.shop.logoUrl,
+            ...shopStatistics,
+          }
+        : null,
       categoryId: product.categoryId,
       name: product.name,
       description: product.description,
       price: product.price,
+      originalPrice: product.originalPrice,
       imageUrl: product.imageUrl,
       approvedAt: product.approvedAt,
       inventory: {
@@ -432,8 +818,105 @@ export class ProductService {
     };
   }
 
+  private async getPublicShopStatistics(
+    shopId: string,
+  ): Promise<PublicShopStatistics> {
+    const [productCount, reviewCountRaw] = await Promise.all([
+      this.productRepository
+        .createQueryBuilder('shopProduct')
+        .innerJoin('shopProduct.category', 'category')
+        .where('shopProduct.shopId = :shopId', { shopId })
+        .andWhere('shopProduct.status = :productStatus', {
+          productStatus: ProductStatus.APPROVED,
+        })
+        .andWhere('category.status = :categoryStatus', {
+          categoryStatus: CategoryStatus.ACTIVE,
+        })
+        .getCount(),
+      this.productRepository
+        .createQueryBuilder('shopProduct')
+        .innerJoin('shopProduct.reviews', 'review')
+        .select('COUNT(review.reviewId)', 'reviewCount')
+        .where('shopProduct.shopId = :shopId', { shopId })
+        .andWhere('review.status = :reviewStatus', {
+          reviewStatus: ReviewStatus.ACTIVE,
+        })
+        .getRawOne<{ reviewCount: string }>(),
+    ]);
+
+    return {
+      productCount,
+      reviewCount: Number(reviewCountRaw?.reviewCount ?? 0),
+    };
+  }
+
+  private buildSellerProductResponse(product: Product) {
+    const inventory = product.inventory;
+    const calculatedAvailableQuantity = inventory
+      ? inventory.quantity - inventory.reservedQuantity
+      : 0;
+
+    return {
+      productId: product.productId,
+      shopId: product.shopId,
+      categoryId: product.categoryId,
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      originalPrice: product.originalPrice,
+      imageUrl: product.imageUrl,
+      status: product.status,
+      rejectionReason: product.rejectionReason,
+      approvedAt: product.approvedAt,
+      inventory: inventory
+        ? {
+            quantity: inventory.quantity,
+            reservedQuantity: inventory.reservedQuantity,
+            availableQuantity:
+              calculatedAvailableQuantity > 0 ? calculatedAvailableQuantity : 0,
+          }
+        : null,
+      category: product.category
+        ? {
+            categoryId: product.category.categoryId,
+            name: product.category.name,
+            status: product.category.status,
+          }
+        : null,
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt,
+    };
+  }
+
+  private buildAdminProductResponse(product: Product) {
+    return {
+      ...this.buildSellerProductResponse(product),
+      shop: product.shop
+        ? {
+            shopId: product.shop.shopId,
+            name: product.shop.name,
+            status: product.shop.status,
+          }
+        : null,
+    };
+  }
+
   private decimalToCents(value: string): bigint {
     const [wholePart, fractionPart = ''] = value.split('.');
     return BigInt(wholePart) * 100n + BigInt(fractionPart.padEnd(2, '0'));
+  }
+
+  private validateOriginalPrice(
+    price: string,
+    originalPrice: string | null,
+  ): void {
+    if (
+      originalPrice !== null &&
+      this.decimalToCents(originalPrice) <= this.decimalToCents(price)
+    ) {
+      throw new BadRequestException(
+        'originalPrice must be greater than price',
+      );
+    }
   }
 }

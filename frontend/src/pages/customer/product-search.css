@@ -1,0 +1,103 @@
+.product-search-page {
+  width: min(82rem, calc(100% - 3rem));
+  margin: 0 auto;
+  padding: 1rem 0 2.5rem;
+}
+
+.product-search-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  color: var(--market-muted);
+  font-size: 0.72rem;
+}
+
+.product-search-breadcrumb a {
+  color: var(--market-primary-strong);
+  font-weight: 750;
+}
+
+.product-search-breadcrumb strong {
+  color: #4b5563;
+}
+
+.product-search-header {
+  margin-bottom: 0.85rem;
+  padding: 0.9rem 1rem 1rem;
+  background: #fff;
+  border: 1px solid var(--market-border);
+  border-left: 3px solid var(--market-primary);
+  border-radius: 0.65rem;
+}
+
+.product-search-header > span {
+  color: var(--market-primary-strong);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.product-search-header h1 {
+  margin: 0.15rem 0 0.2rem;
+  font-size: clamp(1.3rem, 2.4vw, 1.85rem);
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+.product-search-header p {
+  margin: 0;
+  color: var(--market-muted);
+  font-size: 0.75rem;
+}
+
+.product-search-empty {
+  min-height: 20rem;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  padding: 2rem;
+  text-align: center;
+  background: #fff;
+  border: 1px solid var(--market-border);
+  border-radius: 0.7rem;
+}
+
+.product-search-empty > span {
+  width: 3rem;
+  height: 3rem;
+  display: grid;
+  place-items: center;
+  color: var(--market-primary-strong);
+  background: #fff7ed;
+  border-radius: 0.65rem;
+  font-size: 1.4rem;
+}
+
+.product-search-empty h2 {
+  margin: 0.8rem 0 0;
+  font-size: 1.05rem;
+}
+
+.product-search-empty p {
+  margin: 0.4rem 0 1rem;
+  color: var(--market-muted);
+  font-size: 0.75rem;
+}
+
+.product-search-empty a {
+  padding: 0.55rem 0.8rem;
+  color: var(--market-primary-strong);
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 0.45rem;
+  font-size: 0.7rem;
+  font-weight: 750;
+}
+
+@media (max-width: 800px) {
+  .product-search-page {
+    width: calc(100% - 2rem);
+  }
+}

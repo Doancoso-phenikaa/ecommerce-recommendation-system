@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Not, QueryFailedError, Repository } from 'typeorm';
+import { AdminCategoryQueryDto } from './dto/admin-category-query.dto.js';
 import { CreateCategoryDto } from './dto/create-category.dto.js';
 import { UpdateCategoryDto } from './dto/update-category.dto.js';
 import { UpdateCategoryStatusDto } from './dto/update-category-status.dto.js';
@@ -34,6 +35,7 @@ export class CategoryService {
     const category = this.categoryRepository.create({
       name,
       description: createCategoryDto.description?.trim() || null,
+      imageUrl: createCategoryDto.imageUrl?.trim() || null,
       status: CategoryStatus.ACTIVE,
     });
 
@@ -47,9 +49,41 @@ export class CategoryService {
       order: { name: 'ASC' },
     });
 
-    return categories.map((category) =>
-      this.buildCategoryResponse(category),
-    );
+    return categories.map((category) => this.buildCategoryResponse(category));
+  }
+
+  async getAdminCategories(query: AdminCategoryQueryDto) {
+    const categoryQuery =
+      this.categoryRepository.createQueryBuilder('category');
+
+    if (query.search) {
+      categoryQuery.andWhere('category.name ILIKE :search', {
+        search: `%${query.search}%`,
+      });
+    }
+
+    if (query.status !== undefined) {
+      categoryQuery.andWhere('category.status = :status', {
+        status: query.status,
+      });
+    }
+
+    const [categories, totalItems] = await categoryQuery
+      .orderBy('category.createdAt', 'DESC')
+      .addOrderBy('category.categoryId', 'DESC')
+      .skip((query.page - 1) * query.limit)
+      .take(query.limit)
+      .getManyAndCount();
+
+    return {
+      data: categories.map((category) => this.buildCategoryResponse(category)),
+      pagination: {
+        page: query.page,
+        limit: query.limit,
+        totalItems,
+        totalPages: Math.ceil(totalItems / query.limit),
+      },
+    };
   }
 
   async updateCategory(
@@ -77,6 +111,10 @@ export class CategoryService {
 
     if (updateCategoryDto.description !== undefined) {
       category.description = updateCategoryDto.description.trim() || null;
+    }
+
+    if (updateCategoryDto.imageUrl !== undefined) {
+      category.imageUrl = updateCategoryDto.imageUrl.trim() || null;
     }
 
     const savedCategory = await this.saveWithNameConflictHandling(category);
@@ -123,6 +161,7 @@ export class CategoryService {
       categoryId: category.categoryId,
       name: category.name,
       description: category.description,
+      imageUrl: category.imageUrl,
       status: category.status,
       createdAt: category.createdAt,
       updatedAt: category.updatedAt,

@@ -42,6 +42,15 @@ export class Product {
   @Column({ name: 'price', type: 'numeric', precision: 12, scale: 2 })
   price: string;
 
+  @Column({
+    name: 'original_price',
+    type: 'numeric',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
+  originalPrice: string | null;
+
   @Column({ name: 'image_url', type: 'text', nullable: true })
   imageUrl: string | null;
 

@@ -19,6 +19,7 @@ import { ShopModule } from './modules/shop/shop.module.js';
 import { UserModule } from './modules/user/user.module.js';
 import { UserBehaviorModule } from './modules/user-behavior/user-behavior.module.js';
 import { WishlistModule } from './modules/wishlist/wishlist.module.js';
+import { ShippingConfigModule } from './modules/shipping-config/shipping-config.module.js';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { WishlistModule } from './modules/wishlist/wishlist.module.js';
     ReviewModule,
     SellerModule,
     UserBehaviorModule,
+    ShippingConfigModule,
   ],
   controllers: [],
   providers: [],

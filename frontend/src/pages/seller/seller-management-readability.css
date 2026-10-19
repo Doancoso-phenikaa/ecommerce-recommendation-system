@@ -1,0 +1,494 @@
+/* Shared readability scale for every Seller Center feature page. */
+
+/* Shop management */
+.seller-shell .seller-shop-form-heading span {
+  font-size: 0.74rem;
+}
+
+.seller-shell .seller-welcome p {
+  font-size: 0.88rem;
+}
+
+.seller-shell .seller-welcome time,
+.seller-shell .seller-shop-card__controls button,
+.seller-shell .seller-shop-form label,
+.seller-shell .seller-shop-form__actions button {
+  font-size: 0.76rem;
+}
+
+.seller-shell .seller-message,
+.seller-shell .seller-no-shop p,
+.seller-shell .seller-page-error p {
+  font-size: 0.8rem;
+}
+
+.seller-shell .seller-shop-card__identity small,
+.seller-shell .seller-shop-metadata dt,
+.seller-shell .seller-activity__heading > span,
+.seller-shell .seller-quick-stat__top > span,
+.seller-shell .seller-quick-stat > a {
+  font-size: 0.7rem;
+}
+
+.seller-shell .seller-shop-card__identity p,
+.seller-shell .seller-rejection-reason strong,
+.seller-shell .seller-page-error button,
+.seller-shell .seller-shop-form textarea {
+  font-size: 0.78rem;
+}
+
+.seller-shell .seller-shop-status,
+.seller-shell .seller-rejection-reason p,
+.seller-shell .seller-activity__warning,
+.seller-shell .seller-shop-form__error {
+  font-size: 0.73rem;
+}
+
+.seller-shell .seller-shop-metadata dd {
+  font-size: 0.84rem;
+}
+
+.seller-shell .seller-activity__heading h2 {
+  font-size: 1.08rem;
+}
+
+.seller-shell .seller-quick-stat > small,
+.seller-shell .seller-shop-form__preview > span {
+  font-size: 0.68rem;
+}
+
+.seller-shell .seller-shop-form label > small,
+.seller-shell .seller-shop-form__preview > small {
+  font-size: 0.64rem;
+}
+
+.seller-shell .seller-shop-form__preview > strong {
+  font-size: 0.88rem;
+}
+
+/* Seller overview dashboard */
+.seller-shell .seller-overview-shop__identity p,
+.seller-shell .seller-overview-notice p,
+.seller-shell .seller-overview-notice a,
+.seller-shell .seller-overview-widget-error,
+.seller-shell .seller-overview-products__rank,
+.seller-shell .seller-overview-panel__footer {
+  font-size: 0.67rem;
+}
+
+.seller-shell .seller-overview-status,
+.seller-shell .seller-overview-refreshing,
+.seller-shell .seller-overview-panel header p,
+.seller-shell .seller-overview-products p,
+.seller-shell .seller-overview-metric > strong small {
+  font-size: 0.62rem;
+}
+
+.seller-shell .seller-overview-range button,
+.seller-shell .seller-overview-metric > div > span,
+.seller-shell .seller-overview-attention__item span {
+  font-size: 0.66rem;
+}
+
+.seller-shell .seller-overview-shop__actions > a,
+.seller-shell .seller-overview-metric > p,
+.seller-shell .seller-overview-panel header a,
+.seller-shell .seller-overview-rating p {
+  font-size: 0.64rem;
+}
+
+.seller-shell .seller-overview-notice strong,
+.seller-shell .seller-overview-products h3,
+.seller-shell .seller-overview-products__revenue {
+  font-size: 0.72rem;
+}
+
+.seller-shell .seller-overview-panel h2 {
+  font-size: 0.84rem;
+}
+
+.seller-shell .seller-overview-panel--chart header > span,
+.seller-shell .seller-overview-error p {
+  font-size: 0.76rem;
+}
+
+.seller-shell .seller-overview-chart__labels {
+  font-size: 0.6rem;
+}
+
+.seller-shell .seller-overview-products-empty p,
+.seller-shell .seller-overview-empty > small,
+.seller-shell .seller-overview-error button {
+  font-size: 0.69rem;
+}
+
+/* Product management */
+.seller-shell .seller-product-heading > div > span,
+.seller-shell .seller-product-summary-card > small,
+.seller-shell .seller-product-tabs button span,
+.seller-shell .seller-product-filter-chips button,
+.seller-shell .seller-product-refreshing,
+.seller-shell .seller-product-policy p,
+.seller-shell .seller-inventory-facts span {
+  font-size: 0.62rem;
+}
+
+.seller-shell .seller-product-heading p {
+  font-size: 0.78rem;
+}
+
+.seller-shell .seller-product-state > button,
+.seller-shell .seller-product-guard strong,
+.seller-shell .seller-product-modal textarea,
+.seller-shell .seller-product-confirm > p {
+  font-size: 0.73rem;
+}
+
+.seller-shell .seller-product-guard p,
+.seller-shell .seller-product-success,
+.seller-shell .seller-product-tabs button,
+.seller-shell .seller-product-toolbar select,
+.seller-shell .seller-product-state p,
+.seller-shell .seller-product-modal label,
+.seller-shell .seller-product-confirm footer button {
+  font-size: 0.69rem;
+}
+
+.seller-shell .seller-product-summary-card > div > span,
+.seller-shell .seller-product-toolbar > label > span,
+.seller-shell .seller-product-reset,
+.seller-shell .seller-product-filter-chips,
+.seller-shell .seller-product-pagination,
+.seller-shell .seller-product-modal > header span,
+.seller-shell .seller-product-form-note,
+.seller-shell .seller-product-form-error,
+.seller-shell .seller-product-policy strong {
+  font-size: 0.66rem;
+}
+
+.seller-shell .seller-product-search input {
+  font-size: 0.71rem;
+}
+
+.seller-shell .seller-product-search button,
+.seller-shell .seller-product-pagination button {
+  font-size: 0.65rem;
+}
+
+.seller-shell .seller-product-table th,
+.seller-shell .seller-product-table td::before {
+  font-size: 0.61rem;
+}
+
+.seller-shell .seller-product-table td {
+  font-size: 0.68rem;
+}
+
+.seller-shell .seller-product-table td > strong {
+  font-size: 0.71rem;
+}
+
+.seller-shell .seller-product-table td > small,
+.seller-shell .seller-product-identity p,
+.seller-shell .seller-product-status,
+.seller-shell .seller-product-actions button {
+  font-size: 0.6rem;
+}
+
+/* Order list and detail */
+.seller-shell .seller-order-heading > div:first-child > span,
+.seller-shell .seller-order-summary-card > small,
+.seller-shell .seller-order-tabs button span,
+.seller-shell .seller-order-toolbar > span,
+.seller-shell .seller-order-reset,
+.seller-shell .seller-order-pagination,
+.seller-shell .seller-order-detail-heading > a,
+.seller-shell .seller-order-overview time,
+.seller-shell .seller-order-actions-card__eyebrow,
+.seller-shell .seller-order-payment-card__eyebrow,
+.seller-shell .seller-order-modal > div button {
+  font-size: 0.65rem;
+}
+
+.seller-shell .seller-order-heading p,
+.seller-shell .seller-order-empty p,
+.seller-shell .seller-order-detail-error p,
+.seller-shell .seller-order-modal > p {
+  font-size: 0.72rem;
+}
+
+.seller-shell .seller-order-summary-card > div > span,
+.seller-shell .seller-order-tabs button,
+.seller-shell .seller-order-search input,
+.seller-shell .seller-order-feedback strong,
+.seller-shell .seller-order-totals-card dd,
+.seller-shell .seller-order-products article > strong,
+.seller-shell .seller-order-actions button,
+.seller-shell .seller-order-modal dl > div {
+  font-size: 0.69rem;
+}
+
+.seller-shell .seller-order-table th,
+.seller-shell .seller-order-table td::before {
+  font-size: 0.61rem;
+}
+
+.seller-shell .seller-order-table td {
+  font-size: 0.68rem;
+}
+
+.seller-shell .seller-order-table td > strong {
+  font-size: 0.71rem;
+}
+
+.seller-shell .seller-order-table td > small,
+.seller-shell .seller-order-products article > div small,
+.seller-shell .seller-order-shipping header p,
+.seller-shell .seller-order-totals-card dt {
+  font-size: 0.61rem;
+}
+
+.seller-shell .seller-order-identity em {
+  font-size: 0.57rem;
+}
+
+.seller-shell .seller-payment-status,
+.seller-shell .seller-order-detail-link {
+  font-size: 0.61rem;
+}
+
+.seller-shell .seller-order-pagination button,
+.seller-shell .seller-order-feedback p,
+.seller-shell .seller-order-empty button,
+.seller-shell .seller-order-overview header small,
+.seller-shell .seller-order-shipping > header > span,
+.seller-shell .seller-order-payment-card > p,
+.seller-shell .seller-order-detail-error a {
+  font-size: 0.65rem;
+}
+
+.seller-shell .seller-order-empty h2,
+.seller-shell .seller-order-shipping h2 {
+  font-size: 0.9rem;
+}
+
+/* Review management */
+.seller-shell .seller-review-heading > span,
+.seller-shell .seller-review-summary-card > div > span,
+.seller-shell .seller-review-summary-card > p,
+.seller-shell .seller-review-tabs button > span,
+.seller-shell .seller-review-toolbar label > span,
+.seller-shell .seller-review-toolbar > p,
+.seller-shell .seller-review-toolbar > button {
+  font-size: 0.65rem;
+}
+
+.seller-shell .seller-review-heading p,
+.seller-shell .seller-review-empty p {
+  font-size: 0.72rem;
+}
+
+.seller-shell .seller-review-summary-card > strong small,
+.seller-shell .seller-review-tabs button,
+.seller-shell .seller-review-toolbar select,
+.seller-shell .seller-review-row,
+.seller-shell .seller-review-comment,
+.seller-shell .seller-review-error strong {
+  font-size: 0.69rem;
+}
+
+.seller-shell .seller-review-table-head,
+.seller-shell .seller-review-row > *::before {
+  font-size: 0.61rem;
+}
+
+.seller-shell .seller-review-meta strong,
+.seller-shell .seller-review-rating > span {
+  font-size: 0.7rem;
+}
+
+.seller-shell .seller-review-meta time,
+.seller-shell .seller-review-rating > strong {
+  font-size: 0.6rem;
+}
+
+.seller-shell .seller-review-error p,
+.seller-shell .seller-review-empty button {
+  font-size: 0.65rem;
+}
+
+.seller-shell .seller-review-empty h2 {
+  font-size: 0.9rem;
+}
+
+/* Statistics */
+.seller-shell .seller-statistics-heading p {
+  font-size: 0.72rem;
+}
+
+.seller-shell .seller-statistics-panel header span,
+.seller-shell .seller-statistics-range button,
+.seller-shell .seller-statistics-card > div > span,
+.seller-shell .seller-statistics-alert p,
+.seller-shell .seller-statistics-alert button {
+  font-size: 0.65rem;
+}
+
+.seller-shell .seller-statistics-alert strong,
+.seller-shell .seller-status-list p,
+.seller-shell .seller-top-products__rank,
+.seller-shell .seller-top-products__identity h3,
+.seller-shell .seller-statistics-panel-empty p,
+.seller-shell .seller-statistics-empty p {
+  font-size: 0.69rem;
+}
+
+.seller-shell .seller-statistics-card > small,
+.seller-shell .seller-statistics-panel header small,
+.seller-shell .seller-revenue-bar strong,
+.seller-shell .seller-top-products__identity p {
+  font-size: 0.62rem;
+}
+
+.seller-shell .seller-revenue-bar small {
+  font-size: 0.59rem;
+}
+
+.seller-shell .seller-statistics-panel header h2 {
+  font-size: 0.88rem;
+}
+
+.seller-shell .seller-status-list p strong,
+.seller-shell .seller-top-products__revenue {
+  font-size: 0.72rem;
+}
+
+.seller-shell .seller-statistics-empty h2 {
+  font-size: 0.92rem;
+}
+
+/* Seller profile */
+.seller-shell .seller-profile-page .customer-profile-heading p {
+  font-size: 0.84rem;
+}
+
+.seller-shell .seller-profile-page .customer-profile-field > span,
+.seller-shell .seller-profile-page .customer-profile-status,
+.seller-shell .seller-profile-page .customer-profile-avatar-url input,
+.seller-shell .seller-profile-page .customer-profile-message {
+  font-size: 0.76rem;
+}
+
+.seller-shell .seller-profile-page .customer-profile-field input,
+.seller-shell .seller-profile-page .customer-profile-field textarea {
+  font-size: 0.9rem;
+}
+
+.seller-shell .seller-profile-page .customer-profile-field > div > small,
+.seller-shell .seller-profile-page .customer-profile-summary > small,
+.seller-shell .seller-profile-page .customer-profile-avatar-url > span {
+  font-size: 0.72rem;
+}
+
+.seller-shell .seller-profile-page .customer-profile-avatar-url small {
+  font-size: 0.66rem;
+}
+
+.seller-shell .seller-profile-page .customer-profile-actions button {
+  font-size: 0.82rem;
+}
+
+/* Order detail needs a roomier scale than the compact management table. */
+.seller-shell .seller-order-detail-heading > div:first-child > span {
+  font-size: 0.68rem;
+}
+
+.seller-shell .seller-order-detail-heading p,
+.seller-shell .seller-order-alert p,
+.seller-shell .seller-order-feedback p {
+  font-size: 0.76rem;
+}
+
+.seller-shell .seller-order-detail-heading > a,
+.seller-shell .seller-order-alert button,
+.seller-shell .seller-order-feedback button {
+  font-size: 0.7rem;
+}
+
+.seller-shell .seller-order-alert strong,
+.seller-shell .seller-order-feedback strong {
+  font-size: 0.76rem;
+}
+
+.seller-shell .seller-order-detail-card h2,
+.seller-shell .seller-order-actions-card h2,
+.seller-shell .seller-order-payment-card h2,
+.seller-shell .seller-order-totals-card h2 {
+  font-size: 1rem;
+}
+
+.seller-shell .seller-order-overview header small,
+.seller-shell .seller-order-actions-card__eyebrow,
+.seller-shell .seller-order-payment-card__eyebrow {
+  font-size: 0.68rem;
+}
+
+.seller-shell .seller-order-overview header h2 {
+  font-size: 1.4rem;
+}
+
+.seller-shell .seller-order-overview time,
+.seller-shell .seller-order-products header p,
+.seller-shell .seller-order-shipping header p {
+  font-size: 0.68rem;
+}
+
+.seller-shell .seller-order-overview dt,
+.seller-shell .seller-order-shipping dt,
+.seller-shell .seller-order-payment-card dt,
+.seller-shell .seller-order-totals-card dt {
+  font-size: 0.68rem;
+}
+
+.seller-shell .seller-order-overview dd,
+.seller-shell .seller-order-shipping dd,
+.seller-shell .seller-order-payment-card dd,
+.seller-shell .seller-order-totals-card dd {
+  font-size: 0.76rem;
+}
+
+.seller-shell .seller-order-products > header > span,
+.seller-shell .seller-order-shipping > header > span {
+  font-size: 0.68rem;
+}
+
+.seller-shell .seller-order-products article > div strong,
+.seller-shell .seller-order-products article > strong {
+  font-size: 0.76rem;
+}
+
+.seller-shell .seller-order-products article > div small {
+  font-size: 0.68rem;
+}
+
+.seller-shell .seller-order-actions-card > p,
+.seller-shell .seller-order-payment-card > p,
+.seller-shell .seller-order-actions-empty {
+  font-size: 0.72rem;
+}
+
+.seller-shell .seller-order-detail-side .seller-order-status,
+.seller-shell .seller-order-detail-side .seller-payment-status,
+.seller-shell .seller-order-overview .seller-order-status {
+  font-size: 0.66rem;
+}
+
+.seller-shell .seller-order-actions button {
+  min-height: 2.55rem;
+  font-size: 0.72rem;
+}
+
+.seller-shell .seller-order-totals-card dl > div:last-child dt,
+.seller-shell .seller-order-totals-card dl > div:last-child dd {
+  font-size: 0.86rem;
+}

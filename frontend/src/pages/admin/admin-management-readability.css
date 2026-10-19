@@ -1,0 +1,236 @@
+/* Shared readability pass for the dense Admin management screens. */
+
+/* Users */
+.admin-shell .admin-user-heading p {
+  font-size: 0.82rem;
+}
+
+.admin-shell .admin-user-heading > div:last-child small,
+.admin-shell .admin-user-toolbar form,
+.admin-shell .admin-user-toolbar > label {
+  font-size: 0.63rem;
+}
+
+.admin-shell .admin-user-summary span {
+  font-size: 0.67rem;
+}
+
+.admin-shell .admin-user-toolbar input,
+.admin-shell .admin-user-toolbar select {
+  font-size: 0.73rem;
+}
+
+.admin-shell .admin-user-toolbar form button,
+.admin-shell .admin-user-table td {
+  font-size: 0.71rem;
+}
+
+.admin-shell .admin-user-table th {
+  font-size: 0.61rem;
+}
+
+.admin-shell .admin-user-table td > strong {
+  font-size: 0.74rem;
+}
+
+.admin-shell .admin-user-table td > small {
+  font-size: 0.62rem;
+}
+
+.admin-shell .admin-user-table time {
+  font-size: 0.67rem;
+}
+
+.admin-shell .admin-user-role,
+.admin-shell .admin-user-status {
+  font-size: 0.63rem;
+}
+
+.admin-shell .admin-user-table td:last-child a {
+  font-size: 0.65rem;
+}
+
+.admin-shell .admin-user-pagination,
+.admin-shell .admin-user-pagination button {
+  font-size: 0.68rem;
+}
+
+.admin-shell .admin-user-detail-heading p,
+.admin-shell .admin-user-detail-heading > button,
+.admin-shell .admin-user-detail-card dd,
+.admin-shell .admin-user-account-panel > p,
+.admin-shell .admin-user-profile-empty {
+  font-size: 0.72rem;
+}
+
+.admin-shell .admin-user-detail-card h2 {
+  font-size: 0.87rem;
+}
+
+.admin-shell .admin-user-detail-card header p,
+.admin-shell .admin-user-detail-card dt,
+.admin-shell .admin-user-shop p {
+  font-size: 0.63rem;
+}
+
+.admin-shell .admin-user-shop h3 {
+  font-size: 0.82rem;
+}
+
+/* Orders */
+.admin-shell .admin-order-heading p {
+  font-size: 0.82rem;
+}
+
+.admin-shell .admin-order-heading > div:last-child small,
+.admin-shell .admin-order-toolbar form > label,
+.admin-shell .admin-order-status,
+.admin-shell .admin-payment-status,
+.admin-shell .admin-order-overview dt {
+  font-size: 0.64rem;
+}
+
+.admin-shell .admin-order-toolbar input,
+.admin-shell .admin-order-products article > strong {
+  font-size: 0.75rem;
+}
+
+.admin-shell .admin-order-toolbar form button,
+.admin-shell .admin-order-overview dd {
+  font-size: 0.73rem;
+}
+
+.admin-shell .admin-order-toolbar nav button,
+.admin-shell .admin-order-payment dl > div,
+.admin-shell .admin-order-totals dl > div {
+  font-size: 0.71rem;
+}
+
+.admin-shell .admin-order-table th {
+  font-size: 0.62rem;
+}
+
+.admin-shell .admin-order-table td,
+.admin-shell .admin-order-delivery dl > div {
+  font-size: 0.72rem;
+}
+
+.admin-shell .admin-order-table td > strong,
+.admin-shell .admin-order-products article > div:nth-child(2) strong {
+  font-size: 0.75rem;
+}
+
+.admin-shell .admin-order-table td > small {
+  font-size: 0.62rem;
+}
+
+.admin-shell .admin-order-table time {
+  font-size: 0.68rem;
+}
+
+.admin-shell .admin-order-table td:last-child a,
+.admin-shell .admin-order-products header p,
+.admin-shell .admin-order-delivery header p,
+.admin-shell .admin-order-products article small {
+  font-size: 0.65rem;
+}
+
+.admin-shell .admin-order-pagination,
+.admin-shell .admin-order-pagination button {
+  font-size: 0.7rem;
+}
+
+.admin-shell .admin-order-products h2,
+.admin-shell .admin-order-delivery h2 {
+  font-size: 0.9rem;
+}
+
+/* Products */
+.admin-shell .admin-product-heading p {
+  font-size: 0.85rem;
+}
+
+.admin-shell .admin-product-heading > div:last-child span,
+.admin-shell .admin-product-detail-link,
+.admin-shell .admin-product-pagination button,
+.admin-shell .admin-product-state button {
+  font-size: 0.66rem;
+}
+
+.admin-shell .admin-product-toolbar label,
+.admin-shell .admin-product-toolbar form > label {
+  font-size: 0.65rem;
+}
+
+.admin-shell .admin-product-toolbar input,
+.admin-shell .admin-product-toolbar select,
+.admin-shell .admin-product-review-hero p {
+  font-size: 0.71rem;
+}
+
+.admin-shell .admin-product-toolbar form button {
+  font-size: 0.68rem;
+}
+
+.admin-shell .admin-product-table th,
+.admin-shell .admin-product-status {
+  font-size: 0.62rem;
+}
+
+.admin-shell .admin-product-table td {
+  font-size: 0.69rem;
+}
+
+.admin-shell .admin-product-table td > small,
+.admin-shell .admin-product-identity small {
+  font-size: 0.61rem;
+}
+
+.admin-shell .admin-product-identity strong {
+  font-size: 0.74rem;
+}
+
+.admin-shell .admin-product-pagination {
+  font-size: 0.69rem;
+}
+
+.admin-shell .admin-product-detail-card h2 {
+  font-size: 0.9rem;
+}
+
+.admin-shell .admin-product-detail-card header p {
+  font-size: 0.63rem;
+}
+
+.admin-shell .admin-product-detail-card dt {
+  font-size: 0.68rem;
+}
+
+.admin-shell .admin-product-detail-card dd {
+  font-size: 0.72rem;
+}
+
+.admin-shell .admin-product-detail-card dd small,
+.admin-shell .admin-product-inventory span {
+  font-size: 0.6rem;
+}
+
+.admin-shell .admin-product-review-actions button,
+.admin-shell .admin-product-rejection strong {
+  font-size: 0.7rem;
+}
+
+.admin-shell .admin-product-rejection p {
+  font-size: 0.69rem;
+}
+
+@media (max-width: 760px) {
+  .admin-shell .admin-user-table td::before,
+  .admin-shell .admin-order-table td::before {
+    font-size: 0.6rem;
+  }
+
+  .admin-shell .admin-product-table td::before {
+    font-size: 0.63rem;
+  }
+}

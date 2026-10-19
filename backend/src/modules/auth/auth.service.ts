@@ -24,6 +24,8 @@ import type { AuthenticationTokenPayload } from './interfaces/authentication-tok
 const PASSWORD_SALT_ROUNDS = 12;
 const POSTGRES_UNIQUE_VIOLATION = '23505';
 const INVALID_CREDENTIALS_MESSAGE = 'Email or password incorrect';
+const INACTIVE_ACCOUNT_MESSAGE =
+  'Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.';
 const INVALID_REFRESH_TOKEN_MESSAGE = 'Invalid or expired refresh token';
 
 interface PostgresDriverError {
@@ -41,8 +43,8 @@ export class AuthService {
   ) {}
 
   async login(loginDto: LoginDto) {
-    const email = loginDto.email.trim().toLowerCase();
-    const user = await this.userService.findByEmail(email);
+    const email = this.normalizeEmail(loginDto.email);
+    const user = await this.userService.findByEmailWithPassword(email);
 
     if (!user) {
       throw new UnauthorizedException(INVALID_CREDENTIALS_MESSAGE);
@@ -50,8 +52,12 @@ export class AuthService {
 
     const passwordMatches = await compare(loginDto.password, user.password);
 
-    if (!passwordMatches || !user.isActive) {
+    if (!passwordMatches) {
       throw new UnauthorizedException(INVALID_CREDENTIALS_MESSAGE);
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedException(INACTIVE_ACCOUNT_MESSAGE);
     }
 
     const [accessToken, refreshToken] = await Promise.all([
@@ -67,6 +73,7 @@ export class AuthService {
         fullName: user.fullName,
         email: user.email,
         phone: user.phone,
+        avatarUrl: user.avatarUrl,
         role: user.role,
         isActive: user.isActive,
       },
@@ -102,8 +109,8 @@ export class AuthService {
   }
 
   async registerCustomer(registerCustomerDto: RegisterCustomerDto) {
-    const email = registerCustomerDto.email.trim().toLowerCase();
-    const phone = registerCustomerDto.phone?.trim() || null;
+    const email = this.normalizeEmail(registerCustomerDto.email);
+    const phone = this.normalizeOptionalText(registerCustomerDto.phone);
 
     if (await this.userService.checkEmailExists(email)) {
       throw new ConflictException('Email already exists');
@@ -128,6 +135,7 @@ export class AuthService {
             fullName: registerCustomerDto.fullName.trim(),
             email,
             phone,
+            avatarUrl: null,
             password: hashedPassword,
             role: UserRole.CUSTOMER,
             isActive: true,
@@ -148,6 +156,7 @@ export class AuthService {
           fullName: user.fullName,
           email: user.email,
           phone: user.phone,
+          avatarUrl: user.avatarUrl,
           role: user.role,
           isActive: user.isActive,
           shippingAddress: customer.shippingAddress,
@@ -164,8 +173,8 @@ export class AuthService {
   }
 
   async registerSeller(registerSellerDto: RegisterSellerDto) {
-    const email = registerSellerDto.email.trim().toLowerCase();
-    const phone = registerSellerDto.phone?.trim() || null;
+    const email = this.normalizeEmail(registerSellerDto.email);
+    const phone = this.normalizeOptionalText(registerSellerDto.phone);
 
     if (await this.userService.checkEmailExists(email)) {
       throw new ConflictException('Email already exists');
@@ -190,6 +199,7 @@ export class AuthService {
             fullName: registerSellerDto.fullName.trim(),
             email,
             phone,
+            avatarUrl: null,
             password: hashedPassword,
             role: UserRole.SELLER,
             isActive: true,
@@ -209,6 +219,7 @@ export class AuthService {
           fullName: user.fullName,
           email: user.email,
           phone: user.phone,
+          avatarUrl: user.avatarUrl,
           role: user.role,
           isActive: user.isActive,
           sellerStatus: seller.status,
@@ -231,6 +242,14 @@ export class AuthService {
 
     const driverError = error.driverError as PostgresDriverError;
     return driverError.code === POSTGRES_UNIQUE_VIOLATION;
+  }
+
+  private normalizeEmail(email: string): string {
+    return email.trim().toLowerCase();
+  }
+
+  private normalizeOptionalText(value: string | undefined): string | null {
+    return value?.trim() || null;
   }
 
   private createTokenPayload(user: User): AuthenticationTokenPayload {

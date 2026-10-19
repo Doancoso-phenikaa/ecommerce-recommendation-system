@@ -7,9 +7,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { CartItem } from '../cart/entities/cart-item.entity.js';
 import { Cart } from '../cart/entities/cart.entity.js';
+import { CategoryStatus } from '../category/enums/category-status.enum.js';
 import { Customer } from '../customer/entities/customer.entity.js';
 import { Discount } from '../discount/entities/discount.entity.js';
 import { DiscountStatus } from '../discount/enums/discount-status.enum.js';
+import { DiscountTarget } from '../discount/enums/discount-target.enum.js';
 import { DiscountType } from '../discount/enums/discount-type.enum.js';
 import { Inventory } from '../inventory/entities/inventory.entity.js';
 import { OrderGroup } from '../order/entities/order-group.entity.js';
@@ -21,14 +23,18 @@ import { ProductStatus } from '../product/enums/product-status.enum.js';
 import { ShopStatus } from '../shop/enums/shop-status.enum.js';
 import { BehaviorType } from '../user-behavior/enums/behavior-type.enum.js';
 import { UserBehaviorService } from '../user-behavior/user-behavior.service.js';
+import { ShippingConfigService } from '../shipping-config/shipping-config.service.js';
 import { CheckoutPreviewDto } from './dto/checkout-preview.dto.js';
 import { ConfirmCheckoutDto } from './dto/confirm-checkout.dto.js';
 
 export interface CheckoutPreviewItem {
+  cartItemId: string;
   productId: string;
   name: string;
   imageUrl: string | null;
   price: string;
+  originalPrice: string | null;
+  categoryName: string;
   quantity: number;
   availableQuantity: number;
   subtotal: string;
@@ -39,13 +45,25 @@ export interface CheckoutPreviewShopGroup {
   shopName: string;
   items: CheckoutPreviewItem[];
   subtotal: string;
+  productDiscountAmount: string;
+  totalAmount: string;
 }
 
 export interface CheckoutPreviewResponse {
   shopGroups: CheckoutPreviewShopGroup[];
+  subtotal: string;
   cartSubtotal: string;
+  productDiscount: CheckoutPreviewDiscount | null;
+  shippingDiscount: CheckoutPreviewDiscount | null;
+  productDiscountAmount: string;
+  shippingFee: string;
+  shippingDiscountAmount: string;
+  totalAmount: string;
+  /** @deprecated Use productDiscount. */
   discount: CheckoutPreviewDiscount | null;
+  /** @deprecated Use productDiscountAmount. */
   discountAmount: string;
+  /** @deprecated Use totalAmount. */
   finalTotal: string;
 }
 
@@ -53,6 +71,7 @@ export interface CheckoutPreviewDiscount {
   discountId: string;
   code: string;
   type: DiscountType;
+  target: DiscountTarget;
   value: string;
 }
 
@@ -90,7 +109,6 @@ export interface ConfirmCheckoutOrderResponse {
   shopId: string;
   subtotal: string;
   discountAmount: string;
-  shippingFee: string;
   totalAmount: string;
   shippingAddress: string;
   shippingMethod: string | null;
@@ -100,11 +118,25 @@ export interface ConfirmCheckoutOrderResponse {
 
 export interface ConfirmCheckoutResponse {
   orderGroupId: string;
+  subtotal: string;
   cartSubtotal: string;
+  productDiscount: {
+    discountId: string;
+    code: string;
+  } | null;
+  shippingDiscount: {
+    discountId: string;
+    code: string;
+  } | null;
+  productDiscountAmount: string;
+  shippingFee: string;
+  shippingDiscountAmount: string;
+  /** @deprecated Use productDiscount. */
   discount: {
     discountId: string;
     code: string;
   } | null;
+  /** @deprecated Use productDiscountAmount. */
   discountAmount: string;
   totalAmount: string;
   orders: ConfirmCheckoutOrderResponse[];
@@ -124,12 +156,16 @@ export class CheckoutService {
     private readonly discountRepository: Repository<Discount>,
     private readonly dataSource: DataSource,
     private readonly userBehaviorService: UserBehaviorService,
+    private readonly shippingConfigService: ShippingConfigService,
   ) {}
 
   async previewCheckout(
     userId: string,
-    checkoutPreviewDto?: CheckoutPreviewDto,
+    checkoutPreviewDto: CheckoutPreviewDto,
   ): Promise<CheckoutPreviewResponse> {
+    const selectedCartItemIds = this.validateSelectedCartItemIds(
+      checkoutPreviewDto?.selectedCartItemIds,
+    );
     const customer = await this.customerRepository.findOneBy({ userId });
 
     if (!customer) {
@@ -148,15 +184,20 @@ export class CheckoutService {
       .createQueryBuilder('cartItem')
       .innerJoinAndSelect('cartItem.product', 'product')
       .innerJoinAndSelect('product.shop', 'shop')
+      .innerJoinAndSelect('product.category', 'category')
       .leftJoinAndSelect('product.inventory', 'inventory')
       .where('cartItem.cartId = :cartId', { cartId: cart.cartId })
+      .andWhere('cartItem.cartItemId IN (:...selectedCartItemIds)', {
+        selectedCartItemIds,
+      })
       .orderBy('cartItem.createdAt', 'ASC')
       .addOrderBy('cartItem.cartItemId', 'ASC')
       .getMany();
 
-    if (cartItems.length === 0) {
-      throw new BadRequestException('Cart is empty');
-    }
+    this.ensureAllSelectedCartItemsWereLoaded(
+      selectedCartItemIds,
+      cartItems,
+    );
 
     const groupsByShop = new Map<string, PreviewShopGroupAccumulator>();
     let cartSubtotalInCents = 0n;
@@ -169,6 +210,12 @@ export class CheckoutService {
       if (product.status !== ProductStatus.APPROVED) {
         throw new BadRequestException(
           `Product ${product.productId} (${product.name}) is not approved`,
+        );
+      }
+
+      if (product.category.status !== CategoryStatus.ACTIVE) {
+        throw new BadRequestException(
+          `Category for product ${product.productId} (${product.name}) is not active`,
         );
       }
 
@@ -207,10 +254,13 @@ export class CheckoutService {
       }
 
       shopGroup.items.push({
+        cartItemId: cartItem.cartItemId,
         productId: product.productId,
         name: product.name,
         imageUrl: product.imageUrl,
         price: product.price,
+        originalPrice: product.originalPrice,
+        categoryName: product.category.name,
         quantity: cartItem.quantity,
         availableQuantity,
         subtotal: this.formatCents(subtotalInCents),
@@ -219,34 +269,76 @@ export class CheckoutService {
       cartSubtotalInCents += subtotalInCents;
     }
 
-    const shopGroups = Array.from(groupsByShop.values(), (shopGroup) => ({
-      shopId: shopGroup.shopId,
-      shopName: shopGroup.shopName,
-      items: shopGroup.items,
-      subtotal: this.formatCents(shopGroup.subtotalInCents),
-    }));
-    const discount = await this.findAndValidateDiscount(
-      checkoutPreviewDto?.discountCode,
-      cartSubtotalInCents,
+    const shopGroupAccumulators = Array.from(groupsByShop.values());
+    const shippingConfig = await this.shippingConfigService.getConfig();
+    const shippingFeeInCents = this.priceToCents(
+      shippingConfig.defaultShippingFee,
     );
-    const discountAmountInCents = discount
-      ? this.calculateDiscountAmount(cartSubtotalInCents, discount)
+    const productDiscount = await this.findAndValidateDiscount(
+      checkoutPreviewDto.productDiscountCode,
+      cartSubtotalInCents,
+      DiscountTarget.PRODUCT,
+    );
+    const shippingDiscount = await this.findAndValidateDiscount(
+      checkoutPreviewDto.shippingDiscountCode,
+      cartSubtotalInCents,
+      DiscountTarget.SHIPPING,
+    );
+    const productDiscountAmountInCents = productDiscount
+      ? this.calculateDiscountAmount(cartSubtotalInCents, productDiscount)
       : 0n;
-    const finalTotalInCents = cartSubtotalInCents - discountAmountInCents;
+    const shippingDiscountAmountInCents = shippingDiscount
+      ? this.calculateDiscountAmount(
+          shippingFeeInCents,
+          shippingDiscount,
+        )
+      : 0n;
+    const productDiscountAllocations = this.allocateAmountByShop(
+      shopGroupAccumulators,
+      cartSubtotalInCents,
+      productDiscountAmountInCents,
+      (shopGroup) => shopGroup.subtotalInCents,
+    );
+    const shopGroups = shopGroupAccumulators.map((shopGroup) => {
+      const shopProductDiscountInCents =
+        productDiscountAllocations.get(shopGroup.shopId) ?? 0n;
+      const totalAmountInCents =
+        shopGroup.subtotalInCents - shopProductDiscountInCents;
+
+      return {
+        shopId: shopGroup.shopId,
+        shopName: shopGroup.shopName,
+        items: shopGroup.items,
+        subtotal: this.formatCents(shopGroup.subtotalInCents),
+        productDiscountAmount: this.formatCents(
+          shopProductDiscountInCents,
+        ),
+        totalAmount: this.formatCents(totalAmountInCents),
+      };
+    });
+    const totalAmountInCents =
+      cartSubtotalInCents -
+      productDiscountAmountInCents +
+      shippingFeeInCents -
+      shippingDiscountAmountInCents;
 
     return {
       shopGroups,
+      subtotal: this.formatCents(cartSubtotalInCents),
       cartSubtotal: this.formatCents(cartSubtotalInCents),
-      discount: discount
-        ? {
-            discountId: discount.discountId,
-            code: discount.code,
-            type: discount.type,
-            value: discount.value,
-          }
-        : null,
-      discountAmount: this.formatCents(discountAmountInCents),
-      finalTotal: this.formatCents(finalTotalInCents),
+      productDiscount: this.buildPreviewDiscount(productDiscount),
+      shippingDiscount: this.buildPreviewDiscount(shippingDiscount),
+      productDiscountAmount: this.formatCents(
+        productDiscountAmountInCents,
+      ),
+      shippingFee: this.formatCents(shippingFeeInCents),
+      shippingDiscountAmount: this.formatCents(
+        shippingDiscountAmountInCents,
+      ),
+      totalAmount: this.formatCents(totalAmountInCents),
+      discount: this.buildPreviewDiscount(productDiscount),
+      discountAmount: this.formatCents(productDiscountAmountInCents),
+      finalTotal: this.formatCents(totalAmountInCents),
     };
   }
 
@@ -254,6 +346,9 @@ export class CheckoutService {
     userId: string,
     confirmCheckoutDto: ConfirmCheckoutDto,
   ): Promise<ConfirmCheckoutResponse> {
+    const selectedCartItemIds = this.validateSelectedCartItemIds(
+      confirmCheckoutDto?.selectedCartItemIds,
+    );
     const transactionResult = await this.dataSource.transaction(
       async (manager) => {
         const customer = await manager
@@ -280,15 +375,21 @@ export class CheckoutService {
         const cartItemRepository = manager.getRepository(CartItem);
         const cartItems = await cartItemRepository
           .createQueryBuilder('cartItem')
+          .setLock('pessimistic_write')
           .innerJoinAndSelect('cartItem.product', 'product')
           .innerJoinAndSelect('product.shop', 'shop')
+          .innerJoinAndSelect('product.category', 'category')
           .where('cartItem.cartId = :cartId', { cartId: cart.cartId })
-          .orderBy('cartItem.productId', 'ASC')
+          .andWhere('cartItem.cartItemId IN (:...selectedCartItemIds)', {
+            selectedCartItemIds,
+          })
+          .orderBy('cartItem.cartItemId', 'ASC')
           .getMany();
 
-        if (cartItems.length === 0) {
-          throw new BadRequestException('Cart is empty');
-        }
+        this.ensureAllSelectedCartItemsWereLoaded(
+          selectedCartItemIds,
+          cartItems,
+        );
 
         const inventoriesByProductId = await this.lockInventories(
           manager,
@@ -296,25 +397,53 @@ export class CheckoutService {
         );
         const { shopGroups, cartSubtotalInCents } =
           this.groupAndValidateCartItems(cartItems, inventoriesByProductId);
-        const discount = await this.findAndLockDiscount(
+        const productDiscount = await this.findAndLockDiscount(
           manager,
-          confirmCheckoutDto.discountCode,
+          confirmCheckoutDto.productDiscountCode,
           cartSubtotalInCents,
+          DiscountTarget.PRODUCT,
         );
-        const discountAmountInCents = discount
-          ? this.calculateDiscountAmount(cartSubtotalInCents, discount)
+        const shippingDiscount = await this.findAndLockDiscount(
+          manager,
+          confirmCheckoutDto.shippingDiscountCode,
+          cartSubtotalInCents,
+          DiscountTarget.SHIPPING,
+        );
+        const shippingConfig = await this.shippingConfigService.lockConfig(
+          manager,
+          'pessimistic_read',
+        );
+        const shippingFeeInCents = this.priceToCents(
+          shippingConfig.defaultShippingFee,
+        );
+        const productDiscountAmountInCents = productDiscount
+          ? this.calculateDiscountAmount(cartSubtotalInCents, productDiscount)
           : 0n;
-        const finalTotalInCents = cartSubtotalInCents - discountAmountInCents;
-        const discountAllocations = this.allocateDiscountByShop(
+        const shippingDiscountAmountInCents = shippingDiscount
+          ? this.calculateDiscountAmount(
+              shippingFeeInCents,
+              shippingDiscount,
+            )
+          : 0n;
+        const finalTotalInCents =
+          cartSubtotalInCents -
+          productDiscountAmountInCents +
+          shippingFeeInCents -
+          shippingDiscountAmountInCents;
+        const productDiscountAllocations = this.allocateAmountByShop(
           shopGroups,
           cartSubtotalInCents,
-          discountAmountInCents,
+          productDiscountAmountInCents,
+          (shopGroup) => shopGroup.subtotalInCents,
         );
-
         const orderGroupRepository = manager.getRepository(OrderGroup);
         const orderGroup = await orderGroupRepository.save(
           orderGroupRepository.create({
             customerId: customer.customerId,
+            shippingFee: this.formatCents(shippingFeeInCents),
+            shippingDiscountAmount: this.formatCents(
+              shippingDiscountAmountInCents,
+            ),
             totalAmount: this.formatCents(finalTotalInCents),
           }),
         );
@@ -324,20 +453,16 @@ export class CheckoutService {
 
         for (const shopGroup of shopGroups) {
           const shopDiscountInCents =
-            discountAllocations.get(shopGroup.shopId) ?? 0n;
-          const shippingFeeInCents = 0n;
+            productDiscountAllocations.get(shopGroup.shopId) ?? 0n;
           const orderTotalInCents =
-            shopGroup.subtotalInCents -
-            shopDiscountInCents +
-            shippingFeeInCents;
+            shopGroup.subtotalInCents - shopDiscountInCents;
           const order = await orderRepository.save(
             orderRepository.create({
               orderGroupId: orderGroup.orderGroupId,
               shopId: shopGroup.shopId,
-              discountId: discount?.discountId ?? null,
+              discountId: productDiscount?.discountId ?? null,
               subtotal: this.formatCents(shopGroup.subtotalInCents),
               discountAmount: this.formatCents(shopDiscountInCents),
-              shippingFee: this.formatCents(shippingFeeInCents),
               totalAmount: this.formatCents(orderTotalInCents),
               shippingAddress: confirmCheckoutDto.shippingAddress.trim(),
               shippingMethod: confirmCheckoutDto.shippingMethod?.trim() || null,
@@ -362,7 +487,6 @@ export class CheckoutService {
             shopId: order.shopId,
             subtotal: order.subtotal,
             discountAmount: order.discountAmount,
-            shippingFee: order.shippingFee,
             totalAmount: order.totalAmount,
             shippingAddress: order.shippingAddress,
             shippingMethod: order.shippingMethod,
@@ -388,13 +512,30 @@ export class CheckoutService {
           .getRepository(Inventory)
           .save(Array.from(inventoriesByProductId.values()));
 
-        if (discount) {
-          await manager
-            .getRepository(Discount)
-            .increment({ discountId: discount.discountId }, 'usedCount', 1);
+        const usedDiscounts = [productDiscount, shippingDiscount].filter(
+          (discount): discount is Discount => discount !== null,
+        );
+
+        if (usedDiscounts.length > 0) {
+          for (const discount of usedDiscounts) {
+            discount.usedCount += 1;
+          }
+          await manager.getRepository(Discount).save(usedDiscounts);
         }
 
-        await cartItemRepository.delete({ cartId: cart.cartId });
+        const deleteResult = await cartItemRepository
+          .createQueryBuilder()
+          .delete()
+          .from(CartItem)
+          .where('"cart_id" = :cartId', { cartId: cart.cartId })
+          .andWhere('"cart_item_id" IN (:...selectedCartItemIds)', {
+            selectedCartItemIds,
+          })
+          .execute();
+
+        if (deleteResult.affected !== selectedCartItemIds.length) {
+          throw new Error('Selected cart items changed during checkout');
+        }
 
         return {
           customerId: customer.customerId,
@@ -403,14 +544,34 @@ export class CheckoutService {
           ),
           response: {
             orderGroupId: orderGroup.orderGroupId,
+            subtotal: this.formatCents(cartSubtotalInCents),
             cartSubtotal: this.formatCents(cartSubtotalInCents),
-            discount: discount
+            productDiscount: productDiscount
               ? {
-                  discountId: discount.discountId,
-                  code: discount.code,
+                  discountId: productDiscount.discountId,
+                  code: productDiscount.code,
                 }
               : null,
-            discountAmount: this.formatCents(discountAmountInCents),
+            shippingDiscount: shippingDiscount
+              ? {
+                  discountId: shippingDiscount.discountId,
+                  code: shippingDiscount.code,
+                }
+              : null,
+            productDiscountAmount: this.formatCents(
+              productDiscountAmountInCents,
+            ),
+            shippingFee: orderGroup.shippingFee,
+            shippingDiscountAmount: this.formatCents(
+              shippingDiscountAmountInCents,
+            ),
+            discount: productDiscount
+              ? {
+                  discountId: productDiscount.discountId,
+                  code: productDiscount.code,
+                }
+              : null,
+            discountAmount: this.formatCents(productDiscountAmountInCents),
             totalAmount: orderGroup.totalAmount,
             orders,
             createdAt: orderGroup.createdAt,
@@ -435,6 +596,7 @@ export class CheckoutService {
   private async findAndValidateDiscount(
     discountCode: string | undefined,
     cartSubtotalInCents: bigint,
+    expectedTarget: DiscountTarget,
   ): Promise<Discount | null> {
     const normalizedCode = discountCode?.trim().toUpperCase();
 
@@ -450,7 +612,7 @@ export class CheckoutService {
       throw new BadRequestException('Discount code is invalid');
     }
 
-    this.validateDiscount(discount, cartSubtotalInCents);
+    this.validateDiscount(discount, cartSubtotalInCents, expectedTarget);
     return discount;
   }
 
@@ -458,6 +620,7 @@ export class CheckoutService {
     manager: EntityManager,
     discountCode: string | undefined,
     cartSubtotalInCents: bigint,
+    expectedTarget: DiscountTarget,
   ): Promise<Discount | null> {
     const normalizedCode = discountCode?.trim().toUpperCase();
 
@@ -476,14 +639,23 @@ export class CheckoutService {
       throw new BadRequestException('Discount code is invalid');
     }
 
-    this.validateDiscount(discount, cartSubtotalInCents);
+    this.validateDiscount(discount, cartSubtotalInCents, expectedTarget);
     return discount;
   }
 
   private validateDiscount(
     discount: Discount,
     cartSubtotalInCents: bigint,
+    expectedTarget: DiscountTarget,
   ): void {
+    if (discount.target !== expectedTarget) {
+      throw new BadRequestException(
+        expectedTarget === DiscountTarget.PRODUCT
+          ? 'Product discount code must target PRODUCT'
+          : 'Shipping discount code must target SHIPPING',
+      );
+    }
+
     if (discount.status !== DiscountStatus.ACTIVE) {
       throw new BadRequestException('Discount is inactive');
     }
@@ -560,6 +732,12 @@ export class CheckoutService {
         );
       }
 
+      if (product.category.status !== CategoryStatus.ACTIVE) {
+        throw new BadRequestException(
+          `Category for product ${product.productId} (${product.name}) is not active`,
+        );
+      }
+
       if (shop.status !== ShopStatus.ACTIVE) {
         throw new BadRequestException(
           `Shop for product ${product.productId} (${product.name}) is not active`,
@@ -609,20 +787,83 @@ export class CheckoutService {
     };
   }
 
-  private allocateDiscountByShop(
-    shopGroups: ConfirmShopGroupAccumulator[],
-    cartSubtotalInCents: bigint,
-    discountAmountInCents: bigint,
+  private validateSelectedCartItemIds(value: unknown): string[] {
+    if (!Array.isArray(value) || value.length === 0) {
+      throw new BadRequestException(
+        'At least one selected cart item is required',
+      );
+    }
+
+    if (
+      value.some(
+        (cartItemId) =>
+          typeof cartItemId !== 'string' || !/^[1-9]\d*$/.test(cartItemId),
+      )
+    ) {
+      throw new BadRequestException(
+        'Each selected cart item ID must be a positive integer string',
+      );
+    }
+
+    const selectedCartItemIds = value as string[];
+
+    if (new Set(selectedCartItemIds).size !== selectedCartItemIds.length) {
+      throw new BadRequestException(
+        'selectedCartItemIds must not contain duplicates',
+      );
+    }
+
+    return selectedCartItemIds;
+  }
+
+  private ensureAllSelectedCartItemsWereLoaded(
+    selectedCartItemIds: string[],
+    cartItems: CartItem[],
+  ): void {
+    if (cartItems.length !== selectedCartItemIds.length) {
+      throw new BadRequestException(
+        'One or more selected cart items are invalid or do not belong to this cart',
+      );
+    }
+
+    const loadedCartItemIds = new Set(
+      cartItems.map((cartItem) => cartItem.cartItemId),
+    );
+
+    if (
+      selectedCartItemIds.some(
+        (cartItemId) => !loadedCartItemIds.has(cartItemId),
+      )
+    ) {
+      throw new BadRequestException(
+        'One or more selected cart items are invalid or do not belong to this cart',
+      );
+    }
+  }
+
+  private allocateAmountByShop<T extends { shopId: string }>(
+    shopGroups: T[],
+    totalWeightInCents: bigint,
+    amountInCents: bigint,
+    getWeightInCents: (shopGroup: T) => bigint,
   ): Map<string, bigint> {
     const allocations = new Map<string, bigint>();
     let allocatedInCents = 0n;
 
+    if (shopGroups.length === 0 || amountInCents === 0n) {
+      return allocations;
+    }
+
+    if (totalWeightInCents <= 0n || amountInCents > totalWeightInCents) {
+      throw new Error('Invalid discount allocation values');
+    }
+
     shopGroups.forEach((shopGroup, index) => {
       const isLastGroup = index === shopGroups.length - 1;
       const allocationInCents = isLastGroup
-        ? discountAmountInCents - allocatedInCents
-        : (discountAmountInCents * shopGroup.subtotalInCents) /
-          cartSubtotalInCents;
+        ? amountInCents - allocatedInCents
+        : (amountInCents * getWeightInCents(shopGroup)) /
+          totalWeightInCents;
 
       allocations.set(shopGroup.shopId, allocationInCents);
       allocatedInCents += allocationInCents;
@@ -632,16 +873,17 @@ export class CheckoutService {
 
     if (lastGroup) {
       const lastAllocation = allocations.get(lastGroup.shopId) ?? 0n;
-      let overflowInCents = lastAllocation - lastGroup.subtotalInCents;
+      let overflowInCents =
+        lastAllocation - getWeightInCents(lastGroup);
 
       if (overflowInCents > 0n) {
-        allocations.set(lastGroup.shopId, lastGroup.subtotalInCents);
+        allocations.set(lastGroup.shopId, getWeightInCents(lastGroup));
 
         for (let index = shopGroups.length - 2; index >= 0; index -= 1) {
           const shopGroup = shopGroups[index];
           const currentAllocation = allocations.get(shopGroup.shopId) ?? 0n;
           const availableCapacity =
-            shopGroup.subtotalInCents - currentAllocation;
+            getWeightInCents(shopGroup) - currentAllocation;
           const amountToMove =
             overflowInCents < availableCapacity
               ? overflowInCents
@@ -662,6 +904,20 @@ export class CheckoutService {
     }
 
     return allocations;
+  }
+
+  private buildPreviewDiscount(
+    discount: Discount | null,
+  ): CheckoutPreviewDiscount | null {
+    return discount
+      ? {
+          discountId: discount.discountId,
+          code: discount.code,
+          type: discount.type,
+          target: discount.target,
+          value: discount.value,
+        }
+      : null;
   }
 
   private calculateDiscountAmount(

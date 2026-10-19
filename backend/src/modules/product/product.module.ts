@@ -9,19 +9,18 @@ import { AdminProductController } from './admin-product.controller.js';
 import { Product } from './entities/product.entity.js';
 import { ProductController } from './product.controller.js';
 import { ProductService } from './product.service.js';
+import { SellerProductController } from './seller-product.controller.js';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([
-      Product,
-      Inventory,
-      Seller,
-      Shop,
-      Category,
-    ]),
+    TypeOrmModule.forFeature([Product, Inventory, Seller, Shop, Category]),
     AuthModule,
   ],
-  controllers: [ProductController, AdminProductController],
+  controllers: [
+    ProductController,
+    AdminProductController,
+    SellerProductController,
+  ],
   providers: [ProductService],
 })
 export class ProductModule {}

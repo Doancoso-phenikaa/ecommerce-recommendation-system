@@ -1,8 +1,17 @@
-import { Body, Controller, Param, Patch, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { UserRole } from '../../common/enums/user-role.enum.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
+import { AdminProductQueryDto } from './dto/admin-product-query.dto.js';
 import { ProductIdParamDto } from './dto/product-id-param.dto.js';
 import { RejectProductDto } from './dto/reject-product.dto.js';
 import { ProductService } from './product.service.js';
@@ -12,6 +21,16 @@ import { ProductService } from './product.service.js';
 @Roles(UserRole.ADMIN)
 export class AdminProductController {
   constructor(private readonly productService: ProductService) {}
+
+  @Get()
+  getProducts(@Query() query: AdminProductQueryDto) {
+    return this.productService.getAdminProducts(query);
+  }
+
+  @Get(':productId')
+  getProductDetail(@Param() params: ProductIdParamDto) {
+    return this.productService.getAdminProductDetail(params.productId);
+  }
 
   @Patch(':productId/approve')
   approveProduct(@Param() params: ProductIdParamDto) {

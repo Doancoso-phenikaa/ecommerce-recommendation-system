@@ -1,0 +1,48 @@
+.customer-product-skeleton {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.7rem;
+  padding: 0.85rem 0.85rem 0;
+}
+
+.customer-product-skeleton span {
+  min-height: 18rem;
+  border: 1px solid var(--market-border);
+  border-radius: 0.55rem;
+  background: linear-gradient(90deg, #fff 20%, #f3f4f6 50%, #fff 80%);
+  background-size: 200% 100%;
+  animation: customer-product-shimmer 1.25s linear infinite;
+}
+
+.catalog-empty--error > span {
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+@keyframes customer-product-shimmer {
+  to { background-position: -200% 0; }
+}
+
+@media (max-width: 1120px) {
+  .customer-product-skeleton { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (max-width: 900px) {
+  .customer-product-skeleton { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 720px) {
+  .customer-product-skeleton {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
+    padding: 0.65rem 0.65rem 0;
+  }
+}
+
+@media (max-width: 380px) {
+  .customer-product-skeleton { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .customer-product-skeleton span { animation: none; }
+}

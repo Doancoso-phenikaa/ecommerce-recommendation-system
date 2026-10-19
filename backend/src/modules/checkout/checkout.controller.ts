@@ -17,7 +17,7 @@ export class CheckoutController {
   @Post('preview')
   previewCheckout(
     @CurrentUser('userId') userId: string,
-    @Body() checkoutPreviewDto?: CheckoutPreviewDto,
+    @Body() checkoutPreviewDto: CheckoutPreviewDto,
   ) {
     return this.checkoutService.previewCheckout(userId, checkoutPreviewDto);
   }

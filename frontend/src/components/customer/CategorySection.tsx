@@ -1,0 +1,56 @@
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import type { Category } from '../../types/category';
+import './category-section.css';
+import './category-section-images.css';
+
+interface CategorySectionProps {
+  categories: Category[];
+  isLoading?: boolean;
+  error?: string;
+}
+
+export function CategorySection({ categories, isLoading = false, error = '' }: CategorySectionProps) {
+  return (
+    <section className="category-section" aria-labelledby="category-title">
+      <div className="market-section-heading">
+        <div>
+          <span>Khám phá theo nhu cầu</span>
+          <h2 id="category-title">Danh mục ngành hàng</h2>
+        </div>
+      </div>
+      {isLoading ? (
+        <div className="category-strip category-strip--loading" aria-label="Đang tải danh mục" aria-busy="true">
+          {Array.from({ length: 8 }, (_, index) => <span key={index} />)}
+        </div>
+      ) : error ? (
+        <div className="category-section__message" role="status">{error}</div>
+      ) : categories.length === 0 ? (
+        <div className="category-section__message">Hiện chưa có danh mục đang hoạt động.</div>
+      ) : (
+      <div className="category-strip">
+        {categories.map((category) => (
+            <Link
+              className="category-item"
+              key={category.categoryId}
+              to={`/categories/${category.categoryId}`}
+            >
+              <CategoryImage key={category.imageUrl ?? 'placeholder'} imageUrl={category.imageUrl} name={category.name} />
+              <strong>{category.name}</strong>
+            </Link>
+        ))}
+      </div>
+      )}
+    </section>
+  );
+}
+
+function CategoryImage({ imageUrl, name }: { imageUrl: string | null; name: string }) {
+  const [hasError, setHasError] = useState(false);
+
+  if (!imageUrl || hasError) {
+    return <span className="category-item__image category-item__image--placeholder" aria-hidden="true">{name.trim().charAt(0).toLocaleUpperCase('vi') || '◇'}</span>;
+  }
+
+  return <img className="category-item__image" src={imageUrl} alt="" onError={() => setHasError(true)} />;
+}

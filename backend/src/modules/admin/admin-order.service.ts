@@ -30,13 +30,15 @@ export class AdminOrderService {
         'order.orderGroupId',
         'order.subtotal',
         'order.discountAmount',
-        'order.shippingFee',
         'order.totalAmount',
         'order.shippingMethod',
         'order.status',
         'order.createdAt',
         'order.updatedAt',
         'orderGroup.orderGroupId',
+        'orderGroup.shippingFee',
+        'orderGroup.shippingDiscountAmount',
+        'orderGroup.totalAmount',
         'customer.customerId',
         'user.userId',
         'user.fullName',
@@ -53,6 +55,9 @@ export class AdminOrderService {
         new Brackets((searchQuery) => {
           searchQuery
             .where('CAST(order.orderId AS TEXT) ILIKE :search', {
+              search: `%${query.search}%`,
+            })
+            .orWhere('CAST(order.orderGroupId AS TEXT) ILIKE :search', {
               search: `%${query.search}%`,
             })
             .orWhere('shop.name ILIKE :search', {
@@ -115,13 +120,14 @@ export class AdminOrderService {
       .innerJoinAndSelect('customer.user', 'user')
       .innerJoinAndSelect('order.shop', 'shop')
       .leftJoinAndSelect('orderGroup.payment', 'payment')
+      .leftJoinAndSelect('orderGroup.orders', 'groupOrder')
       .leftJoinAndSelect('order.items', 'orderItem')
+      .leftJoinAndSelect('orderItem.product', 'product')
       .select([
         'order.orderId',
         'order.orderGroupId',
         'order.subtotal',
         'order.discountAmount',
-        'order.shippingFee',
         'order.totalAmount',
         'order.shippingAddress',
         'order.shippingMethod',
@@ -129,6 +135,13 @@ export class AdminOrderService {
         'order.createdAt',
         'order.updatedAt',
         'orderGroup.orderGroupId',
+        'orderGroup.shippingFee',
+        'orderGroup.shippingDiscountAmount',
+        'orderGroup.totalAmount',
+        'groupOrder.orderId',
+        'groupOrder.subtotal',
+        'groupOrder.discountAmount',
+        'groupOrder.status',
         'customer.customerId',
         'user.userId',
         'user.fullName',
@@ -147,6 +160,8 @@ export class AdminOrderService {
         'orderItem.quantity',
         'orderItem.unitPrice',
         'orderItem.subtotal',
+        'product.productId',
+        'product.imageUrl',
       ])
       .where('order.orderId = :orderId', { orderId })
       .orderBy('orderItem.orderItemId', 'ASC')
@@ -180,7 +195,6 @@ export class AdminOrderService {
       },
       subtotal: order.subtotal,
       discountAmount: order.discountAmount,
-      shippingFee: order.shippingFee,
       totalAmount: order.totalAmount,
       shippingMethod: order.shippingMethod,
       status: order.status,
@@ -211,8 +225,8 @@ export class AdminOrderService {
       },
       subtotal: order.subtotal,
       discountAmount: order.discountAmount,
-      shippingFee: order.shippingFee,
       totalAmount: order.totalAmount,
+      orderGroupSummary: this.buildOrderGroupSummary(order),
       shippingAddress: order.shippingAddress,
       shippingMethod: order.shippingMethod,
       status: order.status,
@@ -231,10 +245,43 @@ export class AdminOrderService {
         orderItemId: item.orderItemId,
         productId: item.productId,
         productName: item.productName,
+        imageUrl: item.product.imageUrl,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         subtotal: item.subtotal,
       })),
     };
+  }
+
+  private buildOrderGroupSummary(order: Order) {
+    const groupOrders = (order.orderGroup.orders ?? []).filter(
+      (groupOrder) => groupOrder.status !== 'CANCELLED',
+    );
+    const subtotalInCents = groupOrders.reduce(
+      (total, groupOrder) => total + this.priceToCents(groupOrder.subtotal),
+      0n,
+    );
+    const productDiscountInCents = groupOrders.reduce(
+      (total, groupOrder) =>
+        total + this.priceToCents(groupOrder.discountAmount),
+      0n,
+    );
+
+    return {
+      subtotal: this.formatCents(subtotalInCents),
+      productDiscountAmount: this.formatCents(productDiscountInCents),
+      shippingFee: order.orderGroup.shippingFee,
+      shippingDiscountAmount: order.orderGroup.shippingDiscountAmount,
+      totalAmount: order.orderGroup.totalAmount,
+    };
+  }
+
+  private priceToCents(amount: string): bigint {
+    const [wholePart, fractionPart = ''] = amount.split('.');
+    return BigInt(wholePart) * 100n + BigInt(fractionPart.padEnd(2, '0'));
+  }
+
+  private formatCents(value: bigint): string {
+    return `${value / 100n}.${(value % 100n).toString().padStart(2, '0')}`;
   }
 }

@@ -5,6 +5,7 @@ import { UserRole } from '../../common/enums/user-role.enum.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../../common/guards/roles.guard.js';
 import { RevenueStatisticsQueryDto } from './dto/revenue-statistics-query.dto.js';
+import { SellerStatisticsQueryDto } from './dto/seller-statistics-query.dto.js';
 import { SellerStatisticsService } from './seller-statistics.service.js';
 
 @Controller('seller/statistics')
@@ -14,6 +15,14 @@ export class SellerStatisticsController {
   constructor(
     private readonly sellerStatisticsService: SellerStatisticsService,
   ) {}
+
+  @Get()
+  getStatistics(
+    @CurrentUser('userId') userId: string,
+    @Query() query: SellerStatisticsQueryDto,
+  ) {
+    return this.sellerStatisticsService.getStatistics(userId, query);
+  }
 
   @Get('revenue')
   getRevenueStatistics(

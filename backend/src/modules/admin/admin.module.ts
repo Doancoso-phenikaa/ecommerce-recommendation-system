@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '../auth/auth.module.js';
 import { Customer } from '../customer/entities/customer.entity.js';
 import { Order } from '../order/entities/order.entity.js';
+import { OrderItem } from '../order/entities/order-item.entity.js';
 import { Product } from '../product/entities/product.entity.js';
 import { Seller } from '../seller/entities/seller.entity.js';
 import { Shop } from '../shop/entities/shop.entity.js';
@@ -20,7 +21,15 @@ import { AdminUserService } from './admin-user.service.js';
   imports: [
     AuthModule,
     ShopModule,
-    TypeOrmModule.forFeature([User, Customer, Seller, Shop, Product, Order]),
+    TypeOrmModule.forFeature([
+      User,
+      Customer,
+      Seller,
+      Shop,
+      Product,
+      Order,
+      OrderItem,
+    ]),
   ],
   controllers: [
     AdminController,
