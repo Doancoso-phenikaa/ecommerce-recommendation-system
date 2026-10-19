@@ -392,14 +392,42 @@ function ProductDetailContent({ product, categoryName, relatedProducts }: { prod
       </section>
 
       <section className="shop-information" aria-labelledby="shop-title">
-        <div className="shop-information__avatar" aria-hidden="true">S</div>
-        <div>
-          <p>Thông tin gian hàng</p>
-          <h2 id="shop-title">Gian hàng #{product.shopId}</h2>
-          <span className="shop-status"><i aria-hidden="true" />Đang hoạt động</span>
-          <small>Sản phẩm được đăng bán bởi gian hàng trên MarketNest.</small>
+        <div className="shop-information__identity">
+          <ShopLogo
+            logoUrl={product.shop?.logoUrl ?? null}
+            shopName={product.shop?.name ?? `Gian hàng ${product.shopId}`}
+          />
+          <div className="shop-information__copy">
+            <h2 id="shop-title">
+              {product.shop?.name ?? `Gian hàng #${product.shopId}`}
+              <span className="shop-information__verified" aria-label="Gian hàng đang hoạt động">✓</span>
+            </h2>
+            <span className="shop-status"><i aria-hidden="true" />Đang hoạt động</span>
+            <button className="shop-information__view-button" type="button">
+              <span aria-hidden="true">▣</span>Xem Shop
+            </button>
+          </div>
         </div>
-        <button type="button">Xem gian hàng</button>
+        <div className="shop-information__metrics">
+          <div>
+            <span>Sản phẩm</span>
+            <strong>
+              {product.shop?.productCount !== undefined
+                ? `${product.shop.productCount} sản phẩm`
+                : '—'}
+            </strong>
+            <small>Đang hiển thị công khai</small>
+          </div>
+          <div>
+            <span>Đánh giá gian hàng</span>
+            <strong>
+              {product.shop?.reviewCount !== undefined
+                ? `${product.shop.reviewCount} review`
+                : '—'}
+            </strong>
+            <small>Trên tất cả sản phẩm của Shop</small>
+          </div>
+        </div>
       </section>
 
       <section className="product-detail-section product-reviews" aria-labelledby="reviews-title">
@@ -466,5 +494,32 @@ function ProductDetailContent({ product, categoryName, relatedProducts }: { prod
         </div>
       </section>}
     </main>
+  );
+}
+
+function ShopLogo({
+  logoUrl,
+  shopName,
+}: {
+  logoUrl: string | null;
+  shopName: string;
+}) {
+  const [hasImageError, setHasImageError] = useState(false);
+
+  if (!logoUrl || hasImageError) {
+    return (
+      <span className="shop-information__avatar" aria-hidden="true">
+        {shopName.trim().charAt(0).toLocaleUpperCase('vi') || 'M'}
+      </span>
+    );
+  }
+
+  return (
+    <img
+      className="shop-information__avatar"
+      src={logoUrl}
+      alt={`Logo ${shopName}`}
+      onError={() => setHasImageError(true)}
+    />
   );
 }

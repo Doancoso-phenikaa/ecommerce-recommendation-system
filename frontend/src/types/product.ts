@@ -4,9 +4,18 @@ export interface ProductInventory {
   availableQuantity: number;
 }
 
+export interface PublicProductShop {
+  shopId: string;
+  name: string;
+  logoUrl: string | null;
+  productCount?: number;
+  reviewCount?: number;
+}
+
 export interface PublicProduct {
   productId: string;
   shopId: string;
+  shop?: PublicProductShop | null;
   categoryId: string;
   name: string;
   description: string | null;

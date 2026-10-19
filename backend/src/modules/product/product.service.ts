@@ -22,6 +22,12 @@ import { UpdateProductDto } from './dto/update-product.dto.js';
 import { Product } from './entities/product.entity.js';
 import { ProductSort } from './enums/product-sort.enum.js';
 import { ProductStatus } from './enums/product-status.enum.js';
+import { ReviewStatus } from '../review/enums/review-status.enum.js';
+
+interface PublicShopStatistics {
+  productCount: number;
+  reviewCount: number;
+}
 
 @Injectable()
 export class ProductService {
@@ -161,7 +167,9 @@ export class ProductService {
       throw new NotFoundException('Product not found');
     }
 
-    return this.buildPublicProductResponse(product);
+    const shopStatistics = await this.getPublicShopStatistics(product.shopId);
+
+    return this.buildPublicProductResponse(product, shopStatistics);
   }
 
   async getSellerProducts(userId: string, query: SellerProductQueryDto) {
@@ -767,7 +775,10 @@ export class ProductService {
     };
   }
 
-  private buildPublicProductResponse(product: Product) {
+  private buildPublicProductResponse(
+    product: Product,
+    shopStatistics?: PublicShopStatistics,
+  ) {
     const inventory = product.inventory;
 
     if (!inventory) {
@@ -777,6 +788,14 @@ export class ProductService {
     return {
       productId: product.productId,
       shopId: product.shopId,
+      shop: product.shop
+        ? {
+            shopId: product.shop.shopId,
+            name: product.shop.name,
+            logoUrl: product.shop.logoUrl,
+            ...shopStatistics,
+          }
+        : null,
       categoryId: product.categoryId,
       name: product.name,
       description: product.description,
@@ -791,6 +810,38 @@ export class ProductService {
       },
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
+    };
+  }
+
+  private async getPublicShopStatistics(
+    shopId: string,
+  ): Promise<PublicShopStatistics> {
+    const [productCount, reviewCountRaw] = await Promise.all([
+      this.productRepository
+        .createQueryBuilder('shopProduct')
+        .innerJoin('shopProduct.category', 'category')
+        .where('shopProduct.shopId = :shopId', { shopId })
+        .andWhere('shopProduct.status = :productStatus', {
+          productStatus: ProductStatus.APPROVED,
+        })
+        .andWhere('category.status = :categoryStatus', {
+          categoryStatus: CategoryStatus.ACTIVE,
+        })
+        .getCount(),
+      this.productRepository
+        .createQueryBuilder('shopProduct')
+        .innerJoin('shopProduct.reviews', 'review')
+        .select('COUNT(review.reviewId)', 'reviewCount')
+        .where('shopProduct.shopId = :shopId', { shopId })
+        .andWhere('review.status = :reviewStatus', {
+          reviewStatus: ReviewStatus.ACTIVE,
+        })
+        .getRawOne<{ reviewCount: string }>(),
+    ]);
+
+    return {
+      productCount,
+      reviewCount: Number(reviewCountRaw?.reviewCount ?? 0),
     };
   }
 
