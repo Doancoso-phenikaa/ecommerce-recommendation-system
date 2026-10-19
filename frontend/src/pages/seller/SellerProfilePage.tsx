@@ -336,6 +336,7 @@ function ProfileAvatar({ avatarUrl, fullName }: { avatarUrl: string; fullName: s
 
   return (
     <img
+      className="customer-profile-avatar-image"
       src={avatarUrl}
       alt={`Ảnh đại diện của ${fullName.trim() || 'người bán'}`}
       onError={() => setHasError(true)}

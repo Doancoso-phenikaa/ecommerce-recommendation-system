@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { confirmCheckout, getCheckoutPreview } from '../../api/checkout.api';
 import { getCustomerProfile } from '../../api/customer-profile.api';
@@ -18,40 +18,41 @@ interface CreatedOrder {
 
 type SubmissionPhase = 'idle' | 'order' | 'payment';
 type CheckoutPaymentOption = 'COD' | 'EWALLET' | 'CREDIT_CARD' | 'ATM';
+type PaymentIconName = 'cash' | 'qr' | 'card' | 'bank';
 
 const paymentOptions: Array<{
   value: CheckoutPaymentOption;
   title: string;
   description: string;
-  icon: string;
+  icon: PaymentIconName;
   badges: string[];
 }> = [
   {
     value: 'COD',
     title: 'Thanh toán khi nhận hàng (COD)',
     description: 'Thanh toán bằng tiền mặt khi nhận được đơn hàng.',
-    icon: '₫',
+    icon: 'cash',
     badges: ['Phí thu hộ 0đ'],
   },
   {
     value: 'EWALLET',
     title: 'Ví điện tử VNPay / MoMo / ZaloPay',
     description: 'Quét mã QR qua ứng dụng ngân hàng hoặc ví điện tử.',
-    icon: '▦',
+    icon: 'qr',
     badges: ['VNPAY', 'MoMo', 'ZaloPay'],
   },
   {
     value: 'CREDIT_CARD',
     title: 'Thẻ tín dụng / Ghi nợ quốc tế',
     description: 'Hỗ trợ Visa, MasterCard và JCB với xác thực bảo mật.',
-    icon: '▭',
+    icon: 'card',
     badges: ['VISA', 'MC', 'JCB'],
   },
   {
     value: 'ATM',
     title: 'Thẻ ATM nội địa / Internet Banking',
     description: 'Thanh toán qua hệ thống ngân hàng nội địa liên kết Napas.',
-    icon: '⌂',
+    icon: 'bank',
     badges: ['NAPAS'],
   },
 ];
@@ -62,6 +63,22 @@ const paymentOptionLabels: Record<CheckoutPaymentOption, string> = {
   CREDIT_CARD: 'Thẻ tín dụng / Ghi nợ quốc tế',
   ATM: 'Thẻ ATM nội địa / Internet Banking',
 };
+
+function PaymentMethodIcon({ name }: { name: PaymentIconName }): ReactNode {
+  if (name === 'cash') {
+    return <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M7 10h.01M17 14h.01" /><circle cx="12" cy="12" r="2.5" /></svg>;
+  }
+
+  if (name === 'qr') {
+    return <svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" /><rect x="7" y="7" width="3" height="3" rx=".4" /><rect x="14" y="7" width="3" height="3" rx=".4" /><rect x="7" y="14" width="3" height="3" rx=".4" /><path d="M14 14h1v1h2v2h-3v-3Z" /></svg>;
+  }
+
+  if (name === 'card') {
+    return <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5" /><path d="M3 9h18M7 15h4" /></svg>;
+  }
+
+  return <svg viewBox="0 0 24 24"><path d="m3 9 9-5 9 5M5 10h14M6 10v7M10 10v7M14 10v7M18 10v7M4 20h16M3 17h18" /></svg>;
+}
 
 function getPreviewError(error: unknown): string {
   const message = getApiErrorMessage(error, 'Không thể tải thông tin đặt hàng.');
@@ -463,7 +480,7 @@ export function CheckoutPage() {
                 <label className={`payment-method${selectedPaymentOption === option.value ? ' payment-method--selected' : ''}`} key={option.value}>
                   <input type="radio" name="paymentOption" value={option.value} checked={selectedPaymentOption === option.value} onChange={() => setSelectedPaymentOption(option.value)} disabled={isSubmitting || isOrderLocked} />
                   <span className="payment-method__radio" aria-hidden="true" />
-                  <span className="payment-method__icon" aria-hidden="true">{option.icon}</span>
+                  <span className="payment-method__icon" aria-hidden="true"><PaymentMethodIcon name={option.icon} /></span>
                   <span className="payment-method__copy"><strong>{option.title}</strong><small>{option.description}</small></span>
                   <span className="payment-method__badges" aria-hidden="true">{option.badges.map((badge) => <i key={badge}>{badge}</i>)}</span>
                 </label>
@@ -472,7 +489,7 @@ export function CheckoutPage() {
 
             <div className="checkout-payment__note">
               <span className="checkout-payment__info-icon" aria-hidden="true">i</span>
-              <div><strong>{selectedPaymentOption === 'COD' ? 'Thanh toán khi nhận hàng (COD)' : 'Thanh toán trực tuyến mô phỏng'}</strong><p>{selectedPaymentOption === 'COD' ? `Bạn sẽ thanh toán ${formatCurrency(preview.totalAmount)} cho nhân viên giao hàng khi nhận đơn.` : 'Ví điện tử, thẻ quốc tế và ATM đều được gửi lên backend với phương thức ONLINE trong phiên bản hiện tại.'}</p></div>
+              <div><strong>{selectedPaymentOption === 'COD' ? 'Thanh toán khi nhận hàng (COD)' : 'Thanh toán trực tuyến an toàn'}</strong><p>{selectedPaymentOption === 'COD' ? `Bạn sẽ thanh toán ${formatCurrency(preview.totalAmount)} cho nhân viên giao hàng khi nhận đơn.` : `Thanh toán bằng ${paymentOptionLabels[selectedPaymentOption]} và nhận xác nhận ngay sau khi hoàn tất.`}</p></div>
             </div>
           </section>
         </div>
@@ -511,7 +528,7 @@ export function CheckoutPage() {
           </dl>
 
           <button className="checkout-summary__confirm" type="button" onClick={handlePrimaryAction} disabled={isSubmitting || isRefreshing || Boolean(previewError)}>{primaryButtonLabel}</button>
-          <p>{createdOrder ? 'Đơn hàng đã được tạo. Thử lại chỉ tạo Payment cho nhóm đơn hiện tại.' : 'Sau khi backend tạo đơn hàng thành công, hệ thống sẽ tạo Payment theo phương thức đã chọn.'}</p>
+          <p>{createdOrder ? 'Đơn hàng đã được ghi nhận. Bạn có thể thử lại bước thanh toán cho đơn hàng này.' : 'Đơn hàng và thông tin thanh toán sẽ được xác nhận theo phương thức bạn đã chọn.'}</p>
         </section>
           <section className="checkout-commitment" aria-labelledby="checkout-commitment-title">
             <span className="checkout-commitment__eyebrow">Cam kết độc quyền từ MarketNest</span>

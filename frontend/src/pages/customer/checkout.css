@@ -751,7 +751,9 @@
 .checkout-payment .payment-method > input { position: absolute; opacity: 0; pointer-events: none; }
 .checkout-payment .payment-method__radio { width: .9rem; height: .9rem; display: grid; place-items: center; justify-self: start; border: 1px solid #aaa3ab; border-radius: 50%; }
 .checkout-payment .payment-method--selected .payment-method__radio { border: .28rem solid #dc2626; }
-.checkout-payment .payment-method__icon { width: 2.1rem; height: 2.1rem; display: grid; place-items: center; justify-self: start; color: #dc2626; background: #fff; border: 1px solid #eee8e8; border-radius: .42rem; font-size: .85rem; font-weight: 750; }
+.checkout-payment .payment-method__icon { width: 2.1rem; height: 2.1rem; display: grid; place-items: center; justify-self: start; color: #dc2626; background: #fff; border: 1px solid #eee8e8; border-radius: .48rem; box-shadow: 0 .18rem .45rem rgba(77, 45, 49, .05); transition: color 180ms ease, background 180ms ease, border-color 180ms ease; }
+.checkout-payment .payment-method__icon svg { width: 1.18rem; height: 1.18rem; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.checkout-payment .payment-method--selected .payment-method__icon { color: #fff; background: #dc2626; border-color: #dc2626; }
 .checkout-payment .payment-method__copy { min-width: 0; width: 100%; display: grid; justify-self: stretch; gap: .1rem; text-align: left; }
 .checkout-payment .payment-method__copy strong { color: #1e1e24; font-size: .72rem; }
 .checkout-payment .payment-method__copy small { color: #777079; font-size: .62rem; line-height: 1.4; }

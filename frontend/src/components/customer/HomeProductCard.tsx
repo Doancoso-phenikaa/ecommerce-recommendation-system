@@ -84,7 +84,9 @@ export function HomeProductCard({
               ? `Còn ${availableQuantity} sản phẩm`
               : 'Tạm hết hàng'}
           </span>
-          <small>Shop #{product.shopId}</small>
+          <small title={product.shop?.name ?? undefined}>
+            {product.shop?.name ?? 'Gian hàng MarketNest'}
+          </small>
         </div>
       </div>
     </article>

@@ -2,6 +2,58 @@
 
 .product-detail-pricing{margin-top:.85rem}.product-detail-pricing .product-detail-price{margin-top:0}.product-detail-pricing>div{display:flex;align-items:center;gap:.55rem;margin-top:.25rem}.product-detail-pricing del{color:#8b8490;font-size:.88rem;font-variant-numeric:tabular-nums}.product-detail-pricing>div span{padding:.18rem .38rem;color:#dc2626;background:#fef2f2;border-radius:.28rem;font-size:.72rem;font-weight:750}
 
+/* Related products stay intentionally compact so they support, rather than dominate, the detail page. */
+.related-products__grid {
+  grid-template-columns: repeat(4, minmax(0, 13.5rem));
+  justify-content: start;
+  gap: .7rem;
+}
+
+.related-products__grid .product-card__media {
+  aspect-ratio: 4 / 3;
+}
+
+.related-products__grid .product-card__body {
+  padding: .58rem;
+}
+
+.related-products__grid .product-card h3 {
+  min-height: 2.15rem;
+  font-size: .76rem;
+  line-height: 1.4;
+}
+
+.related-products__grid .product-card__pricing {
+  margin-top: .42rem;
+}
+
+.related-products__grid .product-card__price {
+  font-size: .9rem;
+}
+
+.related-products__grid .product-card__stock {
+  margin: .25rem 0 0;
+  font-size: .6rem;
+}
+
+@media (max-width: 980px) {
+  .related-products__grid {
+    grid-template-columns: repeat(3, minmax(0, 13.5rem));
+  }
+}
+
+@media (max-width: 720px) {
+  .related-products__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 390px) {
+  .related-products__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Keep the gallery aligned with the purchase actions instead of forcing a square. */
 @media (min-width: 721px) {
   .product-overview {

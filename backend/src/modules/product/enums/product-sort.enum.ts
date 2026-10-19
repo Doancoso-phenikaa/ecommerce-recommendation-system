@@ -1,5 +1,6 @@
 export enum ProductSort {
   NEWEST = 'NEWEST',
+  LATEST_APPROVED = 'LATEST_APPROVED',
   PRICE_ASC = 'PRICE_ASC',
   PRICE_DESC = 'PRICE_DESC',
 }

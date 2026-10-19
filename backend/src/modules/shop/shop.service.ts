@@ -63,11 +63,11 @@ export class ShopService {
   async getMyShop(userId: string) {
     const shop = await this.findMyShop(userId);
 
-    return this.buildShopResponse(shop);
+    return this.buildShopResponseWithActiveRating(shop);
   }
 
   async updateMyShop(userId: string, updateShopDto: UpdateShopDto) {
-    return this.dataSource.transaction(async (manager) => {
+    const updatedShop = await this.dataSource.transaction(async (manager) => {
       const shop = await this.findAndLockMyShop(manager, userId);
 
       if (
@@ -91,26 +91,28 @@ export class ShopService {
         shop.logoUrl = updateShopDto.logoUrl.trim() || null;
       }
 
-      const updatedShop = await manager.getRepository(Shop).save(shop);
-
-      return this.buildShopResponse(updatedShop);
+      return manager.getRepository(Shop).save(shop);
     });
+
+    return this.buildShopResponseWithActiveRating(updatedShop);
   }
 
   async resubmitShop(userId: string) {
-    return this.dataSource.transaction(async (manager) => {
-      const shop = await this.findAndLockMyShop(manager, userId);
+    const resubmittedShop = await this.dataSource.transaction(
+      async (manager) => {
+        const shop = await this.findAndLockMyShop(manager, userId);
 
-      if (shop.status !== ShopStatus.REJECTED) {
-        throw new ConflictException('Only rejected shops can be resubmitted');
-      }
+        if (shop.status !== ShopStatus.REJECTED) {
+          throw new ConflictException('Only rejected shops can be resubmitted');
+        }
 
-      shop.status = ShopStatus.PENDING;
-      shop.rejectionReason = null;
-      const resubmittedShop = await manager.getRepository(Shop).save(shop);
+        shop.status = ShopStatus.PENDING;
+        shop.rejectionReason = null;
+        return manager.getRepository(Shop).save(shop);
+      },
+    );
 
-      return this.buildShopResponse(resubmittedShop);
-    });
+    return this.buildShopResponseWithActiveRating(resubmittedShop);
   }
 
   private async findMyShop(userId: string): Promise<Shop> {
@@ -499,14 +501,25 @@ export class ShopService {
     };
   }
 
-  private buildShopResponse(shop: Shop) {
+  private async buildShopResponseWithActiveRating(shop: Shop) {
+    const ratingsByShopId = await this.getActiveReviewRatingsByShopIds([
+      shop.shopId,
+    ]);
+
+    return this.buildShopResponse(
+      shop,
+      ratingsByShopId.get(shop.shopId) ?? '0',
+    );
+  }
+
+  private buildShopResponse(shop: Shop, rating = shop.rating) {
     return {
       shopId: shop.shopId,
       sellerId: shop.sellerId,
       name: shop.name,
       description: shop.description,
       logoUrl: shop.logoUrl,
-      rating: shop.rating,
+      rating,
       status: shop.status,
       rejectionReason: shop.rejectionReason,
       createdAt: shop.createdAt,

@@ -18,13 +18,55 @@ const FLASH_SALE_RESET_SECONDS = 60 * 60;
 
 const formatCountdownUnit = (value: number) => String(value).padStart(2, '0');
 
+type HomeIconName =
+  | 'categories'
+  | 'flash'
+  | 'verified'
+  | 'trend'
+  | 'new'
+  | 'voucher'
+  | 'live'
+  | 'truck'
+  | 'return'
+  | 'payment'
+  | 'support';
+
+function HomeIcon({ name }: { name: HomeIconName }) {
+  const svgProps = { viewBox: '0 0 24 24', 'aria-hidden': true, focusable: false } as const;
+
+  switch (name) {
+    case 'categories':
+      return <svg {...svgProps}><rect x="3" y="3" width="7" height="7" rx="2" /><rect x="14" y="3" width="7" height="7" rx="2" /><rect x="3" y="14" width="7" height="7" rx="2" /><rect x="14" y="14" width="7" height="7" rx="2" /></svg>;
+    case 'flash':
+      return <svg {...svgProps}><path d="M13.4 2.8 5.8 13h5.8l-1 8.2L18.2 11h-5.8l1-8.2Z" /></svg>;
+    case 'verified':
+      return <svg {...svgProps}><path d="M12 3.2 14.2 5l2.8-.1.7 2.7 2.3 1.6-1.1 2.6.8 2.7-2.4 1.5-.9 2.7-2.8-.3-2.1 1.8-2.1-1.8-2.8.3-.9-2.7-2.4-1.5.8-2.7L3 9.2l2.3-1.6L6 4.9l2.8.1L11 3.2Z" /><path d="m8.2 11.8 2.2 2.2 4.8-4.8" /></svg>;
+    case 'trend':
+      return <svg {...svgProps}><path d="M4 17.5 9 12l3.4 3.4L20 7.8" /><path d="M14.5 7.8H20v5.5" /></svg>;
+    case 'new':
+      return <svg {...svgProps}><path d="m12 3 1.1 3.4A5 5 0 0 0 16.3 9l3.7 1-3.7 1a5 5 0 0 0-3.2 2.6L12 17l-1.1-3.4A5 5 0 0 0 7.7 11L4 10l3.7-1a5 5 0 0 0 3.2-2.6L12 3Z" /><path d="m18.5 15 .5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5.5-1.5Z" /></svg>;
+    case 'voucher':
+      return <svg {...svgProps}><path d="M4 6.5h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4v-4Z" /><path d="m9 15 6-6" /><circle cx="9" cy="9" r=".8" /><circle cx="15" cy="15" r=".8" /></svg>;
+    case 'live':
+      return <svg {...svgProps}><rect x="4" y="5" width="16" height="14" rx="3" /><path d="m10 9 5 3-5 3V9Z" /><path d="M2 9v6M22 9v6" /></svg>;
+    case 'truck':
+      return <svg {...svgProps}><path d="M3 6h11v10H3V6Z" /><path d="M14 9h3l4 4v3h-7V9Z" /><circle cx="7" cy="17" r="2" /><circle cx="18" cy="17" r="2" /></svg>;
+    case 'return':
+      return <svg {...svgProps}><path d="M8 7H4V3" /><path d="M4.5 7A8 8 0 1 1 4 15" /><path d="M8 12h8v7H8z" /></svg>;
+    case 'payment':
+      return <svg {...svgProps}><rect x="3" y="5" width="18" height="14" rx="3" /><path d="M3 9h18M7 15h4" /></svg>;
+    case 'support':
+      return <svg {...svgProps}><path d="M4 13v-2a8 8 0 0 1 16 0v2" /><path d="M4 13h3v6H5a2 2 0 0 1-2-2v-2a2 2 0 0 1 1-2ZM20 13h-3v6h2a2 2 0 0 0 2-2v-2a2 2 0 0 0-1-2Z" /><path d="M17 19c-1 1.3-2.7 2-5 2" /></svg>;
+  }
+}
+
 const benefits = [
-  { icon: '✓', title: '100% chính hãng', text: 'Cam kết nguồn gốc minh bạch' },
-  { icon: '▣', title: 'Miễn phí vận chuyển', text: 'Áp dụng theo chính sách đơn hàng' },
-  { icon: '↻', title: 'Đổi trả thuận tiện', text: 'Quy trình rõ ràng, dễ theo dõi' },
-  { icon: '◇', title: 'Thanh toán an toàn', text: 'Bảo vệ thông tin giao dịch' },
-  { icon: '◎', title: 'Hỗ trợ 24/7', text: 'Luôn sẵn sàng đồng hành' },
-];
+  { icon: 'verified', title: '100% chính hãng', text: 'Cam kết nguồn gốc minh bạch' },
+  { icon: 'truck', title: 'Miễn phí vận chuyển', text: 'Áp dụng theo chính sách đơn hàng' },
+  { icon: 'return', title: 'Đổi trả thuận tiện', text: 'Quy trình rõ ràng, dễ theo dõi' },
+  { icon: 'payment', title: 'Thanh toán an toàn', text: 'Bảo vệ thông tin giao dịch' },
+  { icon: 'support', title: 'Hỗ trợ 24/7', text: 'Luôn sẵn sàng đồng hành' },
+] satisfies Array<{ icon: HomeIconName; title: string; text: string }>;
 
 const mallBrands = [
   ['MN', 'MarketNest Select', 'Chất lượng được tuyển chọn'],
@@ -55,6 +97,9 @@ export function CustomerHomePage() {
   const [productResult, setProductResult] = useState<ProductListResponse | null>(null);
   const [isProductLoading, setIsProductLoading] = useState(true);
   const [productError, setProductError] = useState('');
+  const [flashSaleResult, setFlashSaleResult] = useState<ProductListResponse | null>(null);
+  const [isFlashSaleLoading, setIsFlashSaleLoading] = useState(true);
+  const [flashSaleError, setFlashSaleError] = useState('');
   const [wishlistProductIds, setWishlistProductIds] = useState<Set<string>>(new Set());
   const [updatingWishlistId, setUpdatingWishlistId] = useState<string | null>(null);
   const [wishlistMessage, setWishlistMessage] = useState('');
@@ -75,16 +120,27 @@ export function CustomerHomePage() {
 
   useEffect(() => {
     let isCurrent = true;
-    void Promise.allSettled([getProducts({ page: 1, limit: 10 }), getWishlist()])
-      .then(([productsResult, wishlistResult]) => {
+    void Promise.allSettled([
+      getProducts({ page: 1, limit: 10 }),
+      getProducts({ page: 1, limit: 5, sort: 'LATEST_APPROVED' }),
+      getWishlist(),
+    ])
+      .then(([productsResult, flashProductsResult, wishlistResult]) => {
         if (!isCurrent) return;
         if (productsResult.status === 'fulfilled') setProductResult(productsResult.value);
         else setProductError(getApiErrorMessage(productsResult.reason, 'Không thể tải sản phẩm.'));
+        if (flashProductsResult.status === 'fulfilled') setFlashSaleResult(flashProductsResult.value);
+        else setFlashSaleError(getApiErrorMessage(flashProductsResult.reason, 'Không thể tải sản phẩm mới duyệt.'));
         if (wishlistResult.status === 'fulfilled') {
           setWishlistProductIds(new Set(wishlistResult.value.items.map((item) => item.productId)));
         }
       })
-      .finally(() => { if (isCurrent) setIsProductLoading(false); });
+      .finally(() => {
+        if (isCurrent) {
+          setIsProductLoading(false);
+          setIsFlashSaleLoading(false);
+        }
+      });
     return () => { isCurrent = false; };
   }, []);
 
@@ -101,7 +157,7 @@ export function CustomerHomePage() {
   }, []);
 
   const products = useMemo(() => productResult?.data ?? [], [productResult]);
-  const flashSaleProducts = products.slice(0, 5);
+  const flashSaleProducts = useMemo(() => flashSaleResult?.data ?? [], [flashSaleResult]);
   const flashSaleHours = Math.floor(flashSaleRemainingSeconds / 3600);
   const flashSaleMinutes = Math.floor((flashSaleRemainingSeconds % 3600) / 60);
   const flashSaleSeconds = flashSaleRemainingSeconds % 60;
@@ -145,14 +201,14 @@ export function CustomerHomePage() {
   return (
     <main className="customer-home">
       <div className="home-category-nav" aria-label="Điều hướng mua sắm" role="navigation">
-        <span><i aria-hidden="true">▦</i><b>Khám phá danh mục</b><small>Đa dạng lựa chọn</small></span>
-        <span><i aria-hidden="true">ϟ</i><b>Flash Sale</b><small>Giá sốc</small></span>
-        <span><i aria-hidden="true">M</i><b>Thương hiệu chính hãng</b><small>Mall</small></span>
-        <span><i aria-hidden="true">↗</i><b>Xu hướng & bán chạy</b><small>Chọn lọc</small></span>
-        <span><i aria-hidden="true">◇</i><b>Hàng mới về</b><small>Mỗi ngày</small></span>
-        <span><i aria-hidden="true">%</i><b>Voucher & mã giảm giá</b><small>Ưu đãi</small></span>
-        <span><i aria-hidden="true">▶</i><b>MarketNest Live</b><small>Trực tiếp</small></span>
-        <span className="home-category-nav__delivery"><i aria-hidden="true">▰</i><b>Giao nhanh 2h</b><small>Toàn quốc</small></span>
+        <span><i aria-hidden="true"><HomeIcon name="categories" /></i><b>Khám phá danh mục</b><small>Đa dạng lựa chọn</small></span>
+        <span><i aria-hidden="true"><HomeIcon name="flash" /></i><b>Flash Sale</b><small>Giá sốc</small></span>
+        <span><i aria-hidden="true"><HomeIcon name="verified" /></i><b>Thương hiệu chính hãng</b><small>Mall</small></span>
+        <span><i aria-hidden="true"><HomeIcon name="trend" /></i><b>Xu hướng & bán chạy</b><small>Chọn lọc</small></span>
+        <span><i aria-hidden="true"><HomeIcon name="new" /></i><b>Hàng mới về</b><small>Mỗi ngày</small></span>
+        <span><i aria-hidden="true"><HomeIcon name="voucher" /></i><b>Voucher & mã giảm giá</b><small>Ưu đãi</small></span>
+        <span><i aria-hidden="true"><HomeIcon name="live" /></i><b>MarketNest Live</b><small>Trực tiếp</small></span>
+        <span className="home-category-nav__delivery"><i aria-hidden="true"><HomeIcon name="truck" /></i><b>Giao nhanh 2h</b><small>Toàn quốc</small></span>
       </div>
 
       <section className="promotion-area" aria-label="Chương trình nổi bật">
@@ -168,14 +224,14 @@ export function CustomerHomePage() {
       </section>
 
       <section className="home-benefits" aria-label="Cam kết dịch vụ">
-        {benefits.map((benefit) => <article key={benefit.title}><span aria-hidden="true">{benefit.icon}</span><div><strong>{benefit.title}</strong><small>{benefit.text}</small></div></article>)}
+        {benefits.map((benefit) => <article key={benefit.title}><span aria-hidden="true"><HomeIcon name={benefit.icon} /></span><div><strong>{benefit.title}</strong><small>{benefit.text}</small></div></article>)}
       </section>
 
       <div id="categories"><CategorySection categories={categories} isLoading={isCategoryLoading} error={categoryError} /></div>
 
       <section className="home-market-section home-flash-sale" id="flash-sale" aria-labelledby="flash-sale-title">
         <header className="home-section-heading home-section-heading--sale">
-          <div><span className="home-section-eyebrow">Ưu đãi trong khung giờ</span><h2 id="flash-sale-title"><i aria-hidden="true">ϟ</i> Flash Sale giờ vàng</h2></div>
+          <div><span className="home-section-eyebrow">Ưu đãi trong khung giờ</span><h2 id="flash-sale-title"><i aria-hidden="true"><HomeIcon name="flash" /></i> Flash Sale giờ vàng</h2></div>
           <div className="flash-countdown" aria-label="Thời gian Flash Sale còn lại">
             <span>{formatCountdownUnit(flashSaleHours)}</span>
             <b aria-hidden="true">:</b>
@@ -184,11 +240,11 @@ export function CustomerHomePage() {
             <span>{formatCountdownUnit(flashSaleSeconds)}</span>
           </div>
         </header>
-        <ProductContent products={flashSaleProducts} isLoading={isProductLoading} error={productError} wishlistProductIds={wishlistProductIds} updatingWishlistId={updatingWishlistId} onWishlistToggle={handleWishlistToggle} variant="sale" />
+        <ProductContent products={flashSaleProducts} isLoading={isFlashSaleLoading} error={flashSaleError} wishlistProductIds={wishlistProductIds} updatingWishlistId={updatingWishlistId} onWishlistToggle={handleWishlistToggle} variant="sale" />
       </section>
 
       <section className="home-market-section home-mall" aria-labelledby="mall-title">
-        <header className="home-section-heading"><div><span className="home-section-eyebrow">MarketNest Mall</span><h2 id="mall-title">Thương hiệu chính hãng</h2></div><span className="home-authentic-badge">✓ Tuyển chọn chất lượng</span></header>
+        <header className="home-section-heading"><div><span className="home-section-eyebrow">MarketNest Mall</span><h2 id="mall-title">Thương hiệu chính hãng</h2></div><span className="home-authentic-badge"><HomeIcon name="verified" /> Tuyển chọn chất lượng</span></header>
         <div className="home-brand-grid">{mallBrands.map(([mark, name, note]) => <article key={name}><span>{mark}</span><strong>{name}</strong><small>{note}</small></article>)}</div>
       </section>
 
@@ -200,7 +256,6 @@ export function CustomerHomePage() {
       <section className="home-recommendations" id="recommendations" aria-labelledby="recommendations-title">
         <header className="home-section-heading home-recommendations__heading">
           <div><span className="home-section-eyebrow">Cá nhân hóa theo sở thích</span><h2 id="recommendations-title">Gợi ý hôm nay</h2></div>
-          <div className="home-recommendation-tabs" aria-label="Danh mục gợi ý"><span>Tất cả</span>{categories.slice(0, 4).map((category) => <Link key={category.categoryId} to={`/categories/${category.categoryId}`}>{category.name}</Link>)}</div>
         </header>
         {wishlistMessage && <p className="home-wishlist-message" role="alert">{wishlistMessage}</p>}
         <ProductContent products={products} isLoading={isProductLoading} error={productError} wishlistProductIds={wishlistProductIds} updatingWishlistId={updatingWishlistId} onWishlistToggle={handleWishlistToggle} />
