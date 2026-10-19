@@ -19,7 +19,10 @@ import { OrderItem } from './order-item.entity.js';
 
 @Check('CHK_orders_subtotal_non_negative', '"subtotal" >= 0')
 @Check('CHK_orders_discount_amount_non_negative', '"discount_amount" >= 0')
-@Check('CHK_orders_shipping_fee_non_negative', '"shipping_fee" >= 0')
+@Check(
+  'CHK_orders_discount_not_above_subtotal',
+  '"discount_amount" <= "subtotal"',
+)
 @Check('CHK_orders_total_amount_non_negative', '"total_amount" >= 0')
 @Entity({ name: 'orders' })
 export class Order {
@@ -46,15 +49,6 @@ export class Order {
     default: 0,
   })
   discountAmount: string;
-
-  @Column({
-    name: 'shipping_fee',
-    type: 'numeric',
-    precision: 14,
-    scale: 2,
-    default: 0,
-  })
-  shippingFee: string;
 
   @Column({ name: 'total_amount', type: 'numeric', precision: 14, scale: 2 })
   totalAmount: string;

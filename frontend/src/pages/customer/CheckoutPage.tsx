@@ -33,7 +33,8 @@ export function CheckoutPage() {
   const navigate = useNavigate();
   const [preview, setPreview] = useState<CheckoutPreviewResponse | null>(null);
   const [shippingAddress, setShippingAddress] = useState('');
-  const [discountInput, setDiscountInput] = useState('');
+  const [productDiscountInput, setProductDiscountInput] = useState('');
+  const [shippingDiscountInput, setShippingDiscountInput] = useState('');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>('COD');
   const [createdOrder, setCreatedOrder] = useState<CreatedOrder | null>(null);
   const [submissionPhase, setSubmissionPhase] = useState<SubmissionPhase>('idle');
@@ -76,16 +77,23 @@ export function CheckoutPage() {
     [preview],
   );
 
-  const reloadPreview = async (discountCode = preview?.discount?.code ?? '') => {
+  const reloadPreview = async (
+    productDiscountCode = preview?.productDiscount?.code ?? '',
+    shippingDiscountCode = preview?.shippingDiscount?.code ?? '',
+  ) => {
     if (isRefreshing || isSubmitting || isOrderLocked) return;
     setIsRefreshing(true);
     setPreviewError('');
     setCheckoutError('');
 
     try {
-      const response = await getCheckoutPreview({ discountCode: discountCode || undefined });
+      const response = await getCheckoutPreview({
+        productDiscountCode: productDiscountCode || undefined,
+        shippingDiscountCode: shippingDiscountCode || undefined,
+      });
       setPreview(response);
-      setDiscountInput(response.discount?.code ?? '');
+      setProductDiscountInput(response.productDiscount?.code ?? '');
+      setShippingDiscountInput(response.shippingDiscount?.code ?? '');
     } catch (error: unknown) {
       setPreviewError(getPreviewError(error));
     } finally {
@@ -114,8 +122,18 @@ export function CheckoutPage() {
     }
   };
 
-  const handleApplyDiscount = () => {
-    void reloadPreview(discountInput.trim().toUpperCase());
+  const handleApplyProductDiscount = () => {
+    void reloadPreview(
+      productDiscountInput.trim().toUpperCase(),
+      preview?.shippingDiscount?.code ?? '',
+    );
+  };
+
+  const handleApplyShippingDiscount = () => {
+    void reloadPreview(
+      preview?.productDiscount?.code ?? '',
+      shippingDiscountInput.trim().toUpperCase(),
+    );
   };
 
   const handleConfirm = async () => {
@@ -134,7 +152,8 @@ export function CheckoutPage() {
     try {
       const response = await confirmCheckout({
         shippingAddress: normalizedAddress,
-        discountCode: preview.discount?.code,
+        productDiscountCode: preview.productDiscount?.code,
+        shippingDiscountCode: preview.shippingDiscount?.code,
       });
       const order: CreatedOrder = {
         orderGroupId: response.orderGroupId,
@@ -274,7 +293,11 @@ export function CheckoutPage() {
                       </div>
                     ))}
                   </div>
-                  <footer><span>Tạm tính tại gian hàng</span><strong>{formatCurrency(group.subtotal)}</strong></footer>
+                  <footer className="checkout-shop__totals">
+                    <div><span>Tiền hàng</span><strong>{formatCurrency(group.subtotal)}</strong></div>
+                    {Number(group.productDiscountAmount) > 0 && <div className="is-discount"><span>Giảm giá sản phẩm</span><strong>− {formatCurrency(group.productDiscountAmount)}</strong></div>}
+                    <div className="is-total"><span>Tổng tiền hàng</span><strong>{formatCurrency(group.totalAmount)}</strong></div>
+                  </footer>
                 </article>
               ))}
             </div>
@@ -307,21 +330,32 @@ export function CheckoutPage() {
           <h2 id="checkout-summary-title">Tóm tắt đơn hàng</h2>
 
           <div className="checkout-discount">
-            <label htmlFor="checkout-discount-code">Mã giảm giá</label>
+            <label htmlFor="checkout-product-discount-code">Mã giảm giá sản phẩm</label>
             <div>
-              <input id="checkout-discount-code" value={discountInput} onChange={(event) => setDiscountInput(event.target.value)} placeholder="Nhập mã" maxLength={50} disabled={isRefreshing || isSubmitting || isOrderLocked} />
-              <button type="button" onClick={handleApplyDiscount} disabled={isRefreshing || isSubmitting || isOrderLocked}>{isRefreshing ? 'Đang áp dụng...' : 'Áp dụng'}</button>
+              <input id="checkout-product-discount-code" value={productDiscountInput} onChange={(event) => setProductDiscountInput(event.target.value)} placeholder="Ví dụ: SALE20" maxLength={50} disabled={isRefreshing || isSubmitting || isOrderLocked} />
+              <button type="button" onClick={handleApplyProductDiscount} disabled={isRefreshing || isSubmitting || isOrderLocked}>{isRefreshing ? 'Đang xử lý...' : 'Áp dụng'}</button>
             </div>
-            {preview.discount && <p>Đã áp dụng mã <strong>{preview.discount.code}</strong></p>}
+            {preview.productDiscount && <p>Đã áp dụng <strong>{preview.productDiscount.code}</strong><button type="button" disabled={isRefreshing || isSubmitting || isOrderLocked} onClick={() => { setProductDiscountInput(''); void reloadPreview('', preview.shippingDiscount?.code ?? ''); }}>Gỡ mã</button></p>}
+          </div>
+
+          <div className="checkout-discount">
+            <label htmlFor="checkout-shipping-discount-code">Mã giảm phí vận chuyển</label>
+            <div>
+              <input id="checkout-shipping-discount-code" value={shippingDiscountInput} onChange={(event) => setShippingDiscountInput(event.target.value)} placeholder="Ví dụ: FREESHIP30" maxLength={50} disabled={isRefreshing || isSubmitting || isOrderLocked} />
+              <button type="button" onClick={handleApplyShippingDiscount} disabled={isRefreshing || isSubmitting || isOrderLocked}>{isRefreshing ? 'Đang xử lý...' : 'Áp dụng'}</button>
+            </div>
+            {preview.shippingDiscount && <p>Đã áp dụng <strong>{preview.shippingDiscount.code}</strong><button type="button" disabled={isRefreshing || isSubmitting || isOrderLocked} onClick={() => { setShippingDiscountInput(''); void reloadPreview(preview.productDiscount?.code ?? '', ''); }}>Gỡ mã</button></p>}
           </div>
 
           <dl>
             <div><dt>Số lượng sản phẩm</dt><dd>{totalQuantity}</dd></div>
-            <div><dt>Tổng tiền hàng</dt><dd>{formatCurrency(preview.cartSubtotal)}</dd></div>
-            {preview.discount && <div className="checkout-summary__discount"><dt>Giảm giá</dt><dd>− {formatCurrency(preview.discountAmount)}</dd></div>}
+            <div><dt>Tạm tính</dt><dd>{formatCurrency(preview.subtotal)}</dd></div>
+            <div className="checkout-summary__discount"><dt>Giảm giá sản phẩm</dt><dd>− {formatCurrency(preview.productDiscountAmount)}</dd></div>
+            <div><dt>Phí vận chuyển</dt><dd>{formatCurrency(preview.shippingFee)}</dd></div>
+            <div className="checkout-summary__discount"><dt>Giảm phí vận chuyển</dt><dd>− {formatCurrency(preview.shippingDiscountAmount)}</dd></div>
             <div><dt>Thanh toán</dt><dd>{paymentMethodLabels[selectedPaymentMethod]}</dd></div>
             {createdOrder && <div><dt>Mã nhóm đơn</dt><dd>#{createdOrder.orderGroupId}</dd></div>}
-            <div className="checkout-summary__total"><dt>Tổng thanh toán</dt><dd>{formatCurrency(createdOrder?.totalAmount ?? preview.finalTotal)}</dd></div>
+            <div className="checkout-summary__total"><dt>Tổng thanh toán</dt><dd>{formatCurrency(createdOrder?.totalAmount ?? preview.totalAmount)}</dd></div>
           </dl>
 
           <button className="checkout-summary__confirm" type="button" onClick={handlePrimaryAction} disabled={isSubmitting || isRefreshing || Boolean(previewError)}>{primaryButtonLabel}</button>

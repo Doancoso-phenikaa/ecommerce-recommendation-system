@@ -11,6 +11,7 @@ import {
   ValidateIf,
 } from 'class-validator';
 import { DiscountType } from '../enums/discount-type.enum.js';
+import { DiscountTarget } from '../enums/discount-target.enum.js';
 
 const trimString = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
@@ -24,6 +25,9 @@ export class CreateDiscountDto {
 
   @IsEnum(DiscountType)
   type: DiscountType;
+
+  @IsEnum(DiscountTarget)
+  target: DiscountTarget;
 
   @Transform(trimString)
   @IsString()

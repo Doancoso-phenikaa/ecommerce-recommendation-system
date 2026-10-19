@@ -1,11 +1,14 @@
 export type DiscountType = 'PERCENT' | 'FIXED';
 
+export type DiscountTarget = 'PRODUCT' | 'SHIPPING';
+
 export type DiscountStatus = 'ACTIVE' | 'INACTIVE';
 
 export interface Discount {
   discountId: string;
   code: string;
   type: DiscountType;
+  target: DiscountTarget;
   value: string;
   minOrderAmount: string;
   startDate: string;
@@ -20,6 +23,7 @@ export interface Discount {
 export interface CreateDiscountRequest {
   code: string;
   type: DiscountType;
+  target: DiscountTarget;
   value: string;
   minOrderAmount?: string;
   startDate: string;
@@ -30,6 +34,7 @@ export interface CreateDiscountRequest {
 export interface UpdateDiscountRequest {
   code?: string;
   type?: DiscountType;
+  target?: DiscountTarget;
   value?: string;
   minOrderAmount?: string;
   startDate?: string;

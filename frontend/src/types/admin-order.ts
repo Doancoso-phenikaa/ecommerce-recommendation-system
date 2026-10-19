@@ -35,7 +35,6 @@ export interface AdminOrderListItem {
   customer: AdminOrderCustomer;
   subtotal: string;
   discountAmount: string;
-  shippingFee: string;
   totalAmount: string;
   shippingMethod: string | null;
   status: OrderStatus;
@@ -77,8 +76,14 @@ export interface AdminOrderDetailResponse {
   shop: AdminOrderShop;
   subtotal: string;
   discountAmount: string;
-  shippingFee: string;
   totalAmount: string;
+  orderGroupSummary: {
+    subtotal: string;
+    productDiscountAmount: string;
+    shippingFee: string;
+    shippingDiscountAmount: string;
+    totalAmount: string;
+  };
   shippingAddress: string;
   shippingMethod: string | null;
   status: OrderStatus;

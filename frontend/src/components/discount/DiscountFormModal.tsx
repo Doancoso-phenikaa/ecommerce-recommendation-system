@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import type {
   CreateDiscountRequest,
   Discount,
+  DiscountTarget,
   DiscountType,
   UpdateDiscountRequest,
 } from '../../types/discount';
@@ -31,6 +32,7 @@ export function DiscountFormModal({
 }: DiscountFormModalProps) {
   const [code, setCode] = useState(discount?.code ?? '');
   const [type, setType] = useState<DiscountType>(discount?.type ?? 'PERCENT');
+  const [target, setTarget] = useState<DiscountTarget>(discount?.target ?? 'PRODUCT');
   const [value, setValue] = useState(discount?.value ?? '');
   const [minOrderAmount, setMinOrderAmount] = useState(discount?.minOrderAmount ?? '0');
   const [startDate, setStartDate] = useState(discount ? toLocalDateTime(discount.startDate) : '');
@@ -62,6 +64,7 @@ export function DiscountFormModal({
     await onSubmit({
       code: normalizedCode,
       type,
+      target,
       value: value.trim(),
       minOrderAmount: minOrderAmount.trim() || '0',
       startDate: startsAt.toISOString(),
@@ -85,14 +88,18 @@ export function DiscountFormModal({
               <small>Mã sẽ được chuẩn hóa thành chữ in hoa.</small>
             </label>
             <label className="admin-discount-field">
-              <span>Loại giảm *</span>
+              <span>Hình thức giảm *</span>
               <select value={type} onChange={(event) => setType(event.target.value as DiscountType)}><option value="PERCENT">Theo phần trăm</option><option value="FIXED">Số tiền cố định</option></select>
+            </label>
+            <label className="admin-discount-field">
+              <span>Loại ưu đãi *</span>
+              <select value={target} onChange={(event) => setTarget(event.target.value as DiscountTarget)}><option value="PRODUCT">Giảm giá sản phẩm</option><option value="SHIPPING">Giảm phí vận chuyển</option></select>
             </label>
             <label className="admin-discount-field">
               <span>{type === 'PERCENT' ? 'Phần trăm giảm *' : 'Số tiền giảm *'}</span>
               <input type="number" min="0.01" max={type === 'PERCENT' ? 100 : undefined} step="0.01" value={value} onChange={(event) => setValue(event.target.value)} />
             </label>
-            <label className="admin-discount-field admin-discount-field--wide">
+            <label className="admin-discount-field">
               <span>Giá trị đơn hàng tối thiểu</span>
               <input type="number" min="0" step="0.01" value={minOrderAmount} onChange={(event) => setMinOrderAmount(event.target.value)} />
             </label>

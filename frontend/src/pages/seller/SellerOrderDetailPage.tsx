@@ -207,7 +207,8 @@ export function SellerOrderDetailPage() {
 
           <section className="seller-order-totals-card">
             <h2>Giá trị đơn hàng</h2>
-            <dl><div><dt>Tạm tính</dt><dd>{formatCurrency(order.subtotal)}</dd></div><div><dt>Giảm giá</dt><dd>− {formatCurrency(order.discountAmount)}</dd></div><div><dt>Phí giao hàng</dt><dd>{formatCurrency(order.shippingFee)}</dd></div><div><dt>Tổng cộng</dt><dd>{formatCurrency(order.totalAmount)}</dd></div></dl>
+            <dl><div><dt>Tiền hàng</dt><dd>{formatCurrency(order.subtotal)}</dd></div><div><dt>Giảm giá sản phẩm</dt><dd>− {formatCurrency(order.discountAmount)}</dd></div><div><dt>Tổng tiền sản phẩm</dt><dd>{formatCurrency(order.totalAmount)}</dd></div></dl>
+            <p>Phí vận chuyển được quản lý ở cấp nhóm đơn hàng bởi nền tảng.</p>
           </section>
         </aside>
       </div>

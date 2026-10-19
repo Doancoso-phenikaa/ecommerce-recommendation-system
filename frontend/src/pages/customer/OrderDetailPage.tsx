@@ -273,6 +273,12 @@ export function OrderDetailPage() {
           </section>
 
           <section className="order-detail-summary__total">
+            <dl>
+              <div><dt>Tạm tính sản phẩm</dt><dd>{formatCurrency(orderGroup.subtotal)}</dd></div>
+              <div><dt>Giảm giá sản phẩm</dt><dd>− {formatCurrency(orderGroup.productDiscountAmount)}</dd></div>
+              <div><dt>Phí vận chuyển</dt><dd>{formatCurrency(orderGroup.shippingFee)}</dd></div>
+              <div><dt>Giảm phí vận chuyển</dt><dd>− {formatCurrency(orderGroup.shippingDiscountAmount)}</dd></div>
+            </dl>
             <div><span>Tổng nhóm đơn</span><strong>{formatCurrency(orderGroup.totalAmount)}</strong></div>
             <small>{orderGroup.orders.length} đơn hàng theo gian hàng</small>
           </section>
@@ -439,9 +445,8 @@ function OrderDetailCard({
           <h3>Thành tiền</h3>
           <dl>
             <div><dt>Tạm tính</dt><dd>{formatCurrency(order.subtotal)}</dd></div>
-            <div><dt>Giảm giá</dt><dd>− {formatCurrency(order.discountAmount)}</dd></div>
-            <div><dt>Phí giao hàng</dt><dd>{formatCurrency(order.shippingFee)}</dd></div>
-            <div><dt>Tổng cộng</dt><dd>{formatCurrency(order.totalAmount)}</dd></div>
+            <div><dt>Giảm giá sản phẩm</dt><dd>− {formatCurrency(order.discountAmount)}</dd></div>
+            <div><dt>Tổng tiền hàng</dt><dd>{formatCurrency(order.totalAmount)}</dd></div>
           </dl>
         </section>
       </div>

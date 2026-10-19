@@ -203,6 +203,29 @@
   font-variant-numeric: tabular-nums;
 }
 
+.checkout-shop > footer.checkout-shop__totals {
+  display: grid;
+  justify-content: stretch;
+  gap: 0.38rem;
+}
+
+.checkout-shop__totals > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.checkout-shop__totals > .is-discount strong {
+  color: #16a34a;
+}
+
+.checkout-shop__totals > .is-total {
+  margin-top: 0.2rem;
+  padding-top: 0.42rem;
+  border-top: 1px dashed var(--market-border);
+}
+
 .checkout-item {
   display: grid;
   grid-template-columns: 4.25rem minmax(0, 1fr) 3.5rem 7rem;
@@ -323,6 +346,22 @@
   margin: 0.45rem 0 0;
   color: var(--market-success);
   font-size: 0.65rem;
+}
+
+.checkout-discount p button {
+  margin-left: 0.45rem;
+  padding: 0;
+  color: #dc2626;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  font-size: inherit;
+  text-decoration: underline;
+}
+
+.checkout-discount + .checkout-discount {
+  margin-top: -0.9rem;
+  border-top: 0;
 }
 
 .checkout-summary dl {

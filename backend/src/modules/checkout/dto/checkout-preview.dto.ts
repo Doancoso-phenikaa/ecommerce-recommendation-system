@@ -6,5 +6,11 @@ export class CheckoutPreviewDto {
   @IsOptional()
   @IsString()
   @MaxLength(50)
-  discountCode?: string;
+  productDiscountCode?: string;
+
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  shippingDiscountCode?: string;
 }

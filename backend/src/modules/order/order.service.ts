@@ -50,6 +50,8 @@ export class OrderService {
     return {
       data: orderGroups.map((orderGroup) => ({
         orderGroupId: orderGroup.orderGroupId,
+        shippingFee: orderGroup.shippingFee,
+        shippingDiscountAmount: orderGroup.shippingDiscountAmount,
         totalAmount: orderGroup.totalAmount,
         createdAt: orderGroup.createdAt,
         payment: orderGroup.payment
@@ -101,6 +103,7 @@ export class OrderService {
 
     return {
       orderGroupId: orderGroup.orderGroupId,
+      ...this.buildOrderGroupFinancialSummary(orderGroup),
       totalAmount: orderGroup.totalAmount,
       createdAt: orderGroup.createdAt,
       payment: orderGroup.payment
@@ -123,7 +126,6 @@ export class OrderService {
           shopName: order.shop.name,
           subtotal: order.subtotal,
           discountAmount: order.discountAmount,
-          shippingFee: order.shippingFee,
           totalAmount: order.totalAmount,
           shippingAddress: order.shippingAddress,
           shippingMethod: order.shippingMethod,
@@ -581,22 +583,35 @@ export class OrderService {
     orderGroup: OrderGroup,
     payment: Payment | null,
   ): Promise<void> {
-    const total = await manager
+    const activeOrderSummary = await manager
       .getRepository(Order)
       .createQueryBuilder('order')
       .select(
         'COALESCE(SUM("order"."total_amount"), 0)::numeric(14, 2)',
-        'totalAmount',
+        'productTotal',
       )
+      .addSelect('COUNT("order"."order_id")::int', 'activeOrderCount')
       .where('order.orderGroupId = :orderGroupId', {
         orderGroupId: orderGroup.orderGroupId,
       })
       .andWhere('order.status != :cancelledStatus', {
         cancelledStatus: OrderStatus.CANCELLED,
       })
-      .getRawOne<{ totalAmount: string }>();
+      .getRawOne<{ productTotal: string; activeOrderCount: number | string }>();
 
-    orderGroup.totalAmount = total?.totalAmount ?? '0.00';
+    const activeOrderCount = Number(activeOrderSummary?.activeOrderCount ?? 0);
+
+    if (activeOrderCount === 0) {
+      orderGroup.totalAmount = '0.00';
+    } else {
+      const totalInCents =
+        this.priceToCents(activeOrderSummary?.productTotal ?? '0.00') +
+        this.priceToCents(orderGroup.shippingFee) -
+        this.priceToCents(orderGroup.shippingDiscountAmount);
+      orderGroup.totalAmount = this.formatCents(
+        totalInCents < 0n ? 0n : totalInCents,
+      );
+    }
     await manager.getRepository(OrderGroup).save(orderGroup);
 
     if (
@@ -652,7 +667,6 @@ export class OrderService {
       orderGroupId: order.orderGroupId,
       subtotal: order.subtotal,
       discountAmount: order.discountAmount,
-      shippingFee: order.shippingFee,
       totalAmount: order.totalAmount,
       shippingAddress: order.shippingAddress,
       shippingMethod: order.shippingMethod,
@@ -687,6 +701,36 @@ export class OrderService {
 
   private isZeroAmount(amount: string): boolean {
     return /^0+(?:\.0+)?$/.test(amount.trim());
+  }
+
+  private buildOrderGroupFinancialSummary(orderGroup: OrderGroup) {
+    const orders = (orderGroup.orders ?? []).filter(
+      (order) => order.status !== OrderStatus.CANCELLED,
+    );
+    const subtotalInCents = orders.reduce(
+      (total, order) => total + this.priceToCents(order.subtotal),
+      0n,
+    );
+    const productDiscountInCents = orders.reduce(
+      (total, order) => total + this.priceToCents(order.discountAmount),
+      0n,
+    );
+
+    return {
+      subtotal: this.formatCents(subtotalInCents),
+      productDiscountAmount: this.formatCents(productDiscountInCents),
+      shippingFee: orderGroup.shippingFee,
+      shippingDiscountAmount: orderGroup.shippingDiscountAmount,
+    };
+  }
+
+  private priceToCents(amount: string): bigint {
+    const [wholePart, fractionPart = ''] = amount.split('.');
+    return BigInt(wholePart) * 100n + BigInt(fractionPart.padEnd(2, '0'));
+  }
+
+  private formatCents(value: bigint): string {
+    return `${value / 100n}.${(value % 100n).toString().padStart(2, '0')}`;
   }
 
   private async lockInventories(
