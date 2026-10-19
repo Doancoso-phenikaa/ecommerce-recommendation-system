@@ -17,6 +17,7 @@ import { ProductIdParamDto } from '../product/dto/product-id-param.dto.js';
 import { CreateReviewDto } from './dto/create-review.dto.js';
 import { ReviewIdParamDto } from './dto/review-id-param.dto.js';
 import { SellerReviewQueryDto } from './dto/seller-review-query.dto.js';
+import { SellerReplyReviewDto } from './dto/seller-reply-review.dto.js';
 import { UpdateReviewDto } from './dto/update-review.dto.js';
 import { ReviewService } from './review.service.js';
 
@@ -62,5 +63,16 @@ export class ReviewController {
     @Query() query: SellerReviewQueryDto,
   ) {
     return this.reviewService.getSellerReviews(userId, query);
+  }
+
+  @Patch('seller/reviews/:reviewId/reply')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SELLER)
+  replyToReview(
+    @CurrentUser('userId') userId: string,
+    @Param() params: ReviewIdParamDto,
+    @Body() dto: SellerReplyReviewDto,
+  ) {
+    return this.reviewService.replyToReview(userId, params.reviewId, dto);
   }
 }
