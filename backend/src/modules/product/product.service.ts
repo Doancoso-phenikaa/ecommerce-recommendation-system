@@ -122,6 +122,11 @@ export class ProductService {
           .orderBy('product.price', 'DESC')
           .addOrderBy('product.productId', 'DESC');
         break;
+      case ProductSort.LATEST_APPROVED:
+        queryBuilder
+          .orderBy('product.approvedAt', 'DESC', 'NULLS LAST')
+          .addOrderBy('product.productId', 'DESC');
+        break;
       case ProductSort.NEWEST:
       default:
         queryBuilder

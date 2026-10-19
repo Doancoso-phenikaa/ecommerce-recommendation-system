@@ -18,9 +18,21 @@ export interface CustomerOrderListItem {
   orderId: string;
   shopId: string;
   shopName: string;
+  shopLogoUrl: string | null;
   totalAmount: string;
   status: OrderStatus;
   createdAt: string;
+  items: CustomerOrderListProduct[];
+}
+
+export interface CustomerOrderListProduct {
+  orderItemId: string;
+  productId: string;
+  productName: string;
+  imageUrl: string | null;
+  quantity: number;
+  unitPrice: string;
+  subtotal: string;
 }
 
 export interface CustomerOrderGroupListItem {

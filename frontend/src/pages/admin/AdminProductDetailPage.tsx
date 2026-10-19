@@ -156,7 +156,7 @@ export function AdminProductDetailPage() {
       </div>
 
       {isApproveOpen && (
-        <div className="admin-product-modal-backdrop"><section className="admin-product-modal" role="dialog" aria-modal="true" aria-labelledby="approve-product-title"><span className="admin-product-modal-icon">✓</span><h2 id="approve-product-title">Duyệt sản phẩm?</h2><p>Backend sẽ kiểm tra lại trạng thái gian hàng, danh mục và sản phẩm trước khi duyệt.</p>{actionError && <div className="admin-product-modal-error">{actionError}</div>}<footer><button type="button" disabled={isApproving} onClick={() => setIsApproveOpen(false)}>Quay lại</button><button className="is-primary" type="button" disabled={isApproving} onClick={() => void handleApprove()}>{isApproving ? 'Đang xử lý...' : 'Duyệt sản phẩm'}</button></footer></section></div>
+        <div className="admin-product-modal-backdrop"><section className="admin-product-modal" role="dialog" aria-modal="true" aria-labelledby="approve-product-title"><span className="admin-product-modal-icon">✓</span><h2 id="approve-product-title">Duyệt sản phẩm?</h2><p>Sản phẩm chỉ được duyệt khi gian hàng, danh mục và thông tin sản phẩm đều hợp lệ.</p>{actionError && <div className="admin-product-modal-error">{actionError}</div>}<footer><button type="button" disabled={isApproving} onClick={() => setIsApproveOpen(false)}>Quay lại</button><button className="is-primary" type="button" disabled={isApproving} onClick={() => void handleApprove()}>{isApproving ? 'Đang xử lý...' : 'Duyệt sản phẩm'}</button></footer></section></div>
       )}
 
       {isRejectOpen && (

@@ -41,6 +41,12 @@ export class Review {
   @Column({ name: 'comment', type: 'text', nullable: true })
   comment: string | null;
 
+  @Column({ name: 'seller_reply', type: 'text', nullable: true })
+  sellerReply: string | null;
+
+  @Column({ name: 'seller_replied_at', type: 'timestamptz', nullable: true })
+  sellerRepliedAt: Date | null;
+
   @Column({
     name: 'status',
     type: 'enum',

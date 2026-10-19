@@ -365,9 +365,9 @@
 }
 .order-detail-card.is-focused { border-color: #fdba74; box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.08); }
 .order-detail-card > header {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: center;
-  justify-content: space-between;
   gap: 1rem;
   padding: 0.85rem 1rem;
   background: #fafbfc;
@@ -486,11 +486,18 @@
 .order-detail-summary dt { color: var(--market-muted); }
 .order-detail-summary dd { margin: 0; font-weight: 750; text-align: right; }
 .order-detail-summary__missing { margin: 0; color: var(--market-muted); font-size: 0.7rem; line-height: 1.5; }
-.order-detail-summary .order-detail-summary__total { background: var(--market-dark); border: 0; }
-.order-detail-summary__total > div { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; color: #fff; }
+.order-detail-summary .order-detail-summary__total {
+  background: #fffafa;
+  border: 1px solid #f1dada;
+  border-top: 3px solid #dc2626;
+}
+.order-detail-summary__total dl { padding-bottom: .75rem; border-bottom: 1px solid #f0e4e5; }
+.order-detail-summary__total dt { color: #746d75; }
+.order-detail-summary__total dd { color: #1e1e24; }
+.order-detail-summary__total > div { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-top: .8rem; color: #1e1e24; }
 .order-detail-summary__total span { font-size: 0.7rem; }
-.order-detail-summary__total strong { color: #fdba74; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
-.order-detail-summary__total small { display: block; margin-top: 0.35rem; color: #cbd5e1; font-size: 0.62rem; }
+.order-detail-summary__total strong { color: #dc2626; font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.order-detail-summary__total small { display: block; margin-top: 0.35rem; color: #817a83; font-size: 0.62rem; }
 
 .order-detail-loading { grid-template-columns: minmax(0, 1fr) minmax(18rem, 21rem); }
 .order-detail-loading > section,
@@ -581,7 +588,7 @@
 @media (max-width: 430px) {
   .order-group-card > header { flex-direction: column; }
   .order-group-card__payment { align-items: flex-start; }
-  .order-detail-card > header { flex-direction: column; }
+  .order-detail-card > header { grid-template-columns: 1fr; }
   .order-detail-card__meta { justify-items: start; }
   .order-cancel-button { margin-top: 0.35rem; }
   .order-received-button { margin-top: 0.35rem; }

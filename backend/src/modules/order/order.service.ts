@@ -38,6 +38,8 @@ export class OrderService {
       .leftJoinAndSelect('orderGroup.payment', 'payment')
       .leftJoinAndSelect('orderGroup.orders', 'order')
       .leftJoinAndSelect('order.shop', 'shop')
+      .leftJoinAndSelect('order.items', 'orderItem')
+      .leftJoinAndSelect('orderItem.product', 'product')
       .where('orderGroup.customerId = :customerId', {
         customerId: customer.customerId,
       })
@@ -45,6 +47,7 @@ export class OrderService {
       .addOrderBy('orderGroup.orderGroupId', 'DESC')
       .addOrderBy('order.createdAt', 'ASC')
       .addOrderBy('order.orderId', 'ASC')
+      .addOrderBy('orderItem.orderItemId', 'ASC')
       .getMany();
 
     return {
@@ -65,9 +68,19 @@ export class OrderService {
           orderId: order.orderId,
           shopId: order.shopId,
           shopName: order.shop.name,
+          shopLogoUrl: order.shop.logoUrl,
           totalAmount: order.totalAmount,
           status: order.status,
           createdAt: order.createdAt,
+          items: (order.items ?? []).map((orderItem) => ({
+            orderItemId: orderItem.orderItemId,
+            productId: orderItem.productId,
+            productName: orderItem.productName,
+            imageUrl: orderItem.product.imageUrl,
+            quantity: orderItem.quantity,
+            unitPrice: orderItem.unitPrice,
+            subtotal: orderItem.subtotal,
+          })),
         })),
       })),
     };

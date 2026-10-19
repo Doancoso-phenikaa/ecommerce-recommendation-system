@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { confirmCheckout, getCheckoutPreview } from '../../api/checkout.api';
+import { getCustomerProfile } from '../../api/customer-profile.api';
 import { createPayment } from '../../api/payment.api';
+import { useAuth } from '../../hooks/useAuth';
 import type { CheckoutPreviewResponse } from '../../types/checkout';
 import type { PaymentMethod, PaymentResultState } from '../../types/payment';
 import { getApiErrorMessage } from '../../utils/auth';
 import { formatCurrency } from '../../utils/format-currency';
 import './checkout.css';
-import './payment.css';
 
 interface CreatedOrder {
   orderGroupId: string;
@@ -16,11 +17,68 @@ interface CreatedOrder {
 }
 
 type SubmissionPhase = 'idle' | 'order' | 'payment';
+type CheckoutPaymentOption = 'COD' | 'EWALLET' | 'CREDIT_CARD' | 'ATM';
+type PaymentIconName = 'cash' | 'qr' | 'card' | 'bank';
 
-const paymentMethodLabels: Record<PaymentMethod, string> = {
+const paymentOptions: Array<{
+  value: CheckoutPaymentOption;
+  title: string;
+  description: string;
+  icon: PaymentIconName;
+  badges: string[];
+}> = [
+  {
+    value: 'COD',
+    title: 'Thanh toán khi nhận hàng (COD)',
+    description: 'Thanh toán bằng tiền mặt khi nhận được đơn hàng.',
+    icon: 'cash',
+    badges: ['Phí thu hộ 0đ'],
+  },
+  {
+    value: 'EWALLET',
+    title: 'Ví điện tử VNPay / MoMo / ZaloPay',
+    description: 'Quét mã QR qua ứng dụng ngân hàng hoặc ví điện tử.',
+    icon: 'qr',
+    badges: ['VNPAY', 'MoMo', 'ZaloPay'],
+  },
+  {
+    value: 'CREDIT_CARD',
+    title: 'Thẻ tín dụng / Ghi nợ quốc tế',
+    description: 'Hỗ trợ Visa, MasterCard và JCB với xác thực bảo mật.',
+    icon: 'card',
+    badges: ['VISA', 'MC', 'JCB'],
+  },
+  {
+    value: 'ATM',
+    title: 'Thẻ ATM nội địa / Internet Banking',
+    description: 'Thanh toán qua hệ thống ngân hàng nội địa liên kết Napas.',
+    icon: 'bank',
+    badges: ['NAPAS'],
+  },
+];
+
+const paymentOptionLabels: Record<CheckoutPaymentOption, string> = {
   COD: 'Thanh toán khi nhận hàng (COD)',
-  ONLINE: 'Thanh toán trực tuyến (mô phỏng)',
+  EWALLET: 'Ví điện tử',
+  CREDIT_CARD: 'Thẻ tín dụng / Ghi nợ quốc tế',
+  ATM: 'Thẻ ATM nội địa / Internet Banking',
 };
+
+function PaymentMethodIcon({ name }: { name: PaymentIconName }): ReactNode {
+  if (name === 'cash') {
+    return <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M7 10h.01M17 14h.01" /><circle cx="12" cy="12" r="2.5" /></svg>;
+  }
+
+  if (name === 'qr') {
+    return <svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" /><rect x="7" y="7" width="3" height="3" rx=".4" /><rect x="14" y="7" width="3" height="3" rx=".4" /><rect x="7" y="14" width="3" height="3" rx=".4" /><path d="M14 14h1v1h2v2h-3v-3Z" /></svg>;
+  }
+
+  if (name === 'card') {
+    return <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5" /><path d="M3 9h18M7 15h4" /></svg>;
+  }
+
+  return <svg viewBox="0 0 24 24"><path d="m3 9 9-5 9 5M5 10h14M6 10v7M10 10v7M14 10v7M18 10v7M4 20h16M3 17h18" /></svg>;
+}
 
 function getPreviewError(error: unknown): string {
   const message = getApiErrorMessage(error, 'Không thể tải thông tin đặt hàng.');
@@ -31,26 +89,57 @@ function getPreviewError(error: unknown): string {
 
 export function CheckoutPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useAuth();
+  const selectedCartItemIds = useMemo(() => {
+    const value = (location.state as { selectedCartItemIds?: unknown } | null)?.selectedCartItemIds;
+    if (!Array.isArray(value)) return [];
+    const validIds = value.filter(
+      (cartItemId): cartItemId is string =>
+        typeof cartItemId === 'string' && /^[1-9]\d*$/.test(cartItemId),
+    );
+    return validIds.length === value.length && new Set(validIds).size === validIds.length
+      ? validIds
+      : [];
+  }, [location.state]);
   const [preview, setPreview] = useState<CheckoutPreviewResponse | null>(null);
+  const [customerName, setCustomerName] = useState(user?.fullName ?? 'Khách hàng MarketNest');
+  const [phone, setPhone] = useState(user?.phone ?? '');
   const [shippingAddress, setShippingAddress] = useState('');
+  const [defaultContact, setDefaultContact] = useState({ phone: user?.phone ?? '', shippingAddress: '' });
+  const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
+  const [addressDraft, setAddressDraft] = useState({ phone: '', shippingAddress: '' });
+  const [addressError, setAddressError] = useState('');
   const [productDiscountInput, setProductDiscountInput] = useState('');
   const [shippingDiscountInput, setShippingDiscountInput] = useState('');
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>('COD');
+  const [selectedPaymentOption, setSelectedPaymentOption] = useState<CheckoutPaymentOption>('COD');
   const [createdOrder, setCreatedOrder] = useState<CreatedOrder | null>(null);
   const [submissionPhase, setSubmissionPhase] = useState<SubmissionPhase>('idle');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(selectedCartItemIds.length > 0);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [previewError, setPreviewError] = useState('');
+  const [previewError, setPreviewError] = useState(
+    selectedCartItemIds.length > 0
+      ? ''
+      : 'Vui lòng chọn ít nhất một sản phẩm từ giỏ hàng.',
+  );
   const [checkoutError, setCheckoutError] = useState('');
   const [paymentError, setPaymentError] = useState('');
 
   const isSubmitting = submissionPhase !== 'idle';
   const isOrderLocked = createdOrder !== null;
+  const selectedPaymentMethod: PaymentMethod = selectedPaymentOption === 'COD' ? 'COD' : 'ONLINE';
+  const isDefaultAddress = phone === defaultContact.phone && shippingAddress === defaultContact.shippingAddress;
 
   useEffect(() => {
     let isCurrent = true;
 
-    void getCheckoutPreview()
+    if (selectedCartItemIds.length === 0) {
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    void getCheckoutPreview({ selectedCartItemIds })
       .then((response) => {
         if (isCurrent) setPreview(response);
       })
@@ -59,6 +148,31 @@ export function CheckoutPage() {
       })
       .finally(() => {
         if (isCurrent) setIsLoading(false);
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [selectedCartItemIds]);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    void getCustomerProfile()
+      .then((profile) => {
+        if (!isCurrent) return;
+        const profilePhone = profile.phone?.trim() ?? '';
+        const profileAddress = profile.shippingAddress?.trim() ?? '';
+        setCustomerName(profile.fullName);
+        setPhone(profilePhone);
+        setShippingAddress(profileAddress);
+        setDefaultContact({
+          phone: profilePhone,
+          shippingAddress: profileAddress,
+        });
+      })
+      .catch(() => {
+        // Authentication data remains a safe fallback when profile loading fails.
       });
 
     return () => {
@@ -88,6 +202,7 @@ export function CheckoutPage() {
 
     try {
       const response = await getCheckoutPreview({
+        selectedCartItemIds,
         productDiscountCode: productDiscountCode || undefined,
         shippingDiscountCode: shippingDiscountCode || undefined,
       });
@@ -136,6 +251,43 @@ export function CheckoutPage() {
     );
   };
 
+  const openAddressModal = () => {
+    setAddressDraft({ phone, shippingAddress });
+    setAddressError('');
+    setIsAddressModalOpen(true);
+  };
+
+  const closeAddressModal = () => {
+    if (isSubmitting || isOrderLocked) return;
+    setIsAddressModalOpen(false);
+    setAddressError('');
+  };
+
+  const handleAddressSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const normalizedPhone = addressDraft.phone.trim();
+    const normalizedAddress = addressDraft.shippingAddress.trim();
+
+    if (!normalizedPhone) {
+      setAddressError('Vui lòng nhập số điện thoại nhận hàng.');
+      return;
+    }
+    if (normalizedPhone.length > 20) {
+      setAddressError('Số điện thoại tối đa 20 ký tự.');
+      return;
+    }
+    if (!normalizedAddress) {
+      setAddressError('Vui lòng nhập địa chỉ nhận hàng.');
+      return;
+    }
+
+    setPhone(normalizedPhone);
+    setShippingAddress(normalizedAddress);
+    setIsAddressModalOpen(false);
+    setAddressError('');
+    setCheckoutError('');
+  };
+
   const handleConfirm = async () => {
     if (!preview || isSubmitting || previewError || createdOrder) return;
     const normalizedAddress = shippingAddress.trim();
@@ -145,12 +297,18 @@ export function CheckoutPage() {
       return;
     }
 
+    if (!phone.trim()) {
+      setCheckoutError('Vui lòng nhập số điện thoại nhận hàng.');
+      return;
+    }
+
     setSubmissionPhase('order');
     setCheckoutError('');
     setPaymentError('');
 
     try {
       const response = await confirmCheckout({
+        selectedCartItemIds,
         shippingAddress: normalizedAddress,
         productDiscountCode: preview.productDiscount?.code,
         shippingDiscountCode: preview.shippingDiscount?.code,
@@ -249,20 +407,20 @@ export function CheckoutPage() {
         <div className="checkout-content">
           <section className="checkout-address" aria-labelledby="checkout-address-title">
             <div className="checkout-section-heading">
-              <span>01</span>
-              <div><h2 id="checkout-address-title">Địa chỉ giao hàng</h2><p>Địa chỉ này sẽ được lưu vào các đơn hàng vừa tạo.</p></div>
-              {isOrderLocked && <em>Đã khóa sau khi tạo đơn</em>}
+              <span aria-hidden="true">⌖</span>
+              <div><h2 id="checkout-address-title">Địa chỉ nhận hàng</h2><p>Kiểm tra thông tin giao nhận để đơn hàng được giao đúng hẹn.</p></div>
+              {isOrderLocked ? <em>Đã khóa sau khi tạo đơn</em> : (
+                <button className="checkout-address__change" type="button" onClick={openAddressModal}>⇄ Thay đổi địa chỉ</button>
+              )}
             </div>
-            <label htmlFor="checkout-shipping-address">Địa chỉ nhận hàng</label>
-            <textarea
-              id="checkout-shipping-address"
-              value={shippingAddress}
-              onChange={(event) => setShippingAddress(event.target.value)}
-              placeholder="Nhập số nhà, đường, phường/xã, quận/huyện, tỉnh/thành phố"
-              autoComplete="street-address"
-              rows={3}
-              disabled={isSubmitting || isOrderLocked}
-            />
+            <div className="checkout-address__card">
+              <div className="checkout-address__contact">
+                <strong>{customerName}</strong>
+                <span>{phone || 'Chưa có số điện thoại'}</span>
+                {isDefaultAddress && shippingAddress && <em>Mặc định</em>}
+              </div>
+              <p><span aria-hidden="true">⌖</span>{shippingAddress || 'Chưa có địa chỉ mặc định. Hãy chọn “Thay đổi địa chỉ” để bổ sung.'}</p>
+            </div>
           </section>
 
           <section className="checkout-order" aria-labelledby="checkout-products-title">
@@ -278,18 +436,25 @@ export function CheckoutPage() {
                   <header><strong>{group.shopName}</strong><span>{group.items.length} mặt hàng</span></header>
                   <div>
                     {group.items.map((item) => (
-                      <div className="checkout-item" key={item.productId}>
+                      <div className="checkout-item" key={item.cartItemId}>
                         <Link className="checkout-item__media" to={`/products/${item.productId}`}>
                           {item.imageUrl
                             ? <img src={item.imageUrl} alt={item.name} />
                             : <span aria-label="Sản phẩm chưa có hình ảnh">{item.name.charAt(0)}</span>}
                         </Link>
                         <div className="checkout-item__info">
+                          <div className="checkout-item__badges">
+                            <span>{item.categoryName}</span>
+                            <em>Còn {item.availableQuantity} sản phẩm</em>
+                          </div>
                           <Link to={`/products/${item.productId}`}>{item.name}</Link>
                           <small>Đơn giá {formatCurrency(item.price)}</small>
                         </div>
-                        <span className="checkout-item__quantity">× {item.quantity}</span>
-                        <strong>{formatCurrency(item.subtotal)}</strong>
+                        <div className="checkout-item__price">
+                          {item.originalPrice && <del>{formatCurrency(item.originalPrice)}</del>}
+                          <strong>{formatCurrency(item.subtotal)}</strong>
+                          <span>Số lượng: {item.quantity}</span>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -305,28 +470,32 @@ export function CheckoutPage() {
 
           <section className="checkout-payment" aria-labelledby="checkout-payment-title">
             <div className="checkout-section-heading">
-              <span>03</span>
-              <div><h2 id="checkout-payment-title">Phương thức thanh toán</h2><p>Chọn phương thức trước khi xác nhận đặt hàng.</p></div>
-              {isOrderLocked && <em>Đã khóa</em>}
+              <span aria-hidden="true">▤</span>
+              <div><h2 id="checkout-payment-title">Phương thức thanh toán</h2><p>Chọn phương thức thuận tiện và an toàn nhất.</p></div>
+              {isOrderLocked ? <em>Đã khóa</em> : <small className="checkout-payment__secure">▣ Bảo mật SSL 256-bit</small>}
             </div>
 
-            <label className={`payment-method${selectedPaymentMethod === 'COD' ? ' payment-method--selected' : ''}`}>
-              <input type="radio" name="paymentMethod" value="COD" checked={selectedPaymentMethod === 'COD'} onChange={() => setSelectedPaymentMethod('COD')} disabled={isSubmitting || isOrderLocked} />
-              <span className="payment-method__icon" aria-hidden="true">₫</span>
-              <span className="payment-method__copy"><strong>Thanh toán khi nhận hàng (COD)</strong><small>Thanh toán trực tiếp khi đơn hàng được giao tới bạn.</small></span>
-              <span className="payment-method__check" aria-hidden="true">✓</span>
-            </label>
+            <div className="checkout-payment__options">
+              {paymentOptions.map((option) => (
+                <label className={`payment-method${selectedPaymentOption === option.value ? ' payment-method--selected' : ''}`} key={option.value}>
+                  <input type="radio" name="paymentOption" value={option.value} checked={selectedPaymentOption === option.value} onChange={() => setSelectedPaymentOption(option.value)} disabled={isSubmitting || isOrderLocked} />
+                  <span className="payment-method__radio" aria-hidden="true" />
+                  <span className="payment-method__icon" aria-hidden="true"><PaymentMethodIcon name={option.icon} /></span>
+                  <span className="payment-method__copy"><strong>{option.title}</strong><small>{option.description}</small></span>
+                  <span className="payment-method__badges" aria-hidden="true">{option.badges.map((badge) => <i key={badge}>{badge}</i>)}</span>
+                </label>
+              ))}
+            </div>
 
-            <label className={`payment-method${selectedPaymentMethod === 'ONLINE' ? ' payment-method--selected' : ''}`}>
-              <input type="radio" name="paymentMethod" value="ONLINE" checked={selectedPaymentMethod === 'ONLINE'} onChange={() => setSelectedPaymentMethod('ONLINE')} disabled={isSubmitting || isOrderLocked} />
-              <span className="payment-method__icon" aria-hidden="true">↗</span>
-              <span className="payment-method__copy"><strong>Thanh toán trực tuyến</strong><small>Backend mô phỏng kết quả thanh toán thành công trong phiên bản hiện tại.</small><em>Mô phỏng — không kết nối ngân hàng hoặc cổng thanh toán</em></span>
-              <span className="payment-method__check" aria-hidden="true">✓</span>
-            </label>
+            <div className="checkout-payment__note">
+              <span className="checkout-payment__info-icon" aria-hidden="true">i</span>
+              <div><strong>{selectedPaymentOption === 'COD' ? 'Thanh toán khi nhận hàng (COD)' : 'Thanh toán trực tuyến an toàn'}</strong><p>{selectedPaymentOption === 'COD' ? `Bạn sẽ thanh toán ${formatCurrency(preview.totalAmount)} cho nhân viên giao hàng khi nhận đơn.` : `Thanh toán bằng ${paymentOptionLabels[selectedPaymentOption]} và nhận xác nhận ngay sau khi hoàn tất.`}</p></div>
+            </div>
           </section>
         </div>
 
-        <aside className="checkout-summary" aria-labelledby="checkout-summary-title">
+        <aside className="checkout-sidebar">
+        <section className="checkout-summary" aria-labelledby="checkout-summary-title">
           <h2 id="checkout-summary-title">Tóm tắt đơn hàng</h2>
 
           <div className="checkout-discount">
@@ -353,15 +522,40 @@ export function CheckoutPage() {
             <div className="checkout-summary__discount"><dt>Giảm giá sản phẩm</dt><dd>− {formatCurrency(preview.productDiscountAmount)}</dd></div>
             <div><dt>Phí vận chuyển</dt><dd>{formatCurrency(preview.shippingFee)}</dd></div>
             <div className="checkout-summary__discount"><dt>Giảm phí vận chuyển</dt><dd>− {formatCurrency(preview.shippingDiscountAmount)}</dd></div>
-            <div><dt>Thanh toán</dt><dd>{paymentMethodLabels[selectedPaymentMethod]}</dd></div>
+            <div><dt>Thanh toán</dt><dd>{paymentOptionLabels[selectedPaymentOption]}</dd></div>
             {createdOrder && <div><dt>Mã nhóm đơn</dt><dd>#{createdOrder.orderGroupId}</dd></div>}
             <div className="checkout-summary__total"><dt>Tổng thanh toán</dt><dd>{formatCurrency(createdOrder?.totalAmount ?? preview.totalAmount)}</dd></div>
           </dl>
 
           <button className="checkout-summary__confirm" type="button" onClick={handlePrimaryAction} disabled={isSubmitting || isRefreshing || Boolean(previewError)}>{primaryButtonLabel}</button>
-          <p>{createdOrder ? 'Đơn hàng đã được tạo. Thử lại chỉ tạo Payment cho nhóm đơn hiện tại.' : 'Sau khi backend tạo đơn hàng thành công, hệ thống sẽ tạo Payment theo phương thức đã chọn.'}</p>
+          <p>{createdOrder ? 'Đơn hàng đã được ghi nhận. Bạn có thể thử lại bước thanh toán cho đơn hàng này.' : 'Đơn hàng và thông tin thanh toán sẽ được xác nhận theo phương thức bạn đã chọn.'}</p>
+        </section>
+          <section className="checkout-commitment" aria-labelledby="checkout-commitment-title">
+            <span className="checkout-commitment__eyebrow">Cam kết độc quyền từ MarketNest</span>
+            <h2 id="checkout-commitment-title">Mua sắm an tâm</h2>
+            <ul>
+              <li><span>↺</span><div><strong>Đổi trả miễn phí 15 ngày</strong><small>Hỗ trợ nhanh khi sản phẩm phát sinh lỗi.</small></div></li>
+              <li><span>♢</span><div><strong>Hoàn tiền nếu phát hiện hàng giả</strong><small>Quy trình đối soát và bảo vệ người mua rõ ràng.</small></div></li>
+              <li><span>▣</span><div><strong>Bảo mật chuẩn quốc tế</strong><small>Dữ liệu thanh toán được mã hóa an toàn.</small></div></li>
+            </ul>
+            <p>Cần trợ giúp? Gọi ngay <strong>1900 8888 (24/7)</strong></p>
+          </section>
         </aside>
       </div>
+
+      {isAddressModalOpen && (
+        <div className="checkout-address-modal" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeAddressModal(); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="checkout-address-modal-title">
+            <header><div><span>Thông tin giao nhận</span><h2 id="checkout-address-modal-title">Thay đổi địa chỉ</h2></div><button type="button" onClick={closeAddressModal} aria-label="Đóng">×</button></header>
+            <form onSubmit={handleAddressSubmit}>
+              <label htmlFor="checkout-phone"><span>Số điện thoại</span><input id="checkout-phone" type="tel" value={addressDraft.phone} maxLength={20} autoComplete="tel" onChange={(event) => setAddressDraft((current) => ({ ...current, phone: event.target.value }))} placeholder="Nhập số điện thoại nhận hàng" autoFocus /></label>
+              <label htmlFor="checkout-address-draft"><span>Địa chỉ nhận hàng</span><textarea id="checkout-address-draft" value={addressDraft.shippingAddress} rows={4} autoComplete="street-address" onChange={(event) => setAddressDraft((current) => ({ ...current, shippingAddress: event.target.value }))} placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành phố" /></label>
+              {addressError && <p role="alert">{addressError}</p>}
+              <footer><button type="button" onClick={closeAddressModal}>Hủy</button><button type="submit">Sử dụng địa chỉ này</button></footer>
+            </form>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

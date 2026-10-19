@@ -4,10 +4,15 @@ export type CartUnavailableReason =
   | 'INSUFFICIENT_STOCK';
 
 export interface CartItem {
+  cartItemId: string;
   productId: string;
+  shopId?: string | null;
+  shopName?: string | null;
+  shopLogoUrl?: string | null;
   name: string | null;
   imageUrl: string | null;
   price: string | null;
+  originalPrice?: string | null;
   quantity: number;
   availableQuantity: number;
   subtotal: string | null;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { getCustomerOrders } from '../../api/order.api';
 import type {
@@ -14,6 +14,7 @@ import {
   formatOrderDate,
 } from '../../utils/order';
 import './order.css';
+import './order-history.css';
 
 type OrderFilter = 'ALL' | OrderStatus;
 
@@ -29,6 +30,8 @@ const statusFilters: { value: OrderFilter; label: string }[] = [
 export function OrderHistoryPage() {
   const [orderGroups, setOrderGroups] = useState<CustomerOrderGroupListItem[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<OrderFilter>('ALL');
+  const [searchDraft, setSearchDraft] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -67,45 +70,107 @@ export function OrderHistoryPage() {
     };
   }, [loadOrders]);
 
+  const statusCounts = useMemo(() => {
+    const counts: Record<OrderFilter, number> = {
+      ALL: 0,
+      PENDING: 0,
+      CONFIRMED: 0,
+      SHIPPING: 0,
+      COMPLETED: 0,
+      CANCELLED: 0,
+    };
+
+    orderGroups.forEach((group) => {
+      group.orders.forEach((order) => {
+        counts.ALL += 1;
+        counts[order.status] += 1;
+      });
+    });
+
+    return counts;
+  }, [orderGroups]);
+
   const filteredGroups = useMemo(() => {
-    if (selectedStatus === 'ALL') return orderGroups;
+    const normalizedSearch = searchTerm.trim().toLocaleLowerCase('vi');
 
     return orderGroups
-      .map((group) => ({
-        ...group,
-        orders: group.orders.filter((order) => order.status === selectedStatus),
-      }))
-      .filter((group) => group.orders.length > 0);
-  }, [orderGroups, selectedStatus]);
+      .map((group) => {
+        const isGroupMatch = normalizedSearch
+          ? group.orderGroupId.toLocaleLowerCase('vi').includes(normalizedSearch)
+          : true;
+        const orders = group.orders.filter((order) => {
+          const matchesStatus = selectedStatus === 'ALL' || order.status === selectedStatus;
+          if (!matchesStatus) return false;
+          if (!normalizedSearch || isGroupMatch) return true;
 
-  const orderCount = orderGroups.reduce((total, group) => total + group.orders.length, 0);
+          return order.orderId.toLocaleLowerCase('vi').includes(normalizedSearch)
+            || order.shopName.toLocaleLowerCase('vi').includes(normalizedSearch)
+            || order.items.some((item) => item.productName.toLocaleLowerCase('vi').includes(normalizedSearch));
+        });
+
+        return { ...group, orders };
+      })
+      .filter((group) => group.orders.length > 0);
+  }, [orderGroups, searchTerm, selectedStatus]);
+
+  const handleSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSearchTerm(searchDraft.trim());
+  };
+
+  const clearFilters = () => {
+    setSelectedStatus('ALL');
+    setSearchDraft('');
+    setSearchTerm('');
+  };
+
+  const hasFilters = selectedStatus !== 'ALL' || Boolean(searchTerm);
 
   return (
-    <main className="order-page">
-      <header className="order-heading">
+    <main className="order-page order-history-page">
+      <header className="order-heading order-history-heading">
         <div>
           <span>Tài khoản của bạn</span>
-          <h1>Đơn hàng của tôi</h1>
-          <p>Theo dõi và xem lại các đơn hàng đã đặt.</p>
+          <div className="order-history-heading__title">
+            <h1>Đơn hàng của tôi</h1>
+            {!isLoading && orderGroups.length > 0 && <em>{orderGroups.length} nhóm đơn hàng</em>}
+          </div>
+          <p>Theo dõi, tra cứu trạng thái và quản lý lịch sử các đơn hàng đã đặt.</p>
         </div>
-        {!isLoading && orderCount > 0 && (
-          <strong>{isRefreshing ? 'Đang cập nhật...' : `${orderCount} đơn hàng`}</strong>
-        )}
+        <div className="order-history-heading__trust">
+          <span aria-hidden="true">✓</span>
+          <strong>{isRefreshing ? 'Đang cập nhật trạng thái...' : 'Trạng thái được cập nhật từ hệ thống'}</strong>
+        </div>
       </header>
 
       {!isLoading && orderGroups.length > 0 && (
-        <nav className="order-tabs" aria-label="Lọc đơn hàng theo trạng thái">
-          {statusFilters.map((filter) => (
-            <button
-              className={selectedStatus === filter.value ? 'is-active' : ''}
-              key={filter.value}
-              type="button"
-              onClick={() => setSelectedStatus(filter.value)}
-            >
-              {filter.label}
-            </button>
-          ))}
-        </nav>
+        <section className="order-history-controls" aria-label="Tìm kiếm và lọc đơn hàng">
+          <nav className="order-history-tabs" aria-label="Lọc đơn hàng theo trạng thái">
+            {statusFilters.map((filter) => (
+              <button
+                className={selectedStatus === filter.value ? 'is-active' : ''}
+                key={filter.value}
+                type="button"
+                onClick={() => setSelectedStatus(filter.value)}
+              >
+                {filter.label}
+                <span>{statusCounts[filter.value]}</span>
+              </button>
+            ))}
+          </nav>
+          <form className="order-history-search" onSubmit={handleSearch}>
+            <label htmlFor="order-history-search">
+              <span aria-hidden="true">⌕</span>
+              <input
+                id="order-history-search"
+                value={searchDraft}
+                onChange={(event) => setSearchDraft(event.target.value)}
+                placeholder="Tìm theo tên Shop, mã nhóm hoặc mã đơn hàng..."
+              />
+            </label>
+            <button type="submit">Tìm kiếm</button>
+          </form>
+        </section>
       )}
 
       {errorMessage && (
@@ -127,53 +192,137 @@ export function OrderHistoryPage() {
       ) : filteredGroups.length === 0 ? (
         <section className="order-empty order-empty--compact">
           <span aria-hidden="true">⌕</span>
-          <h2>Không có đơn hàng ở trạng thái này</h2>
-          <button type="button" onClick={() => setSelectedStatus('ALL')}>Xem tất cả đơn hàng</button>
+          <h2>Không tìm thấy đơn hàng phù hợp</h2>
+          <p>Hãy thử trạng thái hoặc từ khóa tìm kiếm khác.</p>
+          <button type="button" onClick={clearFilters}>Đặt lại bộ lọc</button>
         </section>
       ) : (
-        <section className="order-groups" aria-label="Lịch sử đơn hàng">
+        <section className="order-groups order-history-groups" aria-label="Lịch sử đơn hàng">
           {filteredGroups.map((group) => <OrderGroupCard group={group} key={group.orderGroupId} />)}
         </section>
+      )}
+
+      {hasFilters && filteredGroups.length > 0 && (
+        <button className="order-history-reset" type="button" onClick={clearFilters}>Đặt lại bộ lọc</button>
       )}
     </main>
   );
 }
 
 function OrderGroupCard({ group }: { group: CustomerOrderGroupListItem }) {
+  const productCount = group.orders.reduce(
+    (total, order) => total + order.items.reduce((quantity, item) => quantity + item.quantity, 0),
+    0,
+  );
+
   return (
-    <article className="order-group-card">
+    <article className="order-group-card order-history-group">
       <header>
-        <div>
-          <span>Nhóm đơn #{group.orderGroupId}</span>
-          <time dateTime={group.createdAt}>{formatOrderDate(group.createdAt)}</time>
+        <div className="order-history-group__identity">
+          <span aria-hidden="true">▣</span>
+          <div>
+            <strong>Nhóm đơn #{group.orderGroupId}</strong>
+            <p><time dateTime={group.createdAt}>{formatOrderDate(group.createdAt)}</time><i aria-hidden="true">•</i>{group.orders.length} đơn theo gian hàng</p>
+          </div>
         </div>
         <div className="order-group-card__payment">
           {group.payment ? (
-            <><strong>{PAYMENT_METHOD_LABELS[group.payment.paymentMethod]}</strong><span className={`payment-state is-${group.payment.status.toLowerCase()}`}>{PAYMENT_STATUS_LABELS[group.payment.status]}</span></>
+            <>
+              <strong>{PAYMENT_METHOD_LABELS[group.payment.paymentMethod]}</strong>
+              <span className={`payment-state is-${group.payment.status.toLowerCase()}`}>{PAYMENT_STATUS_LABELS[group.payment.status]}</span>
+            </>
           ) : <span className="payment-state is-missing">Chưa có thanh toán</span>}
         </div>
       </header>
 
-      <div className="order-group-card__orders">
+      <div className="order-group-card__orders order-history-group__orders">
         {group.orders.map((order) => (
-          <section className="order-history-item" key={order.orderId}>
-            <div className="order-history-item__shop">
-              <span aria-hidden="true">M</span>
-              <div><strong>{order.shopName}</strong><small>Đơn hàng #{order.orderId}</small></div>
+          <section className="order-history-shop" key={order.orderId}>
+            <header className="order-history-shop__header">
+              <div className="order-history-shop__identity">
+                <OrderMedia
+                  imageUrl={order.shopLogoUrl}
+                  name={order.shopName}
+                  className="order-history-shop__logo"
+                />
+                <div>
+                  <strong>{order.shopName}</strong>
+                  <small>Gian hàng #{order.shopId}</small>
+                </div>
+              </div>
+              <div className="order-history-shop__meta">
+                <div>
+                  <span>Đơn hàng #{order.orderId}</span>
+                  <time dateTime={order.createdAt}>{formatOrderDate(order.createdAt)}</time>
+                </div>
+                <span className={`order-status is-${order.status.toLowerCase()}`}>{ORDER_STATUS_LABELS[order.status]}</span>
+              </div>
+            </header>
+
+            <div className="order-history-products">
+              {order.items.length > 0 ? order.items.map((item) => (
+                <article className="order-history-product" key={item.orderItemId}>
+                  <Link
+                    className="order-history-product__media"
+                    to={`/products/${item.productId}`}
+                    aria-label={`Xem ${item.productName}`}
+                  >
+                    <OrderMedia imageUrl={item.imageUrl} name={item.productName} />
+                  </Link>
+                  <div className="order-history-product__copy">
+                    <Link to={`/products/${item.productId}`}>{item.productName}</Link>
+                    <span>Đơn giá {formatCurrency(item.unitPrice)} <i aria-hidden="true">×</i> {item.quantity}</span>
+                  </div>
+                  <div className="order-history-product__price">
+                    <small>Thành tiền</small>
+                    <strong>{formatCurrency(item.subtotal)}</strong>
+                  </div>
+                </article>
+              )) : (
+                <p className="order-history-products__empty">Chưa có thông tin sản phẩm cho đơn hàng này.</p>
+              )}
             </div>
-            <time dateTime={order.createdAt}>{formatOrderDate(order.createdAt)}</time>
-            <span className={`order-status is-${order.status.toLowerCase()}`}>{ORDER_STATUS_LABELS[order.status]}</span>
-            <strong className="order-history-item__amount">{formatCurrency(order.totalAmount)}</strong>
-            <Link to={`/orders/${group.orderGroupId}`} state={{ focusOrderId: order.orderId }}>Xem chi tiết</Link>
+
+            <footer className="order-history-shop__total">
+              <span>{order.items.length} mặt hàng</span>
+              <div><small>Tổng tiền gian hàng</small><strong>{formatCurrency(order.totalAmount)}</strong></div>
+            </footer>
           </section>
         ))}
       </div>
 
       <footer>
-        <span>{group.orders.length} đơn theo gian hàng</span>
-        <div><small>Tổng nhóm đơn</small><strong>{formatCurrency(group.totalAmount)}</strong></div>
+        <span>{productCount} sản phẩm từ {group.orders.length} gian hàng</span>
+        <div className="order-history-group__total">
+          <small>Tổng nhóm đơn</small>
+          <strong>{formatCurrency(group.totalAmount)}</strong>
+          <Link to={`/orders/${group.orderGroupId}`}>Xem chi tiết</Link>
+        </div>
       </footer>
     </article>
+  );
+}
+
+function OrderMedia({
+  imageUrl,
+  name,
+  className = '',
+}: {
+  imageUrl: string | null;
+  name: string;
+  className?: string;
+}) {
+  const [hasImageError, setHasImageError] = useState(false);
+  const fallback = name.trim().charAt(0).toLocaleUpperCase('vi') || 'M';
+
+  return (
+    <span className={`order-history-media ${className}`.trim()}>
+      {imageUrl && !hasImageError ? (
+        <img src={imageUrl} alt="" onError={() => setHasImageError(true)} />
+      ) : (
+        <span aria-hidden="true">{fallback}</span>
+      )}
+    </span>
   );
 }
 

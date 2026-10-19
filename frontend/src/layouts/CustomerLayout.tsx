@@ -21,10 +21,6 @@ export function CustomerLayout() {
 
   return (
     <div className="customer-shell">
-      <div className="customer-utility-bar">
-        <div><span><HeaderIcon name="store" /> Kênh người bán</span><span><HeaderIcon name="support" /> Hỗ trợ 24/7</span></div>
-        <div><span><HeaderIcon name="bell" /> Thông báo</span><span>Tiếng Việt / VND</span></div>
-      </div>
       <header className="customer-header">
         <div className="customer-header__inner">
           <Link className="customer-brand" to="/" aria-label="MarketNest trang chủ">
@@ -80,7 +76,7 @@ function CustomerSearchForm({ initialValue, onSearch }: { initialValue: string; 
   );
 }
 
-type HeaderIconName = 'store' | 'support' | 'bell' | 'bag' | 'search' | 'cart' | 'heart' | 'order';
+type HeaderIconName = 'bag' | 'search' | 'cart' | 'heart' | 'order';
 
 function HeaderIcon({ name }: { name: HeaderIconName }): ReactNode {
   if (name === 'search') return <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /></svg>;
@@ -88,7 +84,5 @@ function HeaderIcon({ name }: { name: HeaderIconName }): ReactNode {
   if (name === 'heart') return <svg viewBox="0 0 24 24"><path d="M20 8.5c0 5-8 10-8 10s-8-5-8-10a4.5 4.5 0 0 1 8-2.6A4.5 4.5 0 0 1 20 8.5Z" /></svg>;
   if (name === 'order') return <svg viewBox="0 0 24 24"><path d="M7 4h10l2 17H5L7 4Z" /><path d="M9 8a3 3 0 0 0 6 0" /></svg>;
   if (name === 'bag') return <svg viewBox="0 0 24 24"><path d="M5 8h14l1 13H4L5 8Z" /><path d="M9 9V6a3 3 0 0 1 6 0v3" /></svg>;
-  if (name === 'bell') return <svg viewBox="0 0 24 24"><path d="M6 17h12l-1.5-2V10a4.5 4.5 0 0 0-9 0v5L6 17Z" /><path d="M10 20h4" /></svg>;
-  if (name === 'support') return <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M9.5 9a2.5 2.5 0 1 1 4.3 1.7c-1.2 1.1-1.8 1.4-1.8 3M12 17h.01" /></svg>;
   return <svg viewBox="0 0 24 24"><path d="M4 10h16M5 10l1-6h12l1 6v10H5V10Z" /></svg>;
 }

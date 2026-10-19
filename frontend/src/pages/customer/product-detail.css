@@ -2,6 +2,58 @@
 
 .product-detail-pricing{margin-top:.85rem}.product-detail-pricing .product-detail-price{margin-top:0}.product-detail-pricing>div{display:flex;align-items:center;gap:.55rem;margin-top:.25rem}.product-detail-pricing del{color:#8b8490;font-size:.88rem;font-variant-numeric:tabular-nums}.product-detail-pricing>div span{padding:.18rem .38rem;color:#dc2626;background:#fef2f2;border-radius:.28rem;font-size:.72rem;font-weight:750}
 
+/* Related products stay intentionally compact so they support, rather than dominate, the detail page. */
+.related-products__grid {
+  grid-template-columns: repeat(4, minmax(0, 13.5rem));
+  justify-content: start;
+  gap: .7rem;
+}
+
+.related-products__grid .product-card__media {
+  aspect-ratio: 4 / 3;
+}
+
+.related-products__grid .product-card__body {
+  padding: .58rem;
+}
+
+.related-products__grid .product-card h3 {
+  min-height: 2.15rem;
+  font-size: .76rem;
+  line-height: 1.4;
+}
+
+.related-products__grid .product-card__pricing {
+  margin-top: .42rem;
+}
+
+.related-products__grid .product-card__price {
+  font-size: .9rem;
+}
+
+.related-products__grid .product-card__stock {
+  margin: .25rem 0 0;
+  font-size: .6rem;
+}
+
+@media (max-width: 980px) {
+  .related-products__grid {
+    grid-template-columns: repeat(3, minmax(0, 13.5rem));
+  }
+}
+
+@media (max-width: 720px) {
+  .related-products__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 390px) {
+  .related-products__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Keep the gallery aligned with the purchase actions instead of forcing a square. */
 @media (min-width: 721px) {
   .product-overview {
@@ -68,6 +120,66 @@
 .product-review-state.is-error { color: #991b1b; background: #fef2f2; border-color: #fecaca; }
 .product-review-state button { margin-top: .25rem; padding: .42rem .65rem; color: #fff; background: #f97316; border: 1px solid #f97316; border-radius: .4rem; font-size: .68rem; font-weight: 750; cursor: pointer; }
 .product-review-state button:hover { background: #ea580c; border-color: #ea580c; }
+
+.review-shop-response {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: .65rem;
+  margin-top: .65rem;
+  padding: .7rem .75rem;
+  background: #f8f5f5;
+  border-left: 3px solid #dc2626;
+  border-radius: 0 .5rem .5rem 0;
+}
+
+.review-shop-response > img,
+.review-shop-response > span {
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  object-fit: cover;
+  color: #fff;
+  background: #dc2626;
+  border-radius: .42rem;
+  font-family: var(--font-heading);
+  font-size: .72rem;
+  font-weight: 700;
+}
+
+.review-shop-response__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.review-shop-response__heading strong {
+  color: #991b1b;
+  font-size: .68rem;
+  font-weight: 650;
+}
+
+.review-shop-response__heading time {
+  color: #9ca3af;
+  font-size: .6rem;
+}
+
+.review-list article .review-shop-response p {
+  margin: .25rem 0 0;
+  color: #4b5563;
+  font-size: .72rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 430px) {
+  .review-shop-response__heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: .12rem;
+  }
+}
 
 /* Shop summary: public-safe data only, aligned with the marketplace reference. */
 .shop-information {

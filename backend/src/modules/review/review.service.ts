@@ -15,6 +15,7 @@ import { UpdateReviewDto } from './dto/update-review.dto.js';
 import { Review } from './entities/review.entity.js';
 import { ReviewStatus } from './enums/review-status.enum.js';
 import { SellerReviewQueryDto } from './dto/seller-review-query.dto.js';
+import { SellerReplyReviewDto } from './dto/seller-reply-review.dto.js';
 
 const POSTGRES_UNIQUE_VIOLATION = '23505';
 
@@ -154,6 +155,8 @@ export class ReviewService {
         rating: review.rating,
         comment: review.comment,
         customerName: review.customer.user.fullName,
+        sellerReply: review.sellerReply,
+        sellerRepliedAt: review.sellerRepliedAt,
         createdAt: review.createdAt,
       })),
     };
@@ -222,9 +225,41 @@ export class ReviewService {
         rating: review.rating,
         comment: review.comment,
         customerName: review.customer.user.fullName,
+        sellerReply: review.sellerReply,
+        sellerRepliedAt: review.sellerRepliedAt,
         createdAt: review.createdAt,
       })),
     };
+  }
+
+  async replyToReview(
+    userId: string,
+    reviewId: string,
+    dto: SellerReplyReviewDto,
+  ) {
+    const review = await this.reviewRepository
+      .createQueryBuilder('review')
+      .innerJoin('review.product', 'product')
+      .innerJoin('product.shop', 'shop')
+      .innerJoin('shop.seller', 'seller')
+      .where('review.reviewId = :reviewId', { reviewId })
+      .andWhere('seller.userId = :userId', { userId })
+      .getOne();
+
+    if (!review) {
+      throw new NotFoundException('Review not found');
+    }
+
+    if (review.status !== ReviewStatus.ACTIVE) {
+      throw new ConflictException('Only active reviews can be replied to');
+    }
+
+    review.sellerReply = dto.reply.trim();
+    review.sellerRepliedAt = new Date();
+
+    return this.buildReviewResponse(
+      await this.reviewRepository.save(review),
+    );
   }
 
   private async findCustomerOrFail(userId: string): Promise<Customer> {
@@ -249,6 +284,8 @@ export class ReviewService {
       orderId: review.orderId,
       rating: review.rating,
       comment: review.comment,
+      sellerReply: review.sellerReply,
+      sellerRepliedAt: review.sellerRepliedAt,
       status: review.status,
       createdAt: review.createdAt,
       updatedAt: review.updatedAt,

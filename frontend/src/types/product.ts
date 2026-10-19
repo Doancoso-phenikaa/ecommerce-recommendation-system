@@ -38,7 +38,11 @@ export interface ProductListResponse {
   };
 }
 
-export type ProductSort = 'NEWEST' | 'PRICE_ASC' | 'PRICE_DESC';
+export type ProductSort =
+  | 'NEWEST'
+  | 'LATEST_APPROVED'
+  | 'PRICE_ASC'
+  | 'PRICE_DESC';
 
 export interface PublicProductQuery {
   search?: string;

@@ -2,10 +2,13 @@ export type CheckoutDiscountType = 'PERCENT' | 'FIXED';
 export type CheckoutDiscountTarget = 'PRODUCT' | 'SHIPPING';
 
 export interface CheckoutPreviewItem {
+  cartItemId: string;
   productId: string;
   name: string;
   imageUrl: string | null;
   price: string;
+  originalPrice: string | null;
+  categoryName: string;
   quantity: number;
   availableQuantity: number;
   subtotal: string;
@@ -44,11 +47,13 @@ export interface CheckoutPreviewResponse {
 }
 
 export interface CheckoutPreviewRequest {
+  selectedCartItemIds: string[];
   productDiscountCode?: string;
   shippingDiscountCode?: string;
 }
 
 export interface ConfirmCheckoutRequest {
+  selectedCartItemIds: string[];
   shippingAddress: string;
   shippingMethod?: string;
   productDiscountCode?: string;
