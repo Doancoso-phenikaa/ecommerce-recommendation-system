@@ -2,6 +2,7 @@ import { Discount } from '../discount/entities/discount.entity.js';
 import { DiscountStatus } from '../discount/enums/discount-status.enum.js';
 import { DiscountTarget } from '../discount/enums/discount-target.enum.js';
 import { DiscountType } from '../discount/enums/discount-type.enum.js';
+import { CartItem } from '../cart/entities/cart-item.entity.js';
 import { CheckoutService } from './checkout.service.js';
 
 interface ShopWeight {
@@ -24,6 +25,11 @@ interface CheckoutMoneyHarness {
     discount: Discount,
     cartSubtotalInCents: bigint,
     expectedTarget: DiscountTarget,
+  ): void;
+  validateSelectedCartItemIds(value: unknown): string[];
+  ensureAllSelectedCartItemsWereLoaded(
+    selectedCartItemIds: string[],
+    cartItems: CartItem[],
   ): void;
 }
 
@@ -108,5 +114,35 @@ describe('CheckoutService shipping and discount money rules', () => {
         DiscountTarget.PRODUCT,
       ),
     ).toThrow('Product discount code must target PRODUCT');
+  });
+
+  it('accepts a unique list of positive CartItem IDs', () => {
+    expect(service.validateSelectedCartItemIds(['1', '25'])).toEqual([
+      '1',
+      '25',
+    ]);
+  });
+
+  it('rejects an empty, duplicate or malformed CartItem selection', () => {
+    expect(() => service.validateSelectedCartItemIds([])).toThrow(
+      'At least one selected cart item is required',
+    );
+    expect(() => service.validateSelectedCartItemIds(['4', '4'])).toThrow(
+      'selectedCartItemIds must not contain duplicates',
+    );
+    expect(() => service.validateSelectedCartItemIds(['0'])).toThrow(
+      'positive integer string',
+    );
+  });
+
+  it('rejects selected IDs that were not loaded from the customer cart', () => {
+    const loadedItems = [{ cartItemId: '10' }] as CartItem[];
+
+    expect(() =>
+      service.ensureAllSelectedCartItemsWereLoaded(
+        ['10', '11'],
+        loadedItems,
+      ),
+    ).toThrow('do not belong to this cart');
   });
 });

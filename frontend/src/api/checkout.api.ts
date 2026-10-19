@@ -7,7 +7,7 @@ import type {
 import { api } from './axios';
 
 export async function getCheckoutPreview(
-  data: CheckoutPreviewRequest = {},
+  data: CheckoutPreviewRequest,
 ): Promise<CheckoutPreviewResponse> {
   const response = await api.post<CheckoutPreviewResponse>('/checkout/preview', data);
   return response.data;

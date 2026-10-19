@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { CartItem } from '../cart/entities/cart-item.entity.js';
 import { Cart } from '../cart/entities/cart.entity.js';
+import { CategoryStatus } from '../category/enums/category-status.enum.js';
 import { Customer } from '../customer/entities/customer.entity.js';
 import { Discount } from '../discount/entities/discount.entity.js';
 import { DiscountStatus } from '../discount/enums/discount-status.enum.js';
@@ -27,10 +28,13 @@ import { CheckoutPreviewDto } from './dto/checkout-preview.dto.js';
 import { ConfirmCheckoutDto } from './dto/confirm-checkout.dto.js';
 
 export interface CheckoutPreviewItem {
+  cartItemId: string;
   productId: string;
   name: string;
   imageUrl: string | null;
   price: string;
+  originalPrice: string | null;
+  categoryName: string;
   quantity: number;
   availableQuantity: number;
   subtotal: string;
@@ -157,8 +161,11 @@ export class CheckoutService {
 
   async previewCheckout(
     userId: string,
-    checkoutPreviewDto?: CheckoutPreviewDto,
+    checkoutPreviewDto: CheckoutPreviewDto,
   ): Promise<CheckoutPreviewResponse> {
+    const selectedCartItemIds = this.validateSelectedCartItemIds(
+      checkoutPreviewDto?.selectedCartItemIds,
+    );
     const customer = await this.customerRepository.findOneBy({ userId });
 
     if (!customer) {
@@ -177,15 +184,20 @@ export class CheckoutService {
       .createQueryBuilder('cartItem')
       .innerJoinAndSelect('cartItem.product', 'product')
       .innerJoinAndSelect('product.shop', 'shop')
+      .innerJoinAndSelect('product.category', 'category')
       .leftJoinAndSelect('product.inventory', 'inventory')
       .where('cartItem.cartId = :cartId', { cartId: cart.cartId })
+      .andWhere('cartItem.cartItemId IN (:...selectedCartItemIds)', {
+        selectedCartItemIds,
+      })
       .orderBy('cartItem.createdAt', 'ASC')
       .addOrderBy('cartItem.cartItemId', 'ASC')
       .getMany();
 
-    if (cartItems.length === 0) {
-      throw new BadRequestException('Cart is empty');
-    }
+    this.ensureAllSelectedCartItemsWereLoaded(
+      selectedCartItemIds,
+      cartItems,
+    );
 
     const groupsByShop = new Map<string, PreviewShopGroupAccumulator>();
     let cartSubtotalInCents = 0n;
@@ -198,6 +210,12 @@ export class CheckoutService {
       if (product.status !== ProductStatus.APPROVED) {
         throw new BadRequestException(
           `Product ${product.productId} (${product.name}) is not approved`,
+        );
+      }
+
+      if (product.category.status !== CategoryStatus.ACTIVE) {
+        throw new BadRequestException(
+          `Category for product ${product.productId} (${product.name}) is not active`,
         );
       }
 
@@ -236,10 +254,13 @@ export class CheckoutService {
       }
 
       shopGroup.items.push({
+        cartItemId: cartItem.cartItemId,
         productId: product.productId,
         name: product.name,
         imageUrl: product.imageUrl,
         price: product.price,
+        originalPrice: product.originalPrice,
+        categoryName: product.category.name,
         quantity: cartItem.quantity,
         availableQuantity,
         subtotal: this.formatCents(subtotalInCents),
@@ -254,12 +275,12 @@ export class CheckoutService {
       shippingConfig.defaultShippingFee,
     );
     const productDiscount = await this.findAndValidateDiscount(
-      checkoutPreviewDto?.productDiscountCode,
+      checkoutPreviewDto.productDiscountCode,
       cartSubtotalInCents,
       DiscountTarget.PRODUCT,
     );
     const shippingDiscount = await this.findAndValidateDiscount(
-      checkoutPreviewDto?.shippingDiscountCode,
+      checkoutPreviewDto.shippingDiscountCode,
       cartSubtotalInCents,
       DiscountTarget.SHIPPING,
     );
@@ -325,6 +346,9 @@ export class CheckoutService {
     userId: string,
     confirmCheckoutDto: ConfirmCheckoutDto,
   ): Promise<ConfirmCheckoutResponse> {
+    const selectedCartItemIds = this.validateSelectedCartItemIds(
+      confirmCheckoutDto?.selectedCartItemIds,
+    );
     const transactionResult = await this.dataSource.transaction(
       async (manager) => {
         const customer = await manager
@@ -351,15 +375,21 @@ export class CheckoutService {
         const cartItemRepository = manager.getRepository(CartItem);
         const cartItems = await cartItemRepository
           .createQueryBuilder('cartItem')
+          .setLock('pessimistic_write')
           .innerJoinAndSelect('cartItem.product', 'product')
           .innerJoinAndSelect('product.shop', 'shop')
+          .innerJoinAndSelect('product.category', 'category')
           .where('cartItem.cartId = :cartId', { cartId: cart.cartId })
-          .orderBy('cartItem.productId', 'ASC')
+          .andWhere('cartItem.cartItemId IN (:...selectedCartItemIds)', {
+            selectedCartItemIds,
+          })
+          .orderBy('cartItem.cartItemId', 'ASC')
           .getMany();
 
-        if (cartItems.length === 0) {
-          throw new BadRequestException('Cart is empty');
-        }
+        this.ensureAllSelectedCartItemsWereLoaded(
+          selectedCartItemIds,
+          cartItems,
+        );
 
         const inventoriesByProductId = await this.lockInventories(
           manager,
@@ -493,7 +523,19 @@ export class CheckoutService {
           await manager.getRepository(Discount).save(usedDiscounts);
         }
 
-        await cartItemRepository.delete({ cartId: cart.cartId });
+        const deleteResult = await cartItemRepository
+          .createQueryBuilder()
+          .delete()
+          .from(CartItem)
+          .where('"cart_id" = :cartId', { cartId: cart.cartId })
+          .andWhere('"cart_item_id" IN (:...selectedCartItemIds)', {
+            selectedCartItemIds,
+          })
+          .execute();
+
+        if (deleteResult.affected !== selectedCartItemIds.length) {
+          throw new Error('Selected cart items changed during checkout');
+        }
 
         return {
           customerId: customer.customerId,
@@ -690,6 +732,12 @@ export class CheckoutService {
         );
       }
 
+      if (product.category.status !== CategoryStatus.ACTIVE) {
+        throw new BadRequestException(
+          `Category for product ${product.productId} (${product.name}) is not active`,
+        );
+      }
+
       if (shop.status !== ShopStatus.ACTIVE) {
         throw new BadRequestException(
           `Shop for product ${product.productId} (${product.name}) is not active`,
@@ -737,6 +785,60 @@ export class CheckoutService {
       shopGroups: Array.from(groupsByShop.values()),
       cartSubtotalInCents,
     };
+  }
+
+  private validateSelectedCartItemIds(value: unknown): string[] {
+    if (!Array.isArray(value) || value.length === 0) {
+      throw new BadRequestException(
+        'At least one selected cart item is required',
+      );
+    }
+
+    if (
+      value.some(
+        (cartItemId) =>
+          typeof cartItemId !== 'string' || !/^[1-9]\d*$/.test(cartItemId),
+      )
+    ) {
+      throw new BadRequestException(
+        'Each selected cart item ID must be a positive integer string',
+      );
+    }
+
+    const selectedCartItemIds = value as string[];
+
+    if (new Set(selectedCartItemIds).size !== selectedCartItemIds.length) {
+      throw new BadRequestException(
+        'selectedCartItemIds must not contain duplicates',
+      );
+    }
+
+    return selectedCartItemIds;
+  }
+
+  private ensureAllSelectedCartItemsWereLoaded(
+    selectedCartItemIds: string[],
+    cartItems: CartItem[],
+  ): void {
+    if (cartItems.length !== selectedCartItemIds.length) {
+      throw new BadRequestException(
+        'One or more selected cart items are invalid or do not belong to this cart',
+      );
+    }
+
+    const loadedCartItemIds = new Set(
+      cartItems.map((cartItem) => cartItem.cartItemId),
+    );
+
+    if (
+      selectedCartItemIds.some(
+        (cartItemId) => !loadedCartItemIds.has(cartItemId),
+      )
+    ) {
+      throw new BadRequestException(
+        'One or more selected cart items are invalid or do not belong to this cart',
+      );
+    }
   }
 
   private allocateAmountByShop<T extends { shopId: string }>(

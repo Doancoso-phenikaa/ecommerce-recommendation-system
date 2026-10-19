@@ -310,10 +310,15 @@ export class CartService {
 
     if (!product) {
       return {
+        cartItemId: item.cartItemId,
         productId: item.productId,
+        shopId: null,
+        shopName: null,
+        shopLogoUrl: null,
         name: null,
         imageUrl: null,
         price: null,
+        originalPrice: null,
         quantity: item.quantity,
         availableQuantity: 0,
         subtotal: null,
@@ -344,10 +349,15 @@ export class CartService {
     }
 
     return {
+      cartItemId: item.cartItemId,
       productId: product.productId,
+      shopId: product.shop?.shopId ?? product.shopId,
+      shopName: product.shop?.name ?? null,
+      shopLogoUrl: product.shop?.logoUrl ?? null,
       name: product.name,
       imageUrl: product.imageUrl,
       price: product.price,
+      originalPrice: product.originalPrice,
       quantity: item.quantity,
       availableQuantity,
       subtotal: this.formatCents(subtotalInCents),
