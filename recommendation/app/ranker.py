@@ -1,0 +1,666 @@
+"""Hybrid ranker with business rules + cold-start (todo 10).
+
+Pure function ``rank(user_id, context="homepage", count=20, filter="",
+model_version=None) -> dict`` returning::
+
+    {recommendations: [{item_id, score, reason}], cold_start: bool,
+     strategy: str, model_version: str}
+
+Import path for todo 11 (stable)::
+
+    from recommendation.app.ranker import rank
+
+Candidate sources (deduped union, available-only, suppression-filtered;
+the ``CANDIDATE_CAP`` = 200 cap is applied AFTER scoring, by blended
+score, so a strong candidate whose id sorts late is not dropped):
+
+- ``pop_top``: :func:`recommendation.app.baseline.trending` (``POP_N`` rows).
+- ``als_top``: :func:`recommendation.app.train_als.recommend_with_scores`
+  (``ALS_N`` rows), warm users only, with the suppression set handed to the
+  model as a filter row so already-seen items never consume the candidate
+  budget; wrapped in try/except — a missing model file (or any load
+  failure) degrades to the popularity+content path, never raises.
+- ``content_top``: :func:`recommendation.app.baseline.content_similar_many`
+  (``CONTENT_K`` rows), on both the warm and the cold path — seeded by the
+  user's up-to-20 most recent DISTINCT *consumed* items from the
+  interactions parquet (max timestamp; ties broken by ``item_id`` asc) and
+  scored as one similarity query against the TF-IDF centroid of those
+  seeds (a single seed short-circuits to ``content_similar``); the seed set
+  is filtered exactly like the suppression set below — both come from the
+  one :func:`_consumed_rows` slice, so the passive ``impression``/``search``
+  events are not consumption here either; skipped when the user has no
+  history.
+
+Scoring: the popularity and content terms are each normalised into
+[0, 1] by :func:`_maxnorm` independently (ceiling = that source's own
+best candidate; an all-zero source stays 0.0). Trending already arrives
+min-max normalised to a *global* max of 1.0, but its ceiling spans
+unavailable items too — when the top scorer is unavailable the best
+available row is below 1.0 and :func:`_maxnorm` rescales it. Content's raw
+cosine tops out below 1.0 because seed items are excluded from their own
+neighbours, so there the best candidate is what lands on 1.0. The ALS term
+is normalised
+separately, by min-max over the returned candidates inside
+:func:`_als_scores`: it scores the model's real dot-product rather than
+rank position, so a confident second choice outranks an uncertain first,
+and already-seen items are filtered inside the model call. The min-max
+range is ``[0, 1]`` — the best candidate maps to exactly 1.0 and the worst
+to exactly 0.0 (not ``(0, 1]``); the two degenerate guards return all-0.0
+when no score is positive and all-1.0 when every candidate ties. The
+three terms are then combined as::
+
+    final = ALS_W * als + CONTENT_W * content + POP_W * pop
+
+with module constants ``ALS_W = 0.5``, ``CONTENT_W = 0.3``,
+``POP_W = 0.2`` (tunable; cold-start/degraded paths reuse the same
+constants with the ALS term at 0.0 — no renormalisation, so ordering
+is comparable across paths). ``reason`` is the argmax weighted
+component (``"als"`` / ``"content_similar"`` / ``"trending"``; ties
+broken in that order). Sort is score desc with ``item_id`` asc as the
+deterministic tie-break; no randomness anywhere.
+
+Business rules (v1):
+
+- available-only (from the items parquet);
+- suppression: every item id the user consumed is excluded; the passive
+  ``impression``/``search`` events are not consumption and do not suppress
+  (see :data:`_NON_CONSUMPTION_EVENTS`) — counting this service's own
+  impressions would suppress whatever it just served;
+- dedup (union is a dict keyed by item_id);
+- diversity: at most 2 same-category-adjacent — walking the ranked
+  list, an item is skipped when the previous 2 emitted items share its
+  top-level category (first token of ``category_path``);
+- NO price-band filter in v1 (the ``filter`` argument is accepted for
+  API compatibility and ignored).
+
+Cold-start: users with fewer than ``cold_start_threshold()`` DISTINCT
+consumed items (imported from baseline; default 5, env-overridable via
+``COLD_START_MAX_INTERACTIONS``) take the trending+content path with
+``cold_start=True`` and the ALS term at 0.0. The threshold counts
+distinct items, not event rows — five views of one product are one
+signal — and, like the suppression set, it ignores the passive
+``impression``/``search`` events that are not consumption. The content
+seed set is filtered the same way: it shares the one
+:func:`_consumed_rows` slice with suppression and with this count, so it
+is every item the user *consumed*, capped at the 20 most recent, scored
+as one TF-IDF-centroid query rather than one recent click. (Until the
+single-pass refactor the seed set was the odd one out — it took any
+event, impressions included. The behaviour change is inert on the
+current corpus, which carries only ``view``/``click``/``cart``/
+``purchase``; see the NOTE on :func:`_consumed_rows`.) Strategy choice
+on that path is deterministic and documented here: ``"content"`` iff a
+content source was present AND the first emitted item's unweighted content
+component is non-zero AND its weighted content component strictly
+exceeds its weighted popularity component; otherwise ``"trending"`` (in
+particular, zero-history users with no content seed are always
+``"trending"``).
+
+``model_version`` is read ONLY from
+``recommendation/models/current_version.txt`` (resolved relative to
+this file, so any CWD works). A missing/unreadable/blank file forces
+the degraded path: ``strategy="degraded"``, ``model_version="none"``,
+popularity+content scoring only — never raises. The ``model_version``
+argument is an optional label override (e.g. for staging callers); it
+never changes which model artifacts are loaded (always the file
+pointer). The output is validated by constructing
+``schemas.RecResponse`` before returning its ``model_dump`` — proving
+the wire shape; strategy values come ONLY from ``schemas.Strategy``.
+
+Fallback contract: the response is NEVER empty while the catalog has
+available items — exhausted candidates fall back to popular
+(trending), first honouring suppression, then ignoring it if even
+that is empty (a user who has seen the whole catalog still gets
+recs).
+
+No Kafka/Redis I/O inside ``rank()`` — parquet + model files only, read
+through this module's in-process ``lru_cache`` layer (the frame caches
+below, plus ``train_als``' model cache). That layer has no I/O of its
+own; see :func:`invalidate_frame_cache` for its contract.
+"""
+
+from __future__ import annotations
+
+import os
+from functools import lru_cache, partial
+from pathlib import Path
+
+import pandas as pd
+
+from recommendation.app.baseline import (
+    cold_start_threshold,
+    content_similar_many,
+    trending,
+)
+from recommendation.app.schemas import RecResponse, Strategy
+from recommendation.app import train_als as _als_mod
+from recommendation.app.train_als import recommend as _als_recommend
+
+__all__ = [
+    "ALS_W",
+    "CONTENT_W",
+    "POP_W",
+    "CANDIDATE_CAP",
+    "POP_N",
+    "ALS_N",
+    "CONTENT_K",
+    "rank",
+    "invalidate_frame_cache",
+]
+
+#: Blend weights for the hybrid score (tunable module constants).
+ALS_W = 0.5
+CONTENT_W = 0.3
+POP_W = 0.2
+
+#: Hard cap on the candidate union size.
+CANDIDATE_CAP = 200
+
+#: Per-source fetch sizes (union is capped at CANDIDATE_CAP anyway).
+POP_N = 100
+ALS_N = 100
+CONTENT_K = 100
+
+_DATA_DIR = Path(__file__).resolve().parents[1] / "data"
+_ITEMS_PARQUET = _DATA_DIR / "items.parquet"
+_INTERACTIONS_PARQUET = _DATA_DIR / "interactions.parquet"
+_MODELS_DIR = Path(__file__).resolve().parents[1] / "models"
+
+
+def _parquet_fingerprint(path: Path) -> tuple[int, int] | None:
+    """``(st_mtime_ns, st_size)`` for *path*, or None when it does not exist.
+
+    Part of every frame cache key, because a retrain replaces the file in
+    place (``consumer.merge_batches`` writes a temp file then ``os.replace``)
+    — the path alone cannot tell "same file" from "rewritten file".
+
+    This is an OPTIMISATION that makes staleness *unlikely*, not impossible:
+    a rewrite landing inside the same ``st_mtime_ns`` tick at the same
+    ``st_size`` is invisible to it. ``invalidate_frame_cache()`` is therefore
+    the correctness backstop, not a convenience.
+    """
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    return (st.st_mtime_ns, st.st_size)
+
+
+def _frame_cache_key(path: Path) -> tuple[str, tuple[int, int] | None]:
+    """Cache key for *path*: the path itself plus the file's fingerprint.
+
+    The path is in the key as well as the fingerprint so that redirecting a
+    module global can never alias a frame that belongs to a different file,
+    and so the cached body reads the file its key names rather than re-reading
+    a global that could have moved between the stat and the read.
+    """
+    return (str(path), _parquet_fingerprint(path))
+
+
+@lru_cache(maxsize=2)
+def _load_items_df_cached(key: tuple[str, tuple[int, int] | None]) -> pd.DataFrame:
+    """Read the catalog named by *key* (see :func:`_frame_cache_key`).
+
+    ``maxsize=2`` so the current and the previous fingerprint coexist: with
+    ``maxsize=1`` a rewrite evicts the entry an in-flight reader is about to
+    ask for, so two rewrites in quick succession turn every read into a
+    parquet load.
+    """
+    path, _fingerprint = key
+    return pd.read_parquet(path)
+
+
+@lru_cache(maxsize=2)
+def _load_interactions_df_cached(
+    key: tuple[str, tuple[int, int] | None],
+) -> pd.DataFrame:
+    """Read the interactions log named by *key* (see :func:`_frame_cache_key`)."""
+    path, _fingerprint = key
+    return pd.read_parquet(path)
+
+
+def _load_items_df() -> pd.DataFrame:
+    """Load the items catalog, keyed on the file's identity.
+
+    A plain wrapper that fingerprints the path and delegates to the cached
+    reader, so every zero-argument call site keeps working while an in-place
+    retrain rewrite of the parquet becomes a different cache key instead of a
+    permanent stale entry. ``cache_clear``/``cache_info`` are the cached
+    reader's own, so :func:`evaluate`'s ``_drop_frame_caches`` and this
+    module's :func:`invalidate_frame_cache` both reach the real cache.
+    """
+    return _load_items_df_cached(_frame_cache_key(_ITEMS_PARQUET))
+
+
+def _load_interactions_df() -> pd.DataFrame:
+    """Load the interactions log, keyed on the file's identity.
+
+    Same shape and same reason as :func:`_load_items_df`.
+    """
+    return _load_interactions_df_cached(_frame_cache_key(_INTERACTIONS_PARQUET))
+
+
+_load_items_df.cache_clear = _load_items_df_cached.cache_clear  # type: ignore[attr-defined]
+_load_items_df.cache_info = _load_items_df_cached.cache_info  # type: ignore[attr-defined]
+_load_interactions_df.cache_clear = _load_interactions_df_cached.cache_clear  # type: ignore[attr-defined]
+_load_interactions_df.cache_info = _load_interactions_df_cached.cache_info  # type: ignore[attr-defined]
+
+
+def invalidate_frame_cache() -> None:
+    """Drop the cached catalog and interaction frames.
+
+    The fingerprint already evicts a frame whose file has been rewritten;
+    this hook covers what a fingerprint cannot see — a rewrite within one
+    ``st_mtime_ns`` tick at the same ``st_size`` — and the path globals being
+    redirected by a caller that does not want to pay for a re-read.
+
+    It clears the inner cached readers through the public loaders' own
+    ``cache_clear``, which is the same attribute ``evaluate`` and the test
+    fixtures reach for.
+    """
+    _load_items_df.cache_clear()
+    _load_interactions_df.cache_clear()
+
+
+def _read_model_version() -> str | None:
+    """Return the version pointer, or None when missing/unreadable/blank."""
+    try:
+        text = (_MODELS_DIR / "current_version.txt").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    text = text.strip()
+    return text or None
+
+
+def _maxnorm(scores: dict[str, float]) -> dict[str, float]:
+    """Max-normalise a score dict into [0, 1] (zero-max stays 0.0)."""
+    ceiling = max(scores.values(), default=0.0)
+    if ceiling <= 0:
+        return {k: 0.0 for k in scores}
+    return {k: float(v) / float(ceiling) for k, v in scores.items()}
+
+
+def _top_category(value: object) -> str:
+    """Return the top-level category token for a catalog category_path cell."""
+    if isinstance(value, (list, tuple)):
+        parts = [str(c) for c in value]
+    else:
+        try:
+            import numpy as np  # noqa: PLC0415 — local to keep import light
+
+            if isinstance(value, np.ndarray):
+                parts = [str(c) for c in value.tolist()]
+            elif pd.isna(value):
+                return ""
+            else:
+                parts = [str(value)]
+        except (TypeError, ValueError):
+            parts = [str(value)]
+    return parts[0] if parts else ""
+
+
+#: Passive events that must not count as consumption. ``impression`` is
+#: emitted by this service's own serving layer, so counting it would make
+#: the ranker suppress whatever it just served.
+_NON_CONSUMPTION_EVENTS = frozenset({"impression", "search"})
+
+
+def _consumed_rows(ev: pd.DataFrame, user_id: str) -> pd.DataFrame:
+    """One slice of ``user_id``'s consumption rows, newest first.
+
+    Replaces three separate full-column ``astype(str)`` scans per
+    request. Passive events are dropped here, which is why
+    ``_user_item_ids`` and ``_seed_items`` must both go through it.
+    Ordering is timestamp desc then item_id asc, so seeding is
+    deterministic.
+
+    NOTE: this filters ``_NON_CONSUMPTION_EVENTS``, and it keeps
+    unparseable timestamps (sorted last) where the previous
+    ``_seed_items`` dropped them. Both are behaviour changes to the
+    cold-start seed set for users with passive events or malformed
+    timestamps; they are inert on the current corpus, which has only
+    ``view``/``click``/``cart``/``purchase`` events and no unparseable
+    timestamps. See the module docstring for the cold-start contract.
+    """
+    if ev.empty or "user_id" not in ev.columns:
+        return ev.iloc[0:0]
+    rows = ev[ev["user_id"].astype(str) == str(user_id)]
+    if rows.empty:
+        return rows
+    if "event_type" in rows.columns:
+        rows = rows[~rows["event_type"].astype(str).isin(_NON_CONSUMPTION_EVENTS)]
+    if rows.empty or "timestamp" not in rows.columns:
+        return rows
+    stamps = pd.to_datetime(rows["timestamp"], utc=True, errors="coerce")
+    out = rows.assign(_ts=stamps).sort_values(
+        ["_ts", "item_id"], ascending=[False, True], na_position="last"
+    )
+    return out.drop(columns=["_ts"])
+
+
+def _user_item_ids_from_rows(rows: pd.DataFrame) -> list[str]:
+    """Suppression set from an already-sliced frame (no second scan)."""
+    if rows is None or rows.empty or "item_id" not in rows.columns:
+        return []
+    return sorted({str(i) for i in rows["item_id"].tolist()})
+
+
+def _seed_items_from_rows(rows: pd.DataFrame, limit: int = 20) -> list[str]:
+    """Cold-start seed from an already-sliced frame (no second scan)."""
+    if rows is None or rows.empty or "item_id" not in rows.columns:
+        return []
+    seen: list[str] = []
+    for iid in rows["item_id"].astype(str).tolist():
+        if iid not in seen:
+            seen.append(iid)
+        if len(seen) >= limit:
+            break
+    return seen
+
+
+def _user_item_ids(ev: pd.DataFrame, user_id: str) -> list[str]:
+    """Item ids the user genuinely consumed (suppression set source).
+
+    Excludes passive events — see :data:`_NON_CONSUMPTION_EVENTS`.
+    """
+    return _user_item_ids_from_rows(_consumed_rows(ev, user_id))
+
+
+def _distinct_interactions(ev: pd.DataFrame, user_id: str) -> int:
+    """Count DISTINCT items ``user_id`` consumed.
+
+    Row count overstates signal: five views of one product teach the
+    model nothing about variety, so a user with one item and five rows
+    is still a cold-start user. Applies the same non-consumption filter
+    as :func:`_user_item_ids`, so an impression cannot manufacture
+    warmth out of nothing.
+    """
+    if ev.empty or "user_id" not in ev.columns:
+        return 0
+    rows = ev[ev["user_id"].astype(str) == str(user_id)]
+    if rows.empty:
+        return 0
+    if "event_type" in rows.columns:
+        rows = rows[
+            ~rows["event_type"].astype(str).isin(_NON_CONSUMPTION_EVENTS)
+        ]
+    return int(rows["item_id"].astype(str).nunique())
+
+
+def _seed_items(ev: pd.DataFrame, user_id: str, limit: int = 20) -> list[str]:
+    """Every item ``user_id`` consumed, most recent first (cold-start seed).
+
+    The cold-start branch blends content similarity; seeding from one
+    recent item threw away the rest of a light user's signal. The single-item
+    case is :func:`_seed_item`; both share this one ordering rule so they
+    cannot drift apart.
+
+    Reads the shared :func:`_consumed_rows` slice, so this now also drops
+    passive events (see :func:`_consumed_rows`).
+    """
+    return _seed_items_from_rows(_consumed_rows(ev, user_id), limit=limit)
+
+
+def _seed_item(ev: pd.DataFrame, user_id: str) -> str | None:
+    """Most recent interacted item for ``user_id`` (None when no history).
+
+    Max timestamp wins; ties broken by ``item_id`` asc for determinism.
+    Thin wrapper over :func:`_seed_items`, which applies that same
+    ordering rule to the whole history.
+    """
+    return next(iter(_seed_items(ev, user_id, limit=1)), None)
+
+
+def _als_model_dir() -> Path | str | None:
+    """The model dir an override installed on ``_als_recommend``, if any.
+
+    ``evaluate._train_only_context`` is the only sanctioned override point:
+    it rebinds ``ranker._als_recommend`` to
+    ``partial(train_als.recommend, model_dir=<refit>)`` so the gate scores
+    against a model trained on the train slice only. ``_als_scores`` needs
+    that same model but needs its *scores*, so it reads the dir back off
+    that one global and forwards it.
+
+    ``None`` means no override is installed, i.e. the live pointer — the
+    serving behaviour. Any other shape is refused rather than resolved to
+    the pointer: falling back would silently score the gate against a model
+    that has seen the holdout, which is a data leak no metric assertion
+    would catch. The caller turns the refusal into ``Strategy.degraded``.
+    """
+    target = _als_recommend
+    if target is _als_mod.recommend:
+        return None
+    if isinstance(target, partial) and target.func is _als_mod.recommend:
+        return target.keywords.get("model_dir")
+    raise RuntimeError(
+        f"unrecognised _als_recommend override {target!r}; refusing to resolve "
+        "the live pointer model"
+    )
+
+
+def _als_scores(
+    user_id: str, n: int, seen: set[str] | None = None
+) -> dict[str, float]:
+    """ALS candidates min-max normalised into [0, 1]; best candidate = 1.0.
+
+    Normalises the model's real dot-product rather than rank position, so
+    a confident second choice outranks an uncertain first. ``seen`` is
+    filtered inside the model call so it does not consume the budget.
+    Returns ``{}`` for an unknown user or an exhausted candidate list
+    (the ranker degrades).
+    """
+    try:
+        pairs = _als_mod.recommend_with_scores(
+            str(user_id),
+            n=n,
+            model_dir=_als_model_dir(),
+            seen_item_ids=seen or None,
+        )
+    except KeyError:
+        return {}
+    if not pairs:
+        return {}
+    raw = {iid: float(score) for iid, score in pairs}
+    lo = min(raw.values())
+    hi = max(raw.values())
+    if hi <= 0:
+        return {iid: 0.0 for iid in raw}
+    if hi <= lo:
+        return {iid: 1.0 for iid in raw}
+    return {iid: (value - lo) / (hi - lo) for iid, value in raw.items()}
+
+
+def _apply_diversity(
+    ranked: list[str],
+    category_of: dict[str, str],
+    count: int,
+) -> tuple[list[str], list[str]]:
+    """Split ``ranked`` into (emitted, skipped) under the max-2-adjacent rule.
+
+    Walking ``ranked`` in order, an item is skipped when the previous 2
+    emitted items share its top-level category. Both outputs preserve
+    input order; the caller decides how to use the skipped tail.
+    """
+    emitted: list[str] = []
+    skipped: list[str] = []
+    for item_id in ranked:
+        if len(emitted) >= count:
+            skipped.append(item_id)
+            continue
+        cat = category_of.get(item_id, "")
+        if (
+            len(emitted) >= 2
+            and category_of.get(emitted[-1], "") == cat
+            and category_of.get(emitted[-2], "") == cat
+        ):
+            skipped.append(item_id)
+            continue
+        emitted.append(item_id)
+    return emitted, skipped
+
+
+def rank(
+    user_id: str,
+    context: str = "homepage",
+    count: int = 20,
+    filter: str = "",  # noqa: A002 — spec-mandated argument name; ignored in v1
+    model_version: str | None = None,
+) -> dict:
+    """Return hybrid recommendations for ``user_id`` (pure function).
+
+    ``context`` and ``filter`` are accepted for API compatibility and
+    ignored in v1 (no price-band filtering). See the module docstring
+    for the scoring, strategy, and fallback contracts.
+    """
+    _ = context  # reserved for future context-aware blending
+    _ = filter  # v1 has no price-band filter — intentionally ignored
+
+    limit = max(int(count), 0)
+    pointer = _read_model_version()
+    label = model_version if model_version is not None else (pointer or "none")
+    degraded_pointer = pointer is None and model_version is None
+
+    items = _load_items_df()
+    ev = _load_interactions_df()
+
+    available = items[items["available"].astype(bool)].copy() if not items.empty else items
+    avail_ids = (
+        available["item_id"].astype(str).tolist() if not available.empty else []
+    )
+    if not avail_ids:
+        resp = RecResponse(
+            recommendations=[],
+            cold_start=True,
+            strategy=Strategy.degraded,
+            model_version=label,
+        )
+        return resp.model_dump(mode="json")
+
+    category_of = {
+        str(row["item_id"]): _top_category(row.get("category_path"))
+        for _, row in available.iterrows()
+    }
+    avail_set = set(avail_ids)
+    # One slice feeds suppression, the cold-start count, and content seeding.
+    consumed = _consumed_rows(ev, str(user_id))
+    suppressed = set(_user_item_ids_from_rows(consumed))
+    n_interactions = (
+        int(consumed["item_id"].astype(str).nunique()) if not consumed.empty else 0
+    )
+    cold = bool(n_interactions < cold_start_threshold())
+
+    # --- candidate sources (parquet + model files only) ---
+    pop_rows = trending(limit=POP_N)
+    pop_scores = _maxnorm({r["item_id"]: float(r["score"]) for r in pop_rows})
+
+    seed_ids = _seed_items_from_rows(consumed)
+    content_scores: dict[str, float] = {}
+    if seed_ids:
+        try:
+            content_rows = content_similar_many(seed_ids, k=CONTENT_K)
+        except Exception:
+            content_rows = []
+        content_scores = _maxnorm(
+            {
+                r["item_id"]: float(r["score"])
+                for r in content_rows
+                if r.get("reason") == "content_similar"
+            }
+        )
+
+    strategy: Strategy
+    als_scores: dict[str, float] = {}
+    if degraded_pointer:
+        strategy = Strategy.degraded
+    elif cold:
+        strategy = Strategy.trending  # refined to content below if dominated
+    else:
+        try:
+            als_scores = _als_scores(str(user_id), ALS_N, seen=suppressed)
+            strategy = Strategy.als_hybrid
+        except Exception:
+            als_scores = {}
+            strategy = Strategy.degraded
+
+    # --- union (deduped, available-only, suppression-filtered) ---
+    # The cap is applied after scoring, by blended score, not here by
+    # lexicographic id -- see the `keep` block below.
+    union = [
+        i
+        for i in sorted(set(pop_scores) | set(als_scores) | set(content_scores))
+        if i in avail_set and i not in suppressed
+    ]
+
+    scored: list[tuple[float, str]] = []
+    comp: dict[str, tuple[float, float, float]] = {}
+    for item_id in union:
+        a = als_scores.get(item_id, 0.0)
+        c = content_scores.get(item_id, 0.0)
+        p = pop_scores.get(item_id, 0.0)
+        comp[item_id] = (a, c, p)
+        scored.append((ALS_W * a + CONTENT_W * c + POP_W * p, item_id))
+    scored.sort(key=lambda t: (-t[0], t[1]))
+    ordered = [item_id for _, item_id in scored]
+    if len(ordered) > CANDIDATE_CAP:
+        # Truncate by blended score, not lexicographic id: a strong
+        # candidate whose id sorts late must not be dropped.
+        keep = set(ordered[:CANDIDATE_CAP])
+        ordered = [i for i in ordered if i in keep]
+
+    emitted, skipped = _apply_diversity(ordered, category_of, limit)
+    # Top-up pass: skipped items (diversity overflow) get a second chance
+    # in order so responses stay deep; the adjacency rule still applies.
+    if len(emitted) < limit:
+        for item_id in skipped:
+            if len(emitted) >= limit:
+                break
+            cat = category_of.get(item_id, "")
+            if (
+                len(emitted) >= 2
+                and category_of.get(emitted[-1], "") == cat
+                and category_of.get(emitted[-2], "") == cat
+            ):
+                continue
+            emitted.append(item_id)
+
+    # --- fallback: never empty while the catalog has available items ---
+    if not emitted and limit > 0:
+        for row in pop_rows:
+            if row["item_id"] in avail_set and row["item_id"] not in suppressed:
+                emitted = [row["item_id"]]
+                break
+        if not emitted:
+            for row in pop_rows:
+                if row["item_id"] in avail_set:
+                    emitted = [row["item_id"]]
+                    break
+        if not emitted:
+            emitted = [sorted(avail_set)[0]]
+    emitted = emitted[:limit]
+
+    if strategy is Strategy.trending and content_scores and emitted:
+        top = emitted[0]
+        a, c, p = comp.get(top, (0.0, 0.0, 0.0))
+        if c > 0 and CONTENT_W * c > POP_W * p:
+            strategy = Strategy.content
+
+    recommendations = []
+    for item_id in emitted:
+        a, c, p = comp.get(item_id, (0.0, 0.0, 0.0))
+        parts = (("als", ALS_W * a), ("content_similar", CONTENT_W * c), ("trending", POP_W * p))
+        reason = max(parts, key=lambda t: t[1])[0]
+        if max(a, c, p) == 0.0:
+            reason = "trending"  # fallback-populated rows carry no source signal
+            final = pop_scores.get(item_id, 0.0) * POP_W
+        else:
+            final = ALS_W * a + CONTENT_W * c + POP_W * p
+        recommendations.append(
+            {"item_id": item_id, "score": float(final), "reason": reason}
+        )
+
+    resp = RecResponse(
+        recommendations=recommendations,  # type: ignore[arg-type]
+        cold_start=cold,
+        strategy=strategy,
+        model_version=label,
+    )
+    return resp.model_dump(mode="json")

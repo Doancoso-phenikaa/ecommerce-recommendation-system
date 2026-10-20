@@ -1,0 +1,22 @@
+{
+  "ndcg_hybrid": 0.22713231584132473,
+  "ndcg_baseline": 0.027189689026990146,
+  "delta": 0.19994262681433458,
+  "precision": 0.06363636363636364,
+  "recall": 0.32575757575757575,
+  "map": 0.15529401154401154,
+  "version": "v1",
+  "seed": 42,
+  "k": 10,
+  "margin": 0.02,
+  "passed": true,
+  "n_test_users": 22,
+  "n_cold_start": 0,
+  "n_warm": 22,
+  "ndcg_cold_start": 0.0,
+  "ndcg_warm": 0.22713231584132473,
+  "strategy_counts": {
+    "als_hybrid": 22
+  },
+  "n_rank_errors": 0
+}
