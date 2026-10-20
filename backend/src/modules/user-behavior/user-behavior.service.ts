@@ -25,9 +25,9 @@ export class UserBehaviorService {
     customerId: string,
     productId: string,
     behaviorType: BehaviorType,
-  ): Promise<void> {
+  ): Promise<UserBehavior | null> {
     try {
-      await this.userBehaviorRepository.save(
+      return await this.userBehaviorRepository.save(
         this.userBehaviorRepository.create({
           customerId,
           productId,
@@ -36,10 +36,14 @@ export class UserBehaviorService {
       );
     } catch (error: unknown) {
       this.logFailure(customerId, productId, behaviorType, error);
+      return null;
     }
   }
 
-  async recordViewByUserId(userId: string, productId: string): Promise<void> {
+  async recordViewByUserId(
+    userId: string,
+    productId: string,
+  ): Promise<UserBehavior | null> {
     try {
       const customer = await this.customerRepository.findOneBy({ userId });
 
@@ -47,7 +51,7 @@ export class UserBehaviorService {
         this.logger.warn(
           `Unable to record VIEW behavior: customer profile not found for user ${userId}`,
         );
-        return;
+        return null;
       }
 
       const product = await this.productRepository.findOne({
@@ -64,16 +68,17 @@ export class UserBehaviorService {
         this.logger.warn(
           `Unable to record VIEW behavior: product ${productId} is not publicly available`,
         );
-        return;
+        return null;
       }
 
-      await this.recordBehavior(
+      return await this.recordBehavior(
         customer.customerId,
         productId,
         BehaviorType.VIEW,
       );
     } catch (error: unknown) {
       this.logFailure('unknown', productId, BehaviorType.VIEW, error);
+      return null;
     }
   }
 

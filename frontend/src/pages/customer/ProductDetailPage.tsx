@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ProductCard } from '../../components/product/ProductCard';
 import { addToCart } from '../../api/cart.api';
 import { getActiveCategories } from '../../api/category.api';
 import { getProductDetail, getProducts } from '../../api/product.api';
 import { getProductReviews } from '../../api/review.api';
+import { recordProductView } from '../../api/user-behavior.api';
 import {
   addToWishlist,
   getWishlist,
@@ -25,6 +26,7 @@ export function ProductDetailPage() {
   const [relatedProducts, setRelatedProducts] = useState<PublicProduct[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const trackedProductIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     let isCurrent = true;
@@ -40,6 +42,13 @@ export function ProductDetailPage() {
         if (!isCurrent) return;
         setProduct(currentProduct);
         setCategoryName(`Danh mục #${currentProduct.categoryId}`);
+
+        if (trackedProductIdRef.current !== currentProduct.productId) {
+          trackedProductIdRef.current = currentProduct.productId;
+          void recordProductView(currentProduct.productId).catch(() => {
+            // Recommendation tracking is best-effort and must not block detail.
+          });
+        }
 
         const [categoriesResult, relatedResult] = await Promise.allSettled([
           getActiveCategories(),

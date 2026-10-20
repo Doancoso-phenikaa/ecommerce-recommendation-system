@@ -11,6 +11,7 @@ import { ProductStatus } from '../product/enums/product-status.enum.js';
 import { ShopStatus } from '../shop/enums/shop-status.enum.js';
 import { BehaviorType } from '../user-behavior/enums/behavior-type.enum.js';
 import { UserBehaviorService } from '../user-behavior/user-behavior.service.js';
+import { RecommendationEventPublisherService } from '../recommendation/recommendation-event-publisher.service.js';
 import { WishlistItem } from './entities/wishlist-item.entity.js';
 import { Wishlist } from './entities/wishlist.entity.js';
 
@@ -33,6 +34,7 @@ export class WishlistService {
     private readonly productRepository: Repository<Product>,
     private readonly dataSource: DataSource,
     private readonly userBehaviorService: UserBehaviorService,
+    private readonly recommendationEventPublisher: RecommendationEventPublisherService,
   ) {}
 
   async getWishlist(userId: string) {
@@ -113,11 +115,15 @@ export class WishlistService {
         return this.buildWishlistItemResponse(item, product);
       });
 
-      await this.userBehaviorService.recordBehavior(
+      const behavior = await this.userBehaviorService.recordBehavior(
         customer.customerId,
         productId,
         BehaviorType.WISHLIST,
       );
+
+      if (behavior) {
+        await this.recommendationEventPublisher.publishBehavior(behavior);
+      }
 
       return response;
     } catch (error: unknown) {
