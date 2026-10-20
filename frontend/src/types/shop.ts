@@ -10,6 +10,29 @@ export interface PublicShopListResponse {
   data: PublicShop[];
 }
 
+export interface PublicShopReview {
+  reviewId: string;
+  productId: string;
+  productName: string;
+  productImageUrl: string | null;
+  rating: number;
+  comment: string | null;
+  customerName: string;
+  sellerReply: string | null;
+  sellerRepliedAt: string | null;
+  createdAt: string;
+}
+
+export interface PublicShopDetail extends PublicShop {
+  description: string | null;
+  rating: number;
+  productCount: number;
+  reviewCount: number;
+  createdAt: string;
+  updatedAt: string;
+  reviews: PublicShopReview[];
+}
+
 export interface Shop {
   shopId: string;
   sellerId: string;

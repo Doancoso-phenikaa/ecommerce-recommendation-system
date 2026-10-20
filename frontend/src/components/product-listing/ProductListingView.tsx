@@ -20,6 +20,7 @@ interface ProductListingViewProps {
   shops: PublicShop[];
   categories?: Category[];
   showCategoryFilter?: boolean;
+  showShopFilter?: boolean;
   isShopLoading?: boolean;
   isCategoryLoading?: boolean;
   shopError?: string;
@@ -42,6 +43,7 @@ export function ProductListingView({
   shops,
   categories = [],
   showCategoryFilter = false,
+  showShopFilter = true,
   isShopLoading = false,
   isCategoryLoading = false,
   shopError,
@@ -70,6 +72,7 @@ export function ProductListingView({
     shops,
     categories,
     showCategoryFilter,
+    showShopFilter,
     isLoadingShops: isShopLoading,
     isLoadingCategories: isCategoryLoading,
     shopError,

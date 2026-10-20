@@ -14,6 +14,9 @@ import {
 } from 'typeorm';
 import { Review } from '../review/entities/review.entity.js';
 import { ReviewStatus } from '../review/enums/review-status.enum.js';
+import { Product } from '../product/entities/product.entity.js';
+import { ProductStatus } from '../product/enums/product-status.enum.js';
+import { CategoryStatus } from '../category/enums/category-status.enum.js';
 import { Seller } from '../seller/entities/seller.entity.js';
 import { SellerStatus } from '../seller/enums/seller-status.enum.js';
 import { User } from '../user/entities/user.entity.js';
@@ -39,6 +42,8 @@ export class ShopService {
     private readonly sellerRepository: Repository<Seller>,
     @InjectRepository(Review)
     private readonly reviewRepository: Repository<Review>,
+    @InjectRepository(Product)
+    private readonly productRepository: Repository<Product>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -56,6 +61,103 @@ export class ShopService {
         shopId: shop.shopId,
         name: shop.name,
         logoUrl: shop.logoUrl,
+      })),
+    };
+  }
+
+  async getActiveShopDetail(shopId: string) {
+    const shop = await this.shopRepository
+      .createQueryBuilder('shop')
+      .select([
+        'shop.shopId',
+        'shop.name',
+        'shop.description',
+        'shop.logoUrl',
+        'shop.createdAt',
+        'shop.updatedAt',
+      ])
+      .where('shop.shopId = :shopId', { shopId })
+      .andWhere('shop.status = :status', { status: ShopStatus.ACTIVE })
+      .getOne();
+
+    if (!shop) {
+      throw new NotFoundException('Shop not found');
+    }
+
+    const [productCount, reviewSummary, reviews] = await Promise.all([
+      this.productRepository
+        .createQueryBuilder('product')
+        .innerJoin('product.category', 'category')
+        .where('product.shopId = :shopId', { shopId })
+        .andWhere('product.status = :productStatus', {
+          productStatus: ProductStatus.APPROVED,
+        })
+        .andWhere('category.status = :categoryStatus', {
+          categoryStatus: CategoryStatus.ACTIVE,
+        })
+        .getCount(),
+      this.reviewRepository
+        .createQueryBuilder('review')
+        .innerJoin('review.product', 'product')
+        .innerJoin('product.category', 'category')
+        .select('COALESCE(AVG(review.rating), 0)', 'averageRating')
+        .addSelect('COUNT(review.reviewId)', 'totalReviews')
+        .where('product.shopId = :shopId', { shopId })
+        .andWhere('product.status = :productStatus', {
+          productStatus: ProductStatus.APPROVED,
+        })
+        .andWhere('category.status = :categoryStatus', {
+          categoryStatus: CategoryStatus.ACTIVE,
+        })
+        .andWhere('review.status = :reviewStatus', {
+          reviewStatus: ReviewStatus.ACTIVE,
+        })
+        .getRawOne<{ averageRating: string; totalReviews: string }>(),
+      this.reviewRepository
+        .createQueryBuilder('review')
+        .innerJoinAndSelect('review.product', 'product')
+        .innerJoin('product.category', 'category')
+        .innerJoinAndSelect('review.customer', 'customer')
+        .innerJoinAndSelect('customer.user', 'user')
+        .where('product.shopId = :shopId', { shopId })
+        .andWhere('product.status = :productStatus', {
+          productStatus: ProductStatus.APPROVED,
+        })
+        .andWhere('category.status = :categoryStatus', {
+          categoryStatus: CategoryStatus.ACTIVE,
+        })
+        .andWhere('review.status = :reviewStatus', {
+          reviewStatus: ReviewStatus.ACTIVE,
+        })
+        .orderBy('review.createdAt', 'DESC')
+        .addOrderBy('review.reviewId', 'DESC')
+        .take(6)
+        .getMany(),
+    ]);
+
+    const averageRating = Number(reviewSummary?.averageRating ?? 0);
+
+    return {
+      shopId: shop.shopId,
+      name: shop.name,
+      description: shop.description,
+      logoUrl: shop.logoUrl,
+      rating: Math.round(averageRating * 100) / 100,
+      productCount,
+      reviewCount: Number(reviewSummary?.totalReviews ?? 0),
+      createdAt: shop.createdAt,
+      updatedAt: shop.updatedAt,
+      reviews: reviews.map((review) => ({
+        reviewId: review.reviewId,
+        productId: review.productId,
+        productName: review.product.name,
+        productImageUrl: review.product.imageUrl,
+        rating: review.rating,
+        comment: review.comment,
+        customerName: review.customer.user.fullName,
+        sellerReply: review.sellerReply,
+        sellerRepliedAt: review.sellerRepliedAt,
+        createdAt: review.createdAt,
       })),
     };
   }
