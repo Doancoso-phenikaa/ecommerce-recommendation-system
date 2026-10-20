@@ -64,7 +64,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Query, Response
 from pydantic import BaseModel
 
-from recommendation.app import baseline, bus, ranker, store
+from recommendation.app import baseline, bus, catalog, ranker, store
 from recommendation.app.logging_setup import get_logger, setup_logging
 from recommendation.app.metrics import (
     log_impression as _log_impression,
@@ -75,6 +75,8 @@ from recommendation.app.metrics import (
 from recommendation.app.metrics import router as metrics_router
 from recommendation.app.schemas import (
     EventIn,
+    CatalogSyncRequest,
+    CatalogSyncResponse,
     RecResponse,
     SimilarResponse,
     Strategy,
@@ -109,6 +111,16 @@ class HealthResponse(BaseModel):
     kafka: str
     redis: str
     model_version: str
+
+
+@app.put("/catalog", response_model=CatalogSyncResponse)
+def put_catalog(request: CatalogSyncRequest) -> CatalogSyncResponse:
+    """Replace the internal serving catalog with one validated snapshot."""
+    try:
+        return catalog.replace_catalog(request)
+    except Exception as exc:
+        logger.error("Catalog synchronization failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 def current_model_version() -> str:

@@ -20,6 +20,7 @@ module never fails when the file is absent).
 from __future__ import annotations
 
 import uuid
+from collections import Counter
 from datetime import datetime
 from enum import Enum
 from typing import Any
@@ -147,11 +148,11 @@ class UserIn(BaseModel):
 class ItemIn(BaseModel):
     """Catalog item attributes."""
 
-    item_id: str
-    title: str
+    item_id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
     brand_id: str | None = None
     category_path: list[str] | None = None
-    price_cents: int
+    price_cents: int = Field(ge=0)
     image_url: str | None = None
     available: bool = True
 
@@ -164,6 +165,30 @@ class ItemIn(BaseModel):
         if isinstance(v, str):
             return [v]
         return v
+
+
+class CatalogSyncRequest(BaseModel):
+    """Complete replacement snapshot sent by the trusted NestJS backend."""
+
+    items: list[ItemIn] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _reject_duplicate_item_ids(self) -> CatalogSyncRequest:
+        item_ids = [item.item_id for item in self.items]
+        duplicates = sorted(
+            item_id for item_id, count in Counter(item_ids).items() if count > 1
+        )
+        if duplicates:
+            raise ValueError(f"duplicate item_id values are not allowed: {duplicates}")
+        return self
+
+
+class CatalogSyncResponse(BaseModel):
+    """Result of an atomically committed full catalog snapshot."""
+
+    total_items: int
+    available_items: int
+    synced_at: datetime
 
 
 class ScoredItem(BaseModel):
@@ -208,6 +233,8 @@ __all__ = [
     "EventIn",
     "UserIn",
     "ItemIn",
+    "CatalogSyncRequest",
+    "CatalogSyncResponse",
     "ScoredItem",
     "RecItem",
     "SimilarItem",

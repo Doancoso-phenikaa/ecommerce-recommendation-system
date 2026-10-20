@@ -251,6 +251,31 @@ def invalidate_on_event(user_id: str) -> int:
         ) from exc
 
 
+def invalidate_catalog_caches() -> int:
+    """Delete cached results whose membership depends on the item catalog.
+
+    Uses SCAN in bounded batches and leaves unrelated session state intact.
+    """
+    patterns = ("recs:*", "similar:*", "popular:*")
+    deleted = 0
+    try:
+        client = get_redis()
+        for pattern in patterns:
+            batch: list[str] = []
+            for key in client.scan_iter(match=pattern, count=200):
+                batch.append(str(key))
+                if len(batch) == 200:
+                    deleted += int(client.delete(*batch))
+                    batch.clear()
+            if batch:
+                deleted += int(client.delete(*batch))
+        return deleted
+    except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError) as exc:
+        raise CacheUnavailable(
+            "Redis unavailable on invalidate_catalog_caches()"
+        ) from exc
+
+
 def session_set(
     session_id: str, mapping: dict[str, str], ttl: int | None = None
 ) -> None:
@@ -296,6 +321,7 @@ __all__ = [
     "cache_get",
     "cache_set",
     "invalidate_on_event",
+    "invalidate_catalog_caches",
     "session_set",
     "session_get",
 ]

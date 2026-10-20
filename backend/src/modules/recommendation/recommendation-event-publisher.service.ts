@@ -4,6 +4,9 @@ import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { UserBehavior } from '../user-behavior/entities/user-behavior.entity.js';
 import { BehaviorType } from '../user-behavior/enums/behavior-type.enum.js';
+import { vndDecimalToMinorUnits } from './vnd-price.util.js';
+
+export { vndDecimalToMinorUnits } from './vnd-price.util.js';
 
 export const RECOMMENDATION_EVENT_TYPES = {
   [BehaviorType.VIEW]: 'view',
@@ -29,34 +32,6 @@ interface RecommendationEventPayload {
     unit_price_cents: number;
     currency: 'VND';
   };
-}
-
-/**
- * The Python field keeps its generic `unit_price_cents` name. VND has no
- * fractional minor unit, so this integration sends an integer number of dong.
- * Database values with a non-zero fractional part are rejected instead of
- * being rounded silently.
- */
-export function vndDecimalToMinorUnits(value: string): number {
-  const match = /^(0|[1-9]\d*)(?:\.(\d{1,2}))?$/.exec(value.trim());
-
-  if (!match) {
-    throw new Error('VND unit price must be a non-negative decimal string');
-  }
-
-  const fraction = (match[2] ?? '').padEnd(2, '0');
-
-  if (fraction !== '00') {
-    throw new Error('VND unit price must not contain fractional dong');
-  }
-
-  const minorUnits = BigInt(match[1]);
-
-  if (minorUnits > BigInt(Number.MAX_SAFE_INTEGER)) {
-    throw new Error('VND unit price exceeds the safe JSON integer range');
-  }
-
-  return Number(minorUnits);
 }
 
 @Injectable()

@@ -43,6 +43,31 @@ events ──> Kafka topic user-events ──> consumer ──> Parquet + Redis
                          FAIL exit 3: keep pointer + ALERT to retrain.log)
 ```
 
+## Real MarketNest catalog sync (Phase 1)
+
+The NestJS backend is the only database owner. An authenticated Admin calls
+`POST /admin/recommendation/catalog/sync`; NestJS reads Product, Category,
+Shop and Inventory in one relation query and sends a full snapshot to the
+private Python `PUT /catalog` endpoint. The Python service validates the
+snapshot, writes a temporary Parquet file beside `data/items.parquet`, reads
+it back, and atomically replaces the serving catalog.
+
+The sync keeps every real Product for metadata continuity and sets
+`available=false` unless Product is APPROVED, Shop and Category are ACTIVE,
+Inventory exists, and `quantity - reserved_quantity > 0`. The existing
+ranker already excludes unavailable rows. Empty snapshots and duplicate IDs
+are rejected. After a successful replacement, catalog DataFrame/TF-IDF
+caches and Redis `recs:*`, `similar:*`, and `popular:*` results are cleared.
+
+`scripts/seed.py` and its slug-like IDs remain development/test fixtures.
+Once a real sync runs, `items.parquet` contains only real stringified
+`Product.productId` values. Existing ALS v3 artifacts were trained on seed
+IDs such as `ele-001` and are intentionally not mapped to real products;
+content/trending fallback remains available until a later real-ID retrain.
+
+`PUT /catalog` has no service authentication in Phase 1 and must remain on a
+private/internal network. Browsers and the frontend must call NestJS only.
+
 Serving request flow: `recs:{user}:{context}:{filter}:{model_version}:{count}`
 cache lookup (`X-Cache: HIT`) → miss → `ranker.rank` (ALS + trending +
 content, business rules) → best-effort `cache_set` (`X-Cache: MISS`). Boot
