@@ -32,6 +32,11 @@ export class AdminController {
     return this.shopService.getShopDetail(params.shopId);
   }
 
+  @Patch('approve-all')
+  approveAllPendingShops() {
+    return this.shopService.approveAllPendingShops();
+  }
+
   @Patch(':shopId/approve')
   approveShop(@Param() params: ShopIdParamDto) {
     return this.shopService.approveShop(params.shopId);

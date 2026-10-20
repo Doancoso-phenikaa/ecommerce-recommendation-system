@@ -15,6 +15,7 @@ import { OrderHistoryPage } from './pages/customer/OrderHistoryPage';
 import { OrderDetailPage } from './pages/customer/OrderDetailPage';
 import { WishlistPage } from './pages/customer/WishlistPage';
 import { CustomerProfilePage } from './pages/customer/CustomerProfilePage';
+import { ShopPage } from './pages/customer/ShopPage';
 import { SellerDashboardPage } from './pages/seller/SellerDashboardPage';
 import { SellerShopPage } from './pages/seller/SellerShopPage';
 import { SellerProductPage } from './pages/seller/SellerProductPage';
@@ -51,6 +52,7 @@ function App() {
     </Route>
     <Route element={<CustomerLayout />}>
       <Route path="/" element={<CustomerHomePage />} />
+      <Route path="/shops/:shopId" element={<ShopPage />} />
     </Route>
     <Route element={<ProtectedRoute />}>
       <Route element={<RoleRoute allowedRoles={['CUSTOMER']} />}>

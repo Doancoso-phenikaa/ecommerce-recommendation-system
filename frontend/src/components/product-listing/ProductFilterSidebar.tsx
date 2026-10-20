@@ -9,6 +9,7 @@ interface ProductFilterSidebarProps {
   shops: PublicShop[];
   categories?: Category[];
   showCategoryFilter?: boolean;
+  showShopFilter?: boolean;
   isLoadingCategories?: boolean;
   categoryError?: string;
   isLoadingShops?: boolean;
@@ -32,6 +33,7 @@ export function ProductFilterSidebar({
   shops,
   categories = [],
   showCategoryFilter = false,
+  showShopFilter = true,
   isLoadingCategories = false,
   categoryError,
   isLoadingShops = false,
@@ -124,7 +126,7 @@ export function ProductFilterSidebar({
         <button className="listing-filter__apply" type="button" onClick={applyPrice}>Áp dụng giá</button>
       </section>
 
-      <section className="listing-filter__section">
+      {showShopFilter && <section className="listing-filter__section">
         <label className="listing-filter__label" htmlFor={shopFilterId}>Gian hàng</label>
         <select
           id={shopFilterId}
@@ -136,7 +138,7 @@ export function ProductFilterSidebar({
           {shops.map((shop) => <option key={shop.shopId} value={shop.shopId}>{shop.name}</option>)}
         </select>
         {shopError && <p className="listing-filter__hint">{shopError}</p>}
-      </section>
+      </section>}
 
       <section className="listing-filter__section">
         <label className="listing-filter__checkbox">

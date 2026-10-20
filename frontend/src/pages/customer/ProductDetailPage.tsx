@@ -427,9 +427,12 @@ function ProductDetailContent({ product, categoryName, relatedProducts, isRelate
               <span className="shop-information__verified" aria-label="Gian hàng đang hoạt động">✓</span>
             </h2>
             <span className="shop-status"><i aria-hidden="true" />Đang hoạt động</span>
-            <button className="shop-information__view-button" type="button">
+            <Link
+              className="shop-information__view-button"
+              to={`/shops/${product.shopId}`}
+            >
               <span aria-hidden="true">▣</span>Xem Shop
-            </button>
+            </Link>
           </div>
         </div>
         <div className="shop-information__metrics">

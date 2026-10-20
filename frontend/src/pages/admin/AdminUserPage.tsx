@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { getAdminUsers } from '../../api/admin-user.api';
+import { getAdminUsers, updateAdminUserStatus } from '../../api/admin-user.api';
+import { AdminActionDialog } from '../../components/admin/AdminActionDialog';
+import { useAuth } from '../../hooks/useAuth';
 import type { UserRole } from '../../types/auth';
 import type { AdminUserListResponse } from '../../types/user';
 import { getApiErrorMessage } from '../../utils/auth';
 import './admin-user.css';
+import './admin-list-actions.css';
 
 const PAGE_SIZE = 12;
 const ROLE_OPTIONS: { value: '' | UserRole; label: string }[] = [
@@ -20,6 +23,7 @@ const STATUS_OPTIONS: { value: '' | 'ACTIVE' | 'INACTIVE'; label: string }[] = [
 ];
 
 export function AdminUserPage() {
+  const { user: currentUser } = useAuth();
   const [result, setResult] = useState<AdminUserListResponse | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -29,6 +33,9 @@ export function AdminUserPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [updatingUserId, setUpdatingUserId] = useState('');
+  const [lockTarget, setLockTarget] = useState<{ userId: string; fullName: string } | null>(null);
   const requestIdRef = useRef(0);
 
   const loadUsers = useCallback(async (showLoading = true) => {
@@ -79,6 +86,23 @@ export function AdminUserPage() {
     }
   };
 
+  const handleLockUser = async () => {
+    if (!lockTarget) return;
+    setUpdatingUserId(lockTarget.userId);
+    setActionError('');
+    try {
+      await updateAdminUserStatus(lockTarget.userId, false);
+      await loadUsers(false);
+      setLockTarget(null);
+    } catch (requestError: unknown) {
+      setActionError(
+        getApiErrorMessage(requestError, 'Không thể khóa tài khoản người dùng.'),
+      );
+    } finally {
+      setUpdatingUserId('');
+    }
+  };
+
   return (
     <main className="admin-user-page">
       <header className="admin-user-heading">
@@ -103,6 +127,7 @@ export function AdminUserPage() {
           <label>Trạng thái<select value={status} onChange={(event) => { setStatus(event.target.value as '' | 'ACTIVE' | 'INACTIVE'); setPage(1); }}>{STATUS_OPTIONS.map((option) => <option key={option.value || 'all'} value={option.value}>{option.label}</option>)}</select></label>
         </div>
 
+        {actionError && <div className="admin-user-inline-error" role="alert"><span>{actionError}</span></div>}
         {error && result && <div className="admin-user-inline-error" role="alert"><span>{error}</span><button type="button" onClick={() => void loadUsers(false)}>Thử lại</button></div>}
 
         {isLoading ? <AdminUserSkeleton /> : error && !result ? (
@@ -111,11 +136,21 @@ export function AdminUserPage() {
           <UserState title="Không có người dùng phù hợp" description="Hãy thử thay đổi từ khóa hoặc bộ lọc đang sử dụng." />
         ) : (
           <>
-            <div className="admin-user-table-wrap"><table className="admin-user-table"><thead><tr><th>Người dùng</th><th>Vai trò</th><th>Liên hệ</th><th>Trạng thái</th><th>Ngày tạo</th><th aria-label="Thao tác" /></tr></thead><tbody>{result.data.map((user) => <tr key={user.userId}><td data-label="Người dùng"><strong>{user.fullName}</strong><small>ID #{user.userId}</small></td><td data-label="Vai trò"><span className={`admin-user-role is-${user.role.toLowerCase()}`}>{roleLabel(user.role)}</span></td><td data-label="Liên hệ"><strong>{user.email}</strong><small>{user.phone || 'Chưa có số điện thoại'}</small></td><td data-label="Trạng thái"><span className={`admin-user-status ${user.isActive ? 'is-active' : 'is-inactive'}`}>{user.isActive ? 'Đang hoạt động' : 'Đã khóa'}</span></td><td data-label="Ngày tạo"><time dateTime={user.createdAt}>{formatDate(user.createdAt)}</time></td><td><Link to={`/admin/users/${user.userId}`}>Xem chi tiết</Link></td></tr>)}</tbody></table></div>
+            <div className="admin-user-table-wrap"><table className="admin-user-table"><thead><tr><th>Người dùng</th><th>Vai trò</th><th>Liên hệ</th><th>Trạng thái</th><th>Ngày tạo</th><th aria-label="Thao tác" /></tr></thead><tbody>{result.data.map((user) => <tr key={user.userId}><td data-label="Người dùng"><strong>{user.fullName}</strong><small>ID #{user.userId}</small></td><td data-label="Vai trò"><span className={`admin-user-role is-${user.role.toLowerCase()}`}>{roleLabel(user.role)}</span></td><td data-label="Liên hệ"><strong>{user.email}</strong><small>{user.phone || 'Chưa có số điện thoại'}</small></td><td data-label="Trạng thái"><span className={`admin-user-status ${user.isActive ? 'is-active' : 'is-inactive'}`}>{user.isActive ? 'Đang hoạt động' : 'Đã khóa'}</span></td><td data-label="Ngày tạo"><time dateTime={user.createdAt}>{formatDate(user.createdAt)}</time></td><td><div className="admin-list-row-actions">{user.isActive && user.role !== 'ADMIN' && user.userId !== currentUser?.userId && <button className="is-danger" type="button" disabled={Boolean(updatingUserId)} onClick={() => setLockTarget({ userId: user.userId, fullName: user.fullName })}>{updatingUserId === user.userId ? 'Đang khóa...' : 'Khóa tài khoản'}</button>}<Link to={`/admin/users/${user.userId}`}>Xem chi tiết</Link></div></td></tr>)}</tbody></table></div>
             <div className="admin-user-pagination"><span>Trang {result.pagination.page} / {Math.max(result.pagination.totalPages, 1)}</span><div><button type="button" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>Trước</button><button type="button" disabled={page >= result.pagination.totalPages} onClick={() => setPage((current) => current + 1)}>Sau</button></div></div>
           </>
         )}
       </section>
+      <AdminActionDialog
+        open={Boolean(lockTarget)}
+        title={`Khóa tài khoản ${lockTarget?.fullName ?? ''}?`}
+        description="Người dùng sẽ không thể đăng nhập hoặc sử dụng các chức năng yêu cầu tài khoản cho đến khi được mở khóa. Các điều kiện bảo vệ Seller vẫn được giữ nguyên."
+        confirmLabel="Xác nhận khóa"
+        tone="danger"
+        isLoading={Boolean(updatingUserId)}
+        onClose={() => setLockTarget(null)}
+        onConfirm={() => void handleLockUser()}
+      />
     </main>
   );
 }

@@ -28,6 +28,17 @@ export async function approveAdminShop(shopId: string): Promise<Shop> {
   return response.data;
 }
 
+export async function approveAllAdminShops(): Promise<{
+  approvedCount: number;
+  shopIds: string[];
+}> {
+  const response = await api.patch<{
+    approvedCount: number;
+    shopIds: string[];
+  }>('/admin/shops/approve-all');
+  return response.data;
+}
+
 export async function rejectAdminShop(
   shopId: string,
   rejectionReason: string,
