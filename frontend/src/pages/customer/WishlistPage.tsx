@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { addToCart } from '../../api/cart.api';
+import { getRecommendations } from '../../api/recommendation.api';
 import { getWishlist, removeFromWishlist } from '../../api/wishlist.api';
+import { RecommendationSection } from '../../components/recommendation/RecommendationSection';
+import type { PublicProduct } from '../../types/product';
 import type { WishlistItem } from '../../types/wishlist';
 import { getApiErrorMessage } from '../../utils/auth';
 import { formatCurrency } from '../../utils/format-currency';
@@ -17,6 +20,8 @@ export function WishlistPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [recommendedProducts, setRecommendedProducts] = useState<PublicProduct[]>([]);
+  const [isRecommendationLoading, setIsRecommendationLoading] = useState(true);
 
   const loadWishlist = useCallback(async () => {
     try {
@@ -54,6 +59,23 @@ export function WishlistPage() {
     return () => {
       isCurrent = false;
     };
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    void getRecommendations(10, controller.signal)
+      .then((response) => {
+        setRecommendedProducts(response.items.map((item) => item.product));
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setRecommendedProducts([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setIsRecommendationLoading(false);
+      });
+
+    return () => controller.abort();
   }, []);
 
   const handleRetry = () => {
@@ -112,6 +134,12 @@ export function WishlistPage() {
 
   const firstVisibleItem = items.length === 0 ? 0 : (visiblePage - 1) * WISHLIST_PAGE_SIZE + 1;
   const lastVisibleItem = Math.min(visiblePage * WISHLIST_PAGE_SIZE, items.length);
+  const wishlistRecommendations = useMemo(() => {
+    const wishlistProductIds = new Set(items.map((item) => item.productId));
+    return recommendedProducts.filter(
+      (product) => !wishlistProductIds.has(product.productId),
+    );
+  }, [items, recommendedProducts]);
 
   return (
     <main className="wishlist-page">
@@ -222,6 +250,14 @@ export function WishlistPage() {
           </div>
         </nav>
       )}
+
+      <RecommendationSection
+        title="Gợi ý dành cho bạn"
+        products={wishlistRecommendations}
+        isLoading={isRecommendationLoading}
+        className="wishlist-recommendations"
+        skeletonCount={5}
+      />
     </main>
   );
 }

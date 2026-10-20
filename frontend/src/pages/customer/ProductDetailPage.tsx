@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ProductCard } from '../../components/product/ProductCard';
 import { addToCart } from '../../api/cart.api';
 import { getActiveCategories } from '../../api/category.api';
-import { getProductDetail, getProducts } from '../../api/product.api';
+import { getProductDetail } from '../../api/product.api';
+import { getSimilarProducts } from '../../api/recommendation.api';
 import { getProductReviews } from '../../api/review.api';
 import { recordProductView } from '../../api/user-behavior.api';
 import {
@@ -11,6 +11,7 @@ import {
   getWishlist,
   removeFromWishlist,
 } from '../../api/wishlist.api';
+import { RecommendationSection } from '../../components/recommendation/RecommendationSection';
 import type { PublicProduct } from '../../types/product';
 import type { ProductReviewsResponse } from '../../types/review';
 import { formatCurrency } from '../../utils/format-currency';
@@ -23,7 +24,10 @@ export function ProductDetailPage() {
   const { productId = '' } = useParams<{ productId: string }>();
   const [product, setProduct] = useState<PublicProduct | null>(null);
   const [categoryName, setCategoryName] = useState('');
-  const [relatedProducts, setRelatedProducts] = useState<PublicProduct[]>([]);
+  const [relatedResult, setRelatedResult] = useState<{
+    productId: string;
+    products: PublicProduct[];
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const trackedProductIdRef = useRef<string | null>(null);
@@ -35,7 +39,6 @@ export function ProductDetailPage() {
       setIsLoading(true);
       setError('');
       setProduct(null);
-      setRelatedProducts([]);
 
       try {
         const currentProduct = await getProductDetail(productId);
@@ -50,28 +53,14 @@ export function ProductDetailPage() {
           });
         }
 
-        const [categoriesResult, relatedResult] = await Promise.allSettled([
-          getActiveCategories(),
-          getProducts({
-            categoryId: currentProduct.categoryId,
-            page: 1,
-            limit: 5,
-          }),
-        ]);
+        const categoriesResult = await Promise.allSettled([getActiveCategories()]);
 
         if (!isCurrent) return;
-        if (categoriesResult.status === 'fulfilled') {
-          const category = categoriesResult.value.find(
+        if (categoriesResult[0].status === 'fulfilled') {
+          const category = categoriesResult[0].value.find(
             (item) => item.categoryId === currentProduct.categoryId,
           );
           if (category) setCategoryName(category.name);
-        }
-        if (relatedResult.status === 'fulfilled') {
-          setRelatedProducts(
-            relatedResult.value.data
-              .filter((item) => item.productId !== currentProduct.productId)
-              .slice(0, 4),
-          );
         }
       } catch (requestError: unknown) {
         if (isCurrent) {
@@ -92,6 +81,32 @@ export function ProductDetailPage() {
       isCurrent = false;
     };
   }, [productId]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    void getSimilarProducts(productId, 10, controller.signal)
+      .then((response) => {
+        if (controller.signal.aborted) return;
+        setRelatedResult({
+          productId,
+          products: response.items
+            .map((item) => item.product)
+            .filter((item) => item.productId !== productId),
+        });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setRelatedResult({ productId, products: [] });
+        }
+      });
+
+    return () => controller.abort();
+  }, [productId]);
+
+  const relatedProducts =
+    relatedResult?.productId === productId ? relatedResult.products : [];
+  const isRelatedLoading = relatedResult?.productId !== productId;
 
   if (isLoading) {
     return (
@@ -118,10 +133,10 @@ export function ProductDetailPage() {
     );
   }
 
-  return <ProductDetailContent key={product.productId} product={product} categoryName={categoryName} relatedProducts={relatedProducts} />;
+  return <ProductDetailContent key={product.productId} product={product} categoryName={categoryName} relatedProducts={relatedProducts} isRelatedLoading={isRelatedLoading} />;
 }
 
-function ProductDetailContent({ product, categoryName, relatedProducts }: { product: PublicProduct; categoryName: string; relatedProducts: PublicProduct[] }) {
+function ProductDetailContent({ product, categoryName, relatedProducts, isRelatedLoading }: { product: PublicProduct; categoryName: string; relatedProducts: PublicProduct[]; isRelatedLoading: boolean }) {
   const navigate = useNavigate();
   const [quantity, setQuantity] = useState(1);
   const [isFavorite, setIsFavorite] = useState(false);
@@ -516,12 +531,14 @@ function ProductDetailContent({ product, categoryName, relatedProducts }: { prod
         )}
       </section>
 
-      {relatedProducts.length > 0 && <section className="related-products" aria-labelledby="related-title">
-        <div className="related-products__heading"><h2 id="related-title">Sản phẩm liên quan</h2><span>Cùng danh mục và các lựa chọn khác</span></div>
-        <div className="related-products__grid">
-          {relatedProducts.map((item) => <ProductCard key={item.productId} product={item} />)}
-        </div>
-      </section>}
+      <RecommendationSection
+        title="Sản phẩm tương tự"
+        subtitle="Những lựa chọn phù hợp để bạn khám phá thêm"
+        products={relatedProducts}
+        isLoading={isRelatedLoading}
+        className="product-similar-recommendations"
+        skeletonCount={5}
+      />
     </main>
   );
 }

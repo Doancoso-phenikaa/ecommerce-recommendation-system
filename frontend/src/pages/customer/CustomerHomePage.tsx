@@ -2,13 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getActiveCategories } from '../../api/category.api';
 import { getProducts } from '../../api/product.api';
+import { getRecommendations } from '../../api/recommendation.api';
 import { addToWishlist, getWishlist, removeFromWishlist } from '../../api/wishlist.api';
 import { BannerCarousel } from '../../components/customer/BannerCarousel';
 import { CategorySection } from '../../components/customer/CategorySection';
 import { HomeProductCard } from '../../components/customer/HomeProductCard';
+import { RecommendationSection } from '../../components/recommendation/RecommendationSection';
+import { useAuth } from '../../hooks/useAuth';
 import { mockBanners, mockSidePromotions } from '../../mock/banners';
 import type { Category } from '../../types/category';
-import type { ProductListResponse } from '../../types/product';
+import type { ProductListResponse, PublicProduct } from '../../types/product';
 import { getApiErrorMessage } from '../../utils/auth';
 import './customer-home.css';
 import './customer-product-states.css';
@@ -91,15 +94,19 @@ const normalizeCategoryName = (value: string) => value
   .toLocaleLowerCase('vi');
 
 export function CustomerHomePage() {
+  const { isAuthenticated, user } = useAuth();
   const [categories, setCategories] = useState<Category[]>([]);
   const [isCategoryLoading, setIsCategoryLoading] = useState(true);
   const [categoryError, setCategoryError] = useState('');
   const [productResult, setProductResult] = useState<ProductListResponse | null>(null);
   const [isProductLoading, setIsProductLoading] = useState(true);
-  const [productError, setProductError] = useState('');
   const [flashSaleResult, setFlashSaleResult] = useState<ProductListResponse | null>(null);
   const [isFlashSaleLoading, setIsFlashSaleLoading] = useState(true);
   const [flashSaleError, setFlashSaleError] = useState('');
+  const [recommendationResult, setRecommendationResult] = useState<{
+    userId: string;
+    products: PublicProduct[];
+  } | null>(null);
   const [wishlistProductIds, setWishlistProductIds] = useState<Set<string>>(new Set());
   const [updatingWishlistId, setUpdatingWishlistId] = useState<string | null>(null);
   const [wishlistMessage, setWishlistMessage] = useState('');
@@ -123,15 +130,16 @@ export function CustomerHomePage() {
     void Promise.allSettled([
       getProducts({ page: 1, limit: 10 }),
       getProducts({ page: 1, limit: 5, sort: 'LATEST_APPROVED' }),
-      getWishlist(),
+      isAuthenticated && user?.role === 'CUSTOMER'
+        ? getWishlist()
+        : Promise.resolve(null),
     ])
       .then(([productsResult, flashProductsResult, wishlistResult]) => {
         if (!isCurrent) return;
         if (productsResult.status === 'fulfilled') setProductResult(productsResult.value);
-        else setProductError(getApiErrorMessage(productsResult.reason, 'Không thể tải sản phẩm.'));
         if (flashProductsResult.status === 'fulfilled') setFlashSaleResult(flashProductsResult.value);
         else setFlashSaleError(getApiErrorMessage(flashProductsResult.reason, 'Không thể tải sản phẩm mới duyệt.'));
-        if (wishlistResult.status === 'fulfilled') {
+        if (wishlistResult.status === 'fulfilled' && wishlistResult.value) {
           setWishlistProductIds(new Set(wishlistResult.value.items.map((item) => item.productId)));
         }
       })
@@ -142,7 +150,31 @@ export function CustomerHomePage() {
         }
       });
     return () => { isCurrent = false; };
-  }, []);
+  }, [isAuthenticated, user?.role]);
+
+  useEffect(() => {
+    const isCustomer = isAuthenticated && user?.role === 'CUSTOMER';
+
+    if (!isCustomer) return;
+
+    const controller = new AbortController();
+    const customerUserId = user.userId;
+
+    void getRecommendations(10, controller.signal)
+      .then((response) => {
+        setRecommendationResult({
+          userId: customerUserId,
+          products: response.items.map((item) => item.product),
+        });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setRecommendationResult({ userId: customerUserId, products: [] });
+        }
+      });
+
+    return () => controller.abort();
+  }, [isAuthenticated, user?.role, user?.userId]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -157,6 +189,19 @@ export function CustomerHomePage() {
   }, []);
 
   const products = useMemo(() => productResult?.data ?? [], [productResult]);
+  const isPersonalizedHome = isAuthenticated && user?.role === 'CUSTOMER';
+  const recommendedProducts =
+    isPersonalizedHome && recommendationResult?.userId === user.userId
+      ? recommendationResult.products
+      : [];
+  const isRecommendationLoading =
+    isPersonalizedHome && recommendationResult?.userId !== user.userId;
+  const homeRecommendationProducts = isPersonalizedHome
+    ? recommendedProducts
+    : products;
+  const isHomeRecommendationLoading = isPersonalizedHome
+    ? isRecommendationLoading
+    : isProductLoading;
   const flashSaleProducts = useMemo(() => flashSaleResult?.data ?? [], [flashSaleResult]);
   const flashSaleHours = Math.floor(flashSaleRemainingSeconds / 3600);
   const flashSaleMinutes = Math.floor((flashSaleRemainingSeconds % 3600) / 60);
@@ -253,18 +298,23 @@ export function CustomerHomePage() {
         <div className="home-collection-grid">{collections.map((collection) => <Link to={collectionDestination(collection.categoryAliases)} key={collection.title}><img src={collection.imageUrl} alt="" loading="lazy" /><div><h3>{collection.title}</h3><p>{collection.description}</p><strong>Xem bộ sưu tập <span aria-hidden="true">→</span></strong></div></Link>)}</div>
       </section>
 
-      <section className="home-recommendations" id="recommendations" aria-labelledby="recommendations-title">
-        <header className="home-section-heading home-recommendations__heading">
-          <div><span className="home-section-eyebrow">Cá nhân hóa theo sở thích</span><h2 id="recommendations-title">Gợi ý hôm nay</h2></div>
-        </header>
+      {(wishlistMessage || isHomeRecommendationLoading || homeRecommendationProducts.length > 0) && (
+      <section className="home-recommendations" id="recommendations" aria-label="Gợi ý hôm nay">
         {wishlistMessage && <p className="home-wishlist-message" role="alert">{wishlistMessage}</p>}
-        <ProductContent products={products} isLoading={isProductLoading} error={productError} wishlistProductIds={wishlistProductIds} updatingWishlistId={updatingWishlistId} onWishlistToggle={handleWishlistToggle} />
-        {!isProductLoading && !productError && products.length > 0 && (
+        <RecommendationSection
+          title="Gợi ý hôm nay"
+          products={homeRecommendationProducts}
+          isLoading={isHomeRecommendationLoading}
+          className="home-recommendations__section"
+          skeletonCount={10}
+        />
+        {isAuthenticated && user?.role === 'CUSTOMER' && !isRecommendationLoading && recommendedProducts.length > 0 && (
           <div className="home-recommendations__more">
             <Link to="/recommendations">Xem tất cả gợi ý <span aria-hidden="true">→</span></Link>
           </div>
         )}
       </section>
+      )}
     </main>
   );
 }

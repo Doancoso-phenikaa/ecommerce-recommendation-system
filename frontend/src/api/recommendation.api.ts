@@ -1,27 +1,33 @@
 import type {
-  RecommendationApiItem,
-  RecommendedProduct,
+  RecommendationResponse,
+  SimilarProductsResponse,
 } from '../types/recommendation';
 import { api } from './axios';
-import { getProductDetail } from './product.api';
 
-export async function getRecommendations(): Promise<RecommendedProduct[]> {
-  const response = await api.get<RecommendationApiItem[]>('/recommendations');
-  const uniqueRecommendations = response.data.filter(
-    (item, index, items) =>
-      items.findIndex(
-        (candidate) => candidate.product.productId === item.product.productId,
-      ) === index,
-  );
-  const productResults = await Promise.allSettled(
-    uniqueRecommendations.map((item) =>
-      getProductDetail(item.product.productId),
-    ),
+export async function getRecommendations(
+  limit = 10,
+  signal?: AbortSignal,
+): Promise<RecommendationResponse> {
+  const response = await api.get<RecommendationResponse>('/recommendations', {
+    params: { limit },
+    signal,
+  });
+
+  return response.data;
+}
+
+export async function getSimilarProducts(
+  productId: string,
+  limit = 10,
+  signal?: AbortSignal,
+): Promise<SimilarProductsResponse> {
+  const response = await api.get<SimilarProductsResponse>(
+    `/recommendations/similar/${productId}`,
+    {
+      params: { limit },
+      signal,
+    },
   );
 
-  return productResults.flatMap((result, index) =>
-    result.status === 'fulfilled'
-      ? [{ product: result.value, score: uniqueRecommendations[index].score }]
-      : [],
-  );
+  return response.data;
 }
