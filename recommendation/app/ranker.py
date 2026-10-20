@@ -126,6 +126,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from recommendation.app.interaction_data import empty_interactions_frame
+
 from recommendation.app.baseline import (
     cold_start_threshold,
     content_similar_many,
@@ -214,7 +216,9 @@ def _load_interactions_df_cached(
     key: tuple[str, tuple[int, int] | None],
 ) -> pd.DataFrame:
     """Read the interactions log named by *key* (see :func:`_frame_cache_key`)."""
-    path, _fingerprint = key
+    path, fingerprint = key
+    if fingerprint is None:
+        return empty_interactions_frame()
     return pd.read_parquet(path)
 
 

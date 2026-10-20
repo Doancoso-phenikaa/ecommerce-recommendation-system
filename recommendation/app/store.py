@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from collections.abc import Iterable
 from typing import Any
 
 import redis
@@ -251,6 +252,31 @@ def invalidate_on_event(user_id: str) -> int:
         ) from exc
 
 
+def invalidate_interaction_caches(user_ids: str | Iterable[str]) -> int:
+    """Invalidate results affected after a persisted interaction batch.
+
+    Personalized results for the affected users and global popularity pages
+    depend on interaction history. Similar-item results depend only on the
+    catalog and are intentionally retained. Popularity is scanned once per
+    batch, not once per event.
+    """
+    values = [user_ids] if isinstance(user_ids, str) else list(user_ids)
+    normalized = sorted({_require_plain(value, "user_id") for value in values})
+    patterns = tuple(f"recs:{user_id}:*" for user_id in normalized) + ("popular:*",)
+    deleted = 0
+    try:
+        client = get_redis()
+        for pattern in patterns:
+            keys = list(client.scan_iter(match=pattern))
+            if keys:
+                deleted += int(client.delete(*keys))
+        return deleted
+    except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError) as exc:
+        raise CacheUnavailable(
+            "Redis unavailable on invalidate_interaction_caches()"
+        ) from exc
+
+
 def invalidate_catalog_caches() -> int:
     """Delete cached results whose membership depends on the item catalog.
 
@@ -321,6 +347,7 @@ __all__ = [
     "cache_get",
     "cache_set",
     "invalidate_on_event",
+    "invalidate_interaction_caches",
     "invalidate_catalog_caches",
     "session_set",
     "session_get",

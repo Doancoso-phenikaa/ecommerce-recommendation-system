@@ -53,11 +53,13 @@ import pandas as pd
 
 from recommendation.app.bus import DLQ_TOPIC_SUFFIX, get_producer
 from recommendation.app.config import load_settings
+from recommendation.app.interaction_data import INTERACTION_COLUMNS
 from recommendation.app.schemas import EventIn
 from recommendation.app.store import (
     SESSION_TTL_S,
     CacheUnavailable,
     get_redis,
+    invalidate_interaction_caches,
     session_key,
 )
 
@@ -137,7 +139,7 @@ def event_to_row(event: EventIn) -> dict[str, Any]:
     rating to the default confidence.
     """
     value = event.value
-    return {
+    row = {
         "request_id": event.request_id,
         "user_id": event.user_id,
         "item_id": event.item_id,
@@ -150,6 +152,10 @@ def event_to_row(event: EventIn) -> dict[str, Any]:
         "rating": value.rating if value else None,
         "query": value.query if value else None,
     }
+    # This assertion keeps the live consumer and the first-run empty frame on
+    # one schema instead of letting their columns drift independently.
+    assert list(row) == INTERACTION_COLUMNS
+    return row
 
 
 def decode_record_value(value: Any) -> dict[str, Any]:
@@ -366,6 +372,11 @@ def process_batch(
     )
     for event in valid:
         update_redis_counts(event)
+    if valid:
+        try:
+            invalidate_interaction_caches({event.user_id for event in valid})
+        except (CacheUnavailable, Exception):
+            pass
     if commit_callback is not None:
         commit_callback()
     return {

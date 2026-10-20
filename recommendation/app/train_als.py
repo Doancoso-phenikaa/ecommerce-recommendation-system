@@ -52,6 +52,7 @@ from scipy.sparse import csr_matrix
 
 from recommendation.app.bus import EVENT_WEIGHTS, event_weight
 from recommendation.app.consumer import snapshot_for_training
+from recommendation.app.interaction_data import empty_interactions_frame
 from recommendation.app.schemas import EventType, EventValue, EventIn
 
 __all__ = [
@@ -200,7 +201,7 @@ def load_snapshot_frame(snapshot_dir: Path) -> pd.DataFrame:
         for path in sorted(incoming.glob("batch_*.parquet")):
             frames.append(pd.read_parquet(path))
     if not frames:
-        return pd.DataFrame()
+        return empty_interactions_frame()
     merged = (
         pd.concat(frames, ignore_index=True)
         if len(frames) > 1

@@ -278,6 +278,21 @@ def test_invalidate_on_event_empty_is_zero(fake_redis: Any) -> None:
     assert store.invalidate_on_event("user-001") == 0
 
 
+def test_interaction_invalidation_clears_user_and_popular_only(fake_redis: Any) -> None:
+    mine = store.recs_key("15", "homepage", "", "v4")
+    another = store.recs_key("27", "homepage", "", "v4")
+    popular = store.popular_key(1)
+    similar = store.similar_key("42")
+    for key in (mine, another, popular, similar):
+        store.cache_set(key, {"items": ["42"]})
+
+    assert store.invalidate_interaction_caches("15") == 2
+    assert store.cache_get(mine) is None
+    assert store.cache_get(popular) is None
+    assert store.cache_get(another) is not None
+    assert store.cache_get(similar) is not None
+
+
 def test_invalidate_rejects_wildcard_user_id(fake_redis: Any) -> None:
     """Glob metacharacters in user_id are rejected before any SCAN runs."""
     for bad in ("user-*", "*", "?", "user-001?", "[a-z]", "a\\b", "user-001\n", "user-001\r", "", "user-001:x"):

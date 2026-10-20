@@ -53,6 +53,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from recommendation.app.bus import EVENT_WEIGHTS
+from recommendation.app.interaction_data import empty_interactions_frame
 
 __all__ = [
     "TRENDING_WINDOW_DAYS",
@@ -176,7 +177,9 @@ def _load_interactions_cached(
     key: tuple[str, tuple[int, int] | None],
 ) -> pd.DataFrame:
     """Read the interactions log named by *key* (see :func:`_frame_cache_key`)."""
-    path, _fingerprint = key
+    path, fingerprint = key
+    if fingerprint is None:
+        return empty_interactions_frame()
     return pd.read_parquet(path)
 
 

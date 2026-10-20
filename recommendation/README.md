@@ -68,6 +68,99 @@ content/trending fallback remains available until a later real-ID retrain.
 `PUT /catalog` has no service authentication in Phase 1 and must remain on a
 private/internal network. Browsers and the frontend must call NestJS only.
 
+## Real interaction pipeline (Phase 2)
+
+New MarketNest actions use one ID namespace end to end:
+
+- `Customer.customerId` string -> `user_id`
+- `Product.productId` string -> `item_id`
+- `VIEW`, `ADD_CART`, `WISHLIST`, `PURCHASE` -> `view`, `cart`, `wishlist`,
+  `purchase`
+
+The existing path is retained: NestJS calls `POST /events`, FastAPI publishes
+the validated event to Kafka (or its bounded `local_buffer.jsonl` spool), and
+`scripts/consume.py` atomically merges consumer batches into
+`data/interactions.parquet`. Rows are idempotent by `request_id`. A completed
+purchase retains `quantity`, integer VND `unit_price_cents`, and `currency`.
+After persistence, the consumer invalidates that customer's `recs:*` keys and
+global `popular:*` keys. Catalog-only `similar:*` keys remain valid.
+
+Missing `interactions.parquet` is a supported first-run state: serving loaders
+treat it as an empty frame with the canonical interaction columns, so unknown
+users receive cold-start catalog results. The first consumed event creates the
+real Parquet file. Training with no usable events exits with code 2 and does
+not move `current_version.txt`.
+
+Do not run `scripts/seed.py` in a real-data environment. Its files and IDs are
+test/development fixtures only. If seed-generated `items.parquet` or
+`interactions.parquet` already exists, start from a clean data directory,
+perform the Phase-1 catalog sync, and then ingest only new real events. Old
+PostgreSQL `UserBehavior` rows are intentionally not replayed: historical
+purchase rows predate the corrected completion semantics and lack reliable
+quantity/price snapshots.
+
+The consumer uses `fcntl`; run the API, consumer and training commands on
+Linux, WSL2, or a Linux container. The checked-in Compose file starts Kafka
+and Redis only. It deliberately does not add application containers or hide
+the Python 3.11 virtualenv requirement.
+
+### Manual real-data verification
+
+```bash
+# 1. Infrastructure and Kafka topics
+docker compose -f recommendation/docker-compose.yml up -d
+bash recommendation/scripts/bootstrap_topics.sh
+
+# 2. API (terminal A; internal port)
+export PYTHONPATH=.
+export REDIS_URL=redis://localhost:6379/0
+export MODEL_DIR="$PWD/recommendation/models"
+recommendation/.venv/bin/uvicorn recommendation.app.main:app --port 8000
+
+# 3. Consumer (terminal B, Linux/WSL2)
+export PYTHONPATH=.
+export REDIS_URL=redis://localhost:6379/0
+export MODEL_DIR="$PWD/recommendation/models"
+recommendation/.venv/bin/python recommendation/scripts/consume.py
+```
+
+Trigger the Phase-1 Admin catalog sync, then perform Product Detail view, Add
+Cart, Add Wishlist, and complete an order in MarketNest. If Kafka was down
+when an event arrived, restore Kafka and run:
+
+```bash
+recommendation/.venv/bin/python recommendation/scripts/replay_buffer.py
+```
+
+Inspect the real interaction IDs and purchase values:
+
+```bash
+recommendation/.venv/bin/python - <<'PY'
+import pandas as pd
+cols = ["request_id", "user_id", "item_id", "event_type",
+        "quantity", "unit_price_cents", "currency"]
+print(pd.read_parquet("recommendation/data/interactions.parquet")[cols].tail(20))
+PY
+```
+
+Train without promotion, then run the existing evaluation gate. Replace `v4`
+with the next unused version; never overwrite `als_v3`:
+
+```bash
+recommendation/.venv/bin/python recommendation/scripts/train.py \
+  --version v4 --no-pointer
+recommendation/.venv/bin/python recommendation/scripts/evaluate.py --version v4
+```
+
+Only promote `current_version.txt` if evaluation exits 0. The normal
+`scripts/retrain.sh` workflow already applies this rule. Inspect
+`models/als_v4/mappings.json`, then verify real IDs directly:
+
+```bash
+curl -s http://localhost:8000/recommendations/15
+curl -s http://localhost:8000/similar/42
+```
+
 Serving request flow: `recs:{user}:{context}:{filter}:{model_version}:{count}`
 cache lookup (`X-Cache: HIT`) → miss → `ranker.rank` (ALS + trending +
 content, business rules) → best-effort `cache_set` (`X-Cache: MISS`). Boot
