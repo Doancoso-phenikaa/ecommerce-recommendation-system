@@ -1,0 +1,103 @@
+.recommendation-section {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: #fff;
+  border: 1px solid var(--market-border);
+  border-radius: .7rem;
+  box-shadow: 0 .3rem 1rem rgba(30, 30, 36, .04);
+}
+
+.recommendation-section__heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: .9rem;
+}
+
+.recommendation-section__heading span {
+  display: block;
+  margin-bottom: .18rem;
+  color: #dc2626;
+  font: 700 .62rem var(--font-body);
+  letter-spacing: .065em;
+  text-transform: uppercase;
+}
+
+.recommendation-section__heading h2 {
+  margin: 0;
+  color: #1e1e24;
+  font: 700 1.3rem/1.2 var(--font-heading);
+  letter-spacing: -.025em;
+}
+
+.recommendation-section__heading p {
+  margin: 0;
+  color: #817a83;
+  font: 400 .7rem var(--font-body);
+}
+
+.recommendation-section__grid,
+.recommendation-section__skeleton {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: .72rem;
+}
+
+.recommendation-section__skeleton > span {
+  min-height: 17rem;
+  background: linear-gradient(90deg, #f2eeee, #fff, #f2eeee);
+  background-size: 200% 100%;
+  border-radius: .55rem;
+  animation: recommendation-shimmer 1.2s linear infinite;
+}
+
+.recommendation-section__grid .product-card__media {
+  aspect-ratio: 4 / 3;
+}
+
+.recommendation-section__grid .product-card__body {
+  padding: .62rem;
+}
+
+.recommendation-section__grid .product-card h3 {
+  min-height: 2.25rem;
+  font-size: .8rem;
+}
+
+.recommendation-section__grid .product-card__price {
+  font-size: .92rem;
+}
+
+@keyframes recommendation-shimmer {
+  to { background-position: -200% 0; }
+}
+
+@media (max-width: 1080px) {
+  .recommendation-section__grid,
+  .recommendation-section__skeleton {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .recommendation-section__grid,
+  .recommendation-section__skeleton {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .recommendation-section__heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 390px) {
+  .recommendation-section {
+    padding: .75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recommendation-section__skeleton > span { animation: none; }
+}

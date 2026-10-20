@@ -29,14 +29,20 @@ export function CustomerLayout() {
           </Link>
           <CustomerSearchForm key={`${location.pathname}:${currentSearchKeyword}`} initialValue={currentSearchKeyword} onSearch={handleSearch} />
           <div className="customer-actions">
-            <CustomerAction to="/cart" label="Giỏ hàng" icon="cart" />
-            <CustomerAction to="/wishlist" label="Yêu thích" icon="heart" />
-            <CustomerAction to="/orders" label="Đơn hàng" icon="order" />
-            <Link className="customer-account-link" to="/profile" aria-label="Hồ sơ của tôi">
-              <CustomerHeaderAvatar key={user?.avatarUrl ?? 'fallback'} avatarUrl={user?.avatarUrl ?? null} fullName={user?.fullName ?? ''} />
-              <span className="customer-account__identity"><span>Tài khoản</span><strong>{user?.fullName}</strong></span>
-            </Link>
-            <button className="customer-logout" type="button" onClick={handleLogout}>Đăng xuất</button>
+            {user ? (
+              <>
+                <CustomerAction to="/cart" label="Giỏ hàng" icon="cart" />
+                <CustomerAction to="/wishlist" label="Yêu thích" icon="heart" />
+                <CustomerAction to="/orders" label="Đơn hàng" icon="order" />
+                <Link className="customer-account-link" to="/profile" aria-label="Hồ sơ của tôi">
+                  <CustomerHeaderAvatar key={user.avatarUrl ?? 'fallback'} avatarUrl={user.avatarUrl ?? null} fullName={user.fullName} />
+                  <span className="customer-account__identity"><span>Tài khoản</span><strong>{user.fullName}</strong></span>
+                </Link>
+                <button className="customer-logout" type="button" onClick={handleLogout}>Đăng xuất</button>
+              </>
+            ) : (
+              <Link className="customer-login" to="/login">Đăng nhập</Link>
+            )}
           </div>
         </div>
       </header>

@@ -140,7 +140,7 @@ export class ProductService {
     const [products, totalItems] = await queryBuilder.getManyAndCount();
 
     return {
-      data: products.map((product) => this.buildPublicProductResponse(product)),
+      data: products.map((product) => this.mapPublicProduct(product)),
       pagination: {
         page,
         limit,
@@ -174,7 +174,7 @@ export class ProductService {
 
     const shopStatistics = await this.getPublicShopStatistics(product.shopId);
 
-    return this.buildPublicProductResponse(product, shopStatistics);
+    return this.mapPublicProduct(product, shopStatistics);
   }
 
   async getSellerProducts(userId: string, query: SellerProductQueryDto) {
@@ -780,10 +780,7 @@ export class ProductService {
     };
   }
 
-  private buildPublicProductResponse(
-    product: Product,
-    shopStatistics?: PublicShopStatistics,
-  ) {
+  mapPublicProduct(product: Product, shopStatistics?: PublicShopStatistics) {
     const inventory = product.inventory;
 
     if (!inventory) {

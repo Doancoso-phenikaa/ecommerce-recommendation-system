@@ -1,13 +1,20 @@
 import type { PublicProduct } from './product';
 
-export interface RecommendationApiItem {
-  product: {
-    productId: string;
-  };
-  score: number;
-}
-
-export interface RecommendedProduct {
+export interface RecommendedProductItem {
   product: PublicProduct;
   score: number;
+  reason: string | null;
+}
+
+export interface RecommendationResponse {
+  items: RecommendedProductItem[];
+  coldStart: boolean;
+  strategy: string;
+  modelVersion: string | null;
+}
+
+export interface SimilarProductsResponse {
+  items: RecommendedProductItem[];
+  strategy: string;
+  modelVersion: string | null;
 }

@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getRecommendations } from '../../api/recommendation.api';
 import { ProductGrid } from '../../components/product-listing/ProductGrid';
-import type { RecommendedProduct } from '../../types/recommendation';
+import type { RecommendedProductItem } from '../../types/recommendation';
 import { getApiErrorMessage } from '../../utils/auth';
 import './recommendation-page.css';
 
 export function RecommendationPage() {
-  const [recommendations, setRecommendations] = useState<RecommendedProduct[]>([]);
+  const [recommendations, setRecommendations] = useState<RecommendedProductItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -19,8 +19,8 @@ export function RecommendationPage() {
       setError('');
 
       try {
-        const result = await getRecommendations();
-        if (isCurrent) setRecommendations(result);
+        const result = await getRecommendations(20);
+        if (isCurrent) setRecommendations(result.items);
       } catch (requestError: unknown) {
         if (isCurrent) {
           setError(

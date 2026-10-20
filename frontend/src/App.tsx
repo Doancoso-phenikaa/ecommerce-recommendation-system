@@ -49,10 +49,12 @@ function App() {
       <Route path="/register" element={<RegisterCustomerPage />} />
       <Route path="/register/seller" element={<RegisterSellerPage />} />
     </Route>
+    <Route element={<CustomerLayout />}>
+      <Route path="/" element={<CustomerHomePage />} />
+    </Route>
     <Route element={<ProtectedRoute />}>
       <Route element={<RoleRoute allowedRoles={['CUSTOMER']} />}>
         <Route element={<CustomerLayout />}>
-          <Route path="/" element={<CustomerHomePage />} />
           <Route path="/products/:productId" element={<ProductDetailPage />} />
           <Route path="/categories/:categoryId" element={<CategoryProductPage />} />
           <Route path="/search" element={<ProductSearchPage />} />

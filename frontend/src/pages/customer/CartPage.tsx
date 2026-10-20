@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getCart, removeCartItem, updateCartItem } from '../../api/cart.api';
+import { getRecommendations } from '../../api/recommendation.api';
+import { RecommendationSection } from '../../components/recommendation/RecommendationSection';
 import type { CartItem, CartUnavailableReason } from '../../types/cart';
+import type { PublicProduct } from '../../types/product';
 import { getApiErrorMessage } from '../../utils/auth';
 import { formatCurrency } from '../../utils/format-currency';
 import './cart.css';
@@ -91,6 +94,8 @@ export function CartPage() {
   const [busyProductId, setBusyProductId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [selectedCartItemIds, setSelectedCartItemIds] = useState<Set<string>>(new Set());
+  const [recommendedProducts, setRecommendedProducts] = useState<PublicProduct[]>([]);
+  const [isRecommendationLoading, setIsRecommendationLoading] = useState(true);
 
   const loadCart = useCallback(async () => {
     try {
@@ -128,6 +133,23 @@ export function CartPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const controller = new AbortController();
+
+    void getRecommendations(10, controller.signal)
+      .then((response) => {
+        setRecommendedProducts(response.items.map((item) => item.product));
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setRecommendedProducts([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setIsRecommendationLoading(false);
+      });
+
+    return () => controller.abort();
+  }, []);
+
   const totalQuantity = useMemo(
     () => cart.items.reduce((total, item) => total + item.quantity, 0),
     [cart.items],
@@ -143,6 +165,12 @@ export function CartPage() {
   );
   const selectedTotalAmount = useMemo(() => sumCartItems(selectedItems), [selectedItems]);
   const hasUnavailableItems = selectedItems.some((item) => !item.isAvailable);
+  const cartRecommendations = useMemo(() => {
+    const cartProductIds = new Set(cart.items.map((item) => item.productId));
+    return recommendedProducts.filter(
+      (product) => !cartProductIds.has(product.productId),
+    );
+  }, [cart.items, recommendedProducts]);
   const handleProductSelection = (item: CartDisplayItem) => {
     if (!item.isAvailable) return;
     setSelectedCartItemIds((currentSelection) => {
@@ -346,6 +374,14 @@ export function CartPage() {
           </aside>
         </div>
       ) : null}
+
+      <RecommendationSection
+        title="Có thể bạn cũng thích"
+        products={cartRecommendations}
+        isLoading={isRecommendationLoading}
+        className="cart-recommendations"
+        skeletonCount={5}
+      />
     </main>
   );
 }

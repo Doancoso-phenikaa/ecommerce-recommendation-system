@@ -11,6 +11,7 @@ import { Inventory } from '../inventory/entities/inventory.entity.js';
 import { Product } from '../product/entities/product.entity.js';
 import { ProductStatus } from '../product/enums/product-status.enum.js';
 import { ShopStatus } from '../shop/enums/shop-status.enum.js';
+import { RecommendationEventPublisherService } from '../recommendation/recommendation-event-publisher.service.js';
 import { UserBehaviorService } from '../user-behavior/user-behavior.service.js';
 import { BehaviorType } from '../user-behavior/enums/behavior-type.enum.js';
 import { AddCartItemDto } from './dto/add-cart-item.dto.js';
@@ -35,6 +36,7 @@ export class CartService {
     private readonly cartItemRepository: Repository<CartItem>,
     private readonly dataSource: DataSource,
     private readonly userBehaviorService: UserBehaviorService,
+    private readonly recommendationEventPublisher: RecommendationEventPublisherService,
   ) {}
 
   async getCart(userId: string) {
@@ -132,11 +134,15 @@ export class CartService {
         return this.buildCartItemResponse(savedItem, product, inventory);
       });
 
-      await this.userBehaviorService.recordBehavior(
+      const behavior = await this.userBehaviorService.recordBehavior(
         customer.customerId,
         addCartItemDto.productId,
         BehaviorType.ADD_CART,
       );
+
+      if (behavior) {
+        await this.recommendationEventPublisher.publishBehavior(behavior);
+      }
 
       return response;
     } catch (error: unknown) {
