@@ -29,6 +29,17 @@ export async function approveAdminProduct(
   return response.data;
 }
 
+export async function approveAllAdminProducts(): Promise<{
+  approvedCount: number;
+  productIds: string[];
+}> {
+  const response = await api.patch<{
+    approvedCount: number;
+    productIds: string[];
+  }>('/admin/products/approve-all');
+  return response.data;
+}
+
 export async function rejectAdminProduct(
   productId: string,
   rejectionReason: string,

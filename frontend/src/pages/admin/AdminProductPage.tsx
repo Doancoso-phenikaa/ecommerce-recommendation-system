@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { getAdminCategories } from '../../api/admin-category.api';
-import { getAdminProducts } from '../../api/admin-product.api';
+import {
+  approveAdminProduct,
+  approveAllAdminProducts,
+  getAdminProducts,
+} from '../../api/admin-product.api';
 import { getAdminShops } from '../../api/admin-shop.api';
+import { AdminActionDialog } from '../../components/admin/AdminActionDialog';
 import type { Category } from '../../types/category';
 import type {
   AdminProductListResponse,
@@ -12,8 +17,13 @@ import { getApiErrorMessage } from '../../utils/auth';
 import { formatCurrency } from '../../utils/format-currency';
 import { Link } from 'react-router-dom';
 import './admin-product.css';
+import './admin-list-actions.css';
 
 const PAGE_SIZE = 10;
+
+type ProductDialog =
+  | { kind: 'all' }
+  | { kind: 'product'; productId: string; productName: string };
 
 const STATUS_LABELS: Record<ProductStatus, string> = {
   PENDING: 'Chờ duyệt',
@@ -41,6 +51,10 @@ export function AdminProductPage() {
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [actionMessage, setActionMessage] = useState('');
+  const [activeAction, setActiveAction] = useState('');
+  const [dialog, setDialog] = useState<ProductDialog | null>(null);
 
   const loadProducts = useCallback(async (showLoading = true) => {
     try {
@@ -110,6 +124,56 @@ export function AdminProductPage() {
     callback();
   };
 
+  const handleApproveProduct = async (productId: string): Promise<boolean> => {
+    setActiveAction(`approve:${productId}`);
+    setActionError('');
+    setActionMessage('');
+    try {
+      await approveAdminProduct(productId);
+      setActionMessage('Đã duyệt sản phẩm.');
+      await loadProducts(false);
+      return true;
+    } catch (requestError: unknown) {
+      setActionError(
+        getApiErrorMessage(requestError, 'Không thể duyệt sản phẩm.'),
+      );
+      return false;
+    } finally {
+      setActiveAction('');
+    }
+  };
+
+  const handleApproveAll = async (): Promise<boolean> => {
+    setActiveAction('approve-all');
+    setActionError('');
+    setActionMessage('');
+    try {
+      const response = await approveAllAdminProducts();
+      setActionMessage(
+        response.approvedCount > 0
+          ? `Đã duyệt ${response.approvedCount} sản phẩm.`
+          : 'Không có sản phẩm nào đang chờ duyệt.',
+      );
+      await loadProducts(false);
+      return true;
+    } catch (requestError: unknown) {
+      setActionError(
+        getApiErrorMessage(requestError, 'Không thể duyệt tất cả sản phẩm.'),
+      );
+      return false;
+    } finally {
+      setActiveAction('');
+    }
+  };
+
+  const handleDialogConfirm = async () => {
+    if (!dialog) return;
+    const succeeded = dialog.kind === 'all'
+      ? await handleApproveAll()
+      : await handleApproveProduct(dialog.productId);
+    if (succeeded) setDialog(null);
+  };
+
   return (
     <main className="admin-product-page">
       <header className="admin-product-heading">
@@ -122,9 +186,14 @@ export function AdminProductPage() {
           <form onSubmit={handleSearch}><label htmlFor="admin-product-search">Tìm sản phẩm</label><div><input id="admin-product-search" type="search" value={searchInput} placeholder="Nhập tên sản phẩm..." onChange={(event) => setSearchInput(event.target.value)} /><button type="submit">Tìm</button></div></form>
           <label>Trạng thái<select value={status} onChange={(event) => changeFilter(() => setStatus(event.target.value as '' | ProductStatus))}><option value="">Tất cả</option><option value="PENDING">Chờ duyệt</option><option value="APPROVED">Đã duyệt</option><option value="REJECTED">Bị từ chối</option></select></label>
           <label>Danh mục<select value={categoryId} onChange={(event) => changeFilter(() => setCategoryId(event.target.value))}><option value="">Tất cả</option>{categories.map((category) => <option value={category.categoryId} key={category.categoryId}>{category.name}</option>)}</select></label>
-          <label>Gian hàng<select value={shopId} onChange={(event) => changeFilter(() => setShopId(event.target.value))}><option value="">Tất cả</option>{shops.map((shop) => <option value={shop.shopId} key={shop.shopId}>{shop.name}</option>)}</select></label>
+          <div className="admin-product-shop-actions">
+            <label>Gian hàng<select value={shopId} onChange={(event) => changeFilter(() => setShopId(event.target.value))}><option value="">Tất cả</option>{shops.map((shop) => <option value={shop.shopId} key={shop.shopId}>{shop.name}</option>)}</select></label>
+            <button className="admin-bulk-approve" type="button" disabled={Boolean(activeAction)} onClick={() => setDialog({ kind: 'all' })}>{activeAction === 'approve-all' ? 'Đang duyệt...' : 'Duyệt tất cả'}</button>
+          </div>
         </div>
 
+        {actionMessage && <div className="admin-list-success" role="status">{actionMessage}</div>}
+        {actionError && <div className="admin-product-inline-error" role="alert">{actionError}</div>}
         {error && result && <div className="admin-product-inline-error" role="alert">{error}</div>}
 
         {isLoading ? (
@@ -145,7 +214,7 @@ export function AdminProductPage() {
                   <td data-label="Tồn kho"><strong>{product.inventory?.quantity ?? 0}</strong><small>{product.inventory?.availableQuantity ?? 0} có thể bán</small></td>
                   <td data-label="Trạng thái"><span className={`admin-product-status is-${product.status.toLowerCase()}`}>{STATUS_LABELS[product.status]}</span></td>
                   <td data-label="Ngày tạo">{formatDate(product.createdAt)}</td>
-                  <td><Link className="admin-product-detail-link" to={`/admin/products/${product.productId}`}>Xem chi tiết →</Link></td>
+                  <td><div className="admin-list-row-actions">{product.status === 'PENDING' && <button type="button" disabled={Boolean(activeAction)} onClick={() => setDialog({ kind: 'product', productId: product.productId, productName: product.name })}>{activeAction === `approve:${product.productId}` ? 'Đang duyệt...' : 'Duyệt'}</button>}<Link className="admin-product-detail-link" to={`/admin/products/${product.productId}`}>Xem chi tiết →</Link></div></td>
                 </tr>
               ))}
             </tbody></table></div>
@@ -153,6 +222,15 @@ export function AdminProductPage() {
           </>
         )}
       </section>
+      <AdminActionDialog
+        open={Boolean(dialog)}
+        title={dialog?.kind === 'all' ? 'Duyệt tất cả sản phẩm?' : `Duyệt sản phẩm ${dialog?.productName ?? ''}?`}
+        description={dialog?.kind === 'all' ? 'Tất cả sản phẩm đang chờ duyệt sẽ được kiểm tra điều kiện gian hàng, danh mục và tồn kho trước khi công khai.' : 'Sản phẩm sẽ được công khai với khách hàng sau khi đáp ứng các điều kiện hiện tại.'}
+        confirmLabel={dialog?.kind === 'all' ? 'Duyệt tất cả' : 'Xác nhận duyệt'}
+        isLoading={Boolean(activeAction)}
+        onClose={() => setDialog(null)}
+        onConfirm={() => void handleDialogConfirm()}
+      />
     </main>
   );
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   activateAdminShop,
@@ -30,6 +30,11 @@ const ACTION_COPY: Record<ConfirmAction, { title: string; description: string; b
     description: 'Gian hàng sẽ trở lại trạng thái hoạt động.',
     button: 'Kích hoạt lại',
   },
+};
+
+const SHOP_LOGO_SIZE: CSSProperties = {
+  width: 'clamp(4.5rem, 7vw, 5.75rem)',
+  height: 'clamp(4.5rem, 7vw, 5.75rem)',
 };
 
 export function AdminShopDetailPage() {
@@ -133,7 +138,7 @@ export function AdminShopDetailPage() {
       <Link className="admin-back-link" to="/admin/shops">← Danh sách gian hàng</Link>
 
       <header className="admin-detail-hero">
-        <div className="admin-detail-shop-mark" aria-hidden="true">{shop.name.charAt(0).toUpperCase()}</div>
+        <AdminShopLogo logoUrl={shop.logoUrl} shopName={shop.name} />
         <div className="admin-detail-title">
           <span className={`shop-status shop-status--${shop.status.toLowerCase()}`}>
             {SHOP_STATUS_LABELS[shop.status]}
@@ -220,5 +225,42 @@ export function AdminShopDetailPage() {
         </div>
       )}
     </main>
+  );
+}
+
+function AdminShopLogo({
+  logoUrl,
+  shopName,
+}: {
+  logoUrl: string | null;
+  shopName: string;
+}) {
+  const [hasImageError, setHasImageError] = useState(false);
+
+  if (!logoUrl || hasImageError) {
+    return (
+      <div
+        className="admin-detail-shop-mark"
+        style={SHOP_LOGO_SIZE}
+        aria-hidden="true"
+      >
+        {shopName.charAt(0).toLocaleUpperCase('vi')}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      className="admin-detail-shop-mark admin-detail-shop-mark--image"
+      src={logoUrl}
+      alt={`Logo ${shopName}`}
+      style={{
+        ...SHOP_LOGO_SIZE,
+        display: 'block',
+        objectFit: 'cover',
+        background: '#ffffff',
+      }}
+      onError={() => setHasImageError(true)}
+    />
   );
 }

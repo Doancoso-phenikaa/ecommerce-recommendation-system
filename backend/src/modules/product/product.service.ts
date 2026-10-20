@@ -509,6 +509,38 @@ export class ProductService {
     });
   }
 
+  async approveAllPendingProducts() {
+    return this.dataSource.transaction(async (manager) => {
+      const products = await manager
+        .getRepository(Product)
+        .createQueryBuilder('product')
+        .setLock('pessimistic_write')
+        .where('product.status = :status', { status: ProductStatus.PENDING })
+        .orderBy('product.productId', 'ASC')
+        .getMany();
+
+      for (const product of products) {
+        await this.revalidateProductApproval(manager, product);
+        await this.findInventoryOrFailInTransaction(
+          manager,
+          product.productId,
+        );
+        product.status = ProductStatus.APPROVED;
+        product.rejectionReason = null;
+        product.approvedAt = new Date();
+      }
+
+      if (products.length > 0) {
+        await manager.getRepository(Product).save(products);
+      }
+
+      return {
+        approvedCount: products.length,
+        productIds: products.map((product) => product.productId),
+      };
+    });
+  }
+
   async rejectProduct(productId: string, rejectionReasonInput: string) {
     return this.dataSource.transaction(async (manager) => {
       const product = await this.findAndLockProduct(manager, productId);

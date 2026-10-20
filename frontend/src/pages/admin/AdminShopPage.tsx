@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { getAdminShops } from '../../api/admin-shop.api';
+import { AdminActionDialog } from '../../components/admin/AdminActionDialog';
+import {
+  activateAdminShop,
+  approveAdminShop,
+  approveAllAdminShops,
+  getAdminShops,
+  rejectAdminShop,
+  suspendAdminShop,
+} from '../../api/admin-shop.api';
 import type {
   AdminShopListResponse,
   ShopStatus,
@@ -8,6 +16,7 @@ import type {
 import { getApiErrorMessage } from '../../utils/auth';
 import { formatShopDate, SHOP_STATUS_LABELS } from '../../utils/shop';
 import './admin-shop.css';
+import './admin-list-actions.css';
 
 const STATUS_FILTERS: Array<{ label: string; value: '' | ShopStatus }> = [
   { label: 'Tất cả', value: '' },
@@ -19,6 +28,15 @@ const STATUS_FILTERS: Array<{ label: string; value: '' | ShopStatus }> = [
 
 const PAGE_SIZE = 10;
 
+type ShopDialog =
+  | { kind: 'all' }
+  | {
+    kind: 'shop';
+    shopId: string;
+    shopName: string;
+    action: 'approve' | 'reject' | 'suspend' | 'activate';
+  };
+
 export function AdminShopPage() {
   const [result, setResult] = useState<AdminShopListResponse | null>(null);
   const [status, setStatus] = useState<'' | ShopStatus>('');
@@ -27,6 +45,12 @@ export function AdminShopPage() {
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [actionMessage, setActionMessage] = useState('');
+  const [activeAction, setActiveAction] = useState('');
+  const [dialog, setDialog] = useState<ShopDialog | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [rejectionError, setRejectionError] = useState('');
 
   const loadShops = useCallback(async (showLoading = true) => {
     try {
@@ -77,6 +101,81 @@ export function AdminShopPage() {
     setSearch(normalizedSearch);
   };
 
+  const handleShopAction = async (
+    shopId: string,
+    action: 'approve' | 'reject' | 'suspend' | 'activate',
+  ): Promise<boolean> => {
+    setActiveAction(`${action}:${shopId}`);
+    setActionError('');
+    setActionMessage('');
+    try {
+      if (action === 'approve') await approveAdminShop(shopId);
+      if (action === 'reject') await rejectAdminShop(shopId, rejectionReason);
+      if (action === 'suspend') await suspendAdminShop(shopId);
+      if (action === 'activate') await activateAdminShop(shopId);
+      setActionMessage('Đã cập nhật trạng thái gian hàng.');
+      await loadShops(false);
+      return true;
+    } catch (requestError: unknown) {
+      setActionError(
+        getApiErrorMessage(requestError, 'Không thể cập nhật trạng thái gian hàng.'),
+      );
+      return false;
+    } finally {
+      setActiveAction('');
+    }
+  };
+
+  const handleApproveAll = async (): Promise<boolean> => {
+    setActiveAction('approve-all');
+    setActionError('');
+    setActionMessage('');
+    try {
+      const response = await approveAllAdminShops();
+      setActionMessage(
+        response.approvedCount > 0
+          ? `Đã duyệt ${response.approvedCount} gian hàng.`
+          : 'Không có gian hàng nào đang chờ duyệt.',
+      );
+      await loadShops(false);
+      return true;
+    } catch (requestError: unknown) {
+      setActionError(
+        getApiErrorMessage(requestError, 'Không thể duyệt tất cả gian hàng.'),
+      );
+      return false;
+    } finally {
+      setActiveAction('');
+    }
+  };
+
+  const handleDialogConfirm = async () => {
+    if (!dialog) return;
+    if (dialog.kind === 'all') {
+      if (await handleApproveAll()) setDialog(null);
+      return;
+    }
+    if (dialog.action === 'reject' && !rejectionReason.trim()) {
+      setRejectionError('Vui lòng nhập lý do từ chối gian hàng.');
+      return;
+    }
+    if (await handleShopAction(dialog.shopId, dialog.action)) {
+      setDialog(null);
+      setRejectionReason('');
+      setRejectionError('');
+    }
+  };
+
+  const openShopDialog = (
+    shopId: string,
+    shopName: string,
+    action: 'approve' | 'reject' | 'suspend' | 'activate',
+  ) => {
+    setRejectionReason('');
+    setRejectionError('');
+    setDialog({ kind: 'shop', shopId, shopName, action });
+  };
+
   return (
     <main className="admin-shop-page">
       <header className="admin-page-heading">
@@ -112,21 +211,33 @@ export function AdminShopPage() {
             ))}
           </div>
 
-          <form className="admin-shop-search" onSubmit={handleSearch}>
-            <label htmlFor="admin-shop-search">Tìm gian hàng</label>
-            <div>
-              <input
-                id="admin-shop-search"
-                type="search"
-                value={searchInput}
-                placeholder="Tên shop, seller..."
-                onChange={(event) => setSearchInput(event.target.value)}
-              />
-              <button type="submit">Tìm kiếm</button>
-            </div>
-          </form>
+          <div className="admin-shop-search-actions">
+            <form className="admin-shop-search" onSubmit={handleSearch}>
+              <label htmlFor="admin-shop-search">Tìm gian hàng</label>
+              <div>
+                <input
+                  id="admin-shop-search"
+                  type="search"
+                  value={searchInput}
+                  placeholder="Tên shop, seller..."
+                  onChange={(event) => setSearchInput(event.target.value)}
+                />
+                <button type="submit">Tìm kiếm</button>
+              </div>
+            </form>
+            <button
+              className="admin-bulk-approve"
+              type="button"
+              disabled={Boolean(activeAction)}
+              onClick={() => setDialog({ kind: 'all' })}
+            >
+              {activeAction === 'approve-all' ? 'Đang duyệt...' : 'Duyệt tất cả'}
+            </button>
+          </div>
         </div>
 
+        {actionMessage && <div className="admin-list-success" role="status">{actionMessage}</div>}
+        {actionError && <div className="admin-action-error" role="alert">{actionError}</div>}
         {error && result && <div className="admin-action-error" role="alert">{error}</div>}
 
         {isLoading ? (
@@ -178,9 +289,17 @@ export function AdminShopPage() {
                       <td data-label="Đánh giá"><span className="admin-shop-rating">★ {shop.rating}</span></td>
                       <td data-label="Ngày tạo">{formatShopDate(shop.createdAt)}</td>
                       <td>
-                        <Link className="admin-shop-detail-link" to={`/admin/shops/${shop.shopId}`}>
-                          Xem chi tiết <span aria-hidden="true">→</span>
-                        </Link>
+                        <div className="admin-list-row-actions">
+                          {shop.status === 'PENDING' && <>
+                            <button type="button" disabled={Boolean(activeAction)} onClick={() => openShopDialog(shop.shopId, shop.name, 'approve')}>Duyệt</button>
+                            <button className="is-danger" type="button" disabled={Boolean(activeAction)} onClick={() => openShopDialog(shop.shopId, shop.name, 'reject')}>Từ chối</button>
+                          </>}
+                          {shop.status === 'ACTIVE' && <button className="is-warning" type="button" disabled={Boolean(activeAction)} onClick={() => openShopDialog(shop.shopId, shop.name, 'suspend')}>Tạm ngưng</button>}
+                          {shop.status === 'SUSPENDED' && <button type="button" disabled={Boolean(activeAction)} onClick={() => openShopDialog(shop.shopId, shop.name, 'activate')}>Kích hoạt lại</button>}
+                          <Link className="admin-shop-detail-link" to={`/admin/shops/${shop.shopId}`}>
+                            Xem chi tiết <span aria-hidden="true">→</span>
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -216,6 +335,69 @@ export function AdminShopPage() {
           </>
         )}
       </section>
+      <AdminActionDialog
+        open={Boolean(dialog)}
+        title={getShopDialogTitle(dialog)}
+        description={getShopDialogDescription(dialog)}
+        confirmLabel={getShopDialogConfirmLabel(dialog)}
+        tone={dialog?.kind === 'shop' && dialog.action === 'suspend' ? 'warning' : dialog?.kind === 'shop' && dialog.action === 'reject' ? 'danger' : 'primary'}
+        isLoading={Boolean(activeAction)}
+        onClose={() => {
+          setDialog(null);
+          setRejectionReason('');
+          setRejectionError('');
+        }}
+        onConfirm={() => void handleDialogConfirm()}
+      >
+        {dialog?.kind === 'shop' && dialog.action === 'reject' && (
+          <>
+            <label htmlFor="shop-rejection-reason">Lý do từ chối</label>
+            <textarea
+              id="shop-rejection-reason"
+              value={rejectionReason}
+              placeholder="Nêu rõ nội dung người bán cần điều chỉnh..."
+              onChange={(event) => {
+                setRejectionReason(event.target.value);
+                setRejectionError('');
+              }}
+            />
+            {rejectionError && <span className="admin-action-dialog__field-error">{rejectionError}</span>}
+          </>
+        )}
+      </AdminActionDialog>
     </main>
   );
+}
+
+function getShopDialogTitle(dialog: ShopDialog | null): string {
+  if (!dialog) return '';
+  if (dialog.kind === 'all') return 'Duyệt tất cả gian hàng?';
+  return {
+    approve: `Duyệt gian hàng ${dialog.shopName}?`,
+    reject: `Từ chối gian hàng ${dialog.shopName}?`,
+    suspend: `Tạm ngưng gian hàng ${dialog.shopName}?`,
+    activate: `Kích hoạt lại gian hàng ${dialog.shopName}?`,
+  }[dialog.action];
+}
+
+function getShopDialogDescription(dialog: ShopDialog | null): string {
+  if (!dialog) return '';
+  if (dialog.kind === 'all') return 'Tất cả gian hàng đang chờ duyệt sẽ được kiểm tra điều kiện và kích hoạt trong cùng một lần xử lý.';
+  return {
+    approve: 'Gian hàng sẽ được kích hoạt và có thể đưa các sản phẩm đủ điều kiện lên marketplace.',
+    reject: 'Người bán sẽ nhìn thấy lý do để chỉnh sửa hồ sơ và gửi duyệt lại.',
+    suspend: 'Sản phẩm của gian hàng sẽ tạm thời không hiển thị với khách hàng.',
+    activate: 'Gian hàng sẽ hoạt động trở lại sau khi xác nhận.',
+  }[dialog.action];
+}
+
+function getShopDialogConfirmLabel(dialog: ShopDialog | null): string {
+  if (!dialog) return '';
+  if (dialog.kind === 'all') return 'Duyệt tất cả';
+  return {
+    approve: 'Xác nhận duyệt',
+    reject: 'Xác nhận từ chối',
+    suspend: 'Xác nhận tạm ngưng',
+    activate: 'Xác nhận kích hoạt',
+  }[dialog.action];
 }
