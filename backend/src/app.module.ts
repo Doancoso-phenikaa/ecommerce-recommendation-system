@@ -14,6 +14,7 @@ import { PaymentModule } from './modules/payment/payment.module.js';
 import { OrderModule } from './modules/order/order.module.js';
 import { ProductModule } from './modules/product/product.module.js';
 import { ReviewModule } from './modules/review/review.module.js';
+import { RecommendationModule } from './modules/recommendation/recommendation.module.js';
 import { SellerModule } from './modules/seller/seller.module.js';
 import { ShopModule } from './modules/shop/shop.module.js';
 import { UserModule } from './modules/user/user.module.js';
@@ -46,6 +47,7 @@ import { ShippingConfigModule } from './modules/shipping-config/shipping-config.
     PaymentModule,
     OrderModule,
     ReviewModule,
+    RecommendationModule,
     SellerModule,
     UserBehaviorModule,
     ShippingConfigModule,

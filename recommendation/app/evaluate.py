@@ -234,7 +234,7 @@ def split_temporal_holdout(
     """
     if df.empty:
         return df.copy(), {}
-    stamps = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
+    stamps = pd.to_datetime(df["timestamp"], utc=True, errors="coerce", format="mixed",)
     work = df.copy()
     work["_ts"] = stamps
     # NaT sorts first with na_position="first" — deterministic; such rows

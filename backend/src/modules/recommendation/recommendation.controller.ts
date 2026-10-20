@@ -1,35 +1,32 @@
-import {
-  Controller,
-  Get,
-  Req,
-  UnauthorizedException,
-  UseGuards,
-} from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
-import type { Request } from 'express';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
+import { Roles } from '../../common/decorators/roles.decorator.js';
+import { UserRole } from '../../common/enums/user-role.enum.js';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
+import { RolesGuard } from '../../common/guards/roles.guard.js';
+import { ProductIdParamDto } from '../product/dto/product-id-param.dto.js';
+import { RecommendationQueryDto } from './dto/recommendation-query.dto.js';
 import { RecommendationService } from './recommendation.service.js';
 
-interface JwtRequestUser {
-  userId?: string;
-  sub?: string;
-}
-
 @Controller('recommendations')
-@UseGuards(AuthGuard('jwt'))
 export class RecommendationController {
-  constructor(
-    private readonly recommendationService: RecommendationService,
-  ) {}
+  constructor(private readonly recommendationService: RecommendationService) {}
+
+  @Get('similar/:productId')
+  getSimilarProducts(
+    @Param() params: ProductIdParamDto,
+    @Query() query: RecommendationQueryDto,
+  ) {
+    return this.recommendationService.getSimilar(params.productId, query.limit);
+  }
 
   @Get()
-  getRecommendations(@Req() request: Request) {
-    const user = request.user as JwtRequestUser | undefined;
-    const userId = user?.userId ?? user?.sub;
-
-    if (!userId) {
-      throw new UnauthorizedException('Authenticated user is required');
-    }
-
-    return this.recommendationService.getForUser(userId);
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.CUSTOMER)
+  getRecommendations(
+    @CurrentUser('userId') userId: string,
+    @Query() query: RecommendationQueryDto,
+  ) {
+    return this.recommendationService.getForUser(userId, query.limit);
   }
 }

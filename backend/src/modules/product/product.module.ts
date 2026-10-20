@@ -22,5 +22,6 @@ import { SellerProductController } from './seller-product.controller.js';
     SellerProductController,
   ],
   providers: [ProductService],
+  exports: [ProductService],
 })
 export class ProductModule {}
