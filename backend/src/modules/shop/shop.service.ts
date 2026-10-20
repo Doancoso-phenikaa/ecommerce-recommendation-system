@@ -398,6 +398,33 @@ export class ShopService {
     });
   }
 
+  async approveAllPendingShops() {
+    return this.dataSource.transaction(async (manager) => {
+      const shops = await manager
+        .getRepository(Shop)
+        .createQueryBuilder('shop')
+        .setLock('pessimistic_write')
+        .where('shop.status = :status', { status: ShopStatus.PENDING })
+        .orderBy('shop.shopId', 'ASC')
+        .getMany();
+
+      for (const shop of shops) {
+        await this.revalidateShopApproval(manager, shop);
+        shop.status = ShopStatus.ACTIVE;
+        shop.rejectionReason = null;
+      }
+
+      if (shops.length > 0) {
+        await manager.getRepository(Shop).save(shops);
+      }
+
+      return {
+        approvedCount: shops.length,
+        shopIds: shops.map((shop) => shop.shopId),
+      };
+    });
+  }
+
   async rejectShop(shopId: string, rejectionReasonInput: string) {
     return this.dataSource.transaction(async (manager) => {
       const shop = await this.findAndLockShop(manager, shopId);

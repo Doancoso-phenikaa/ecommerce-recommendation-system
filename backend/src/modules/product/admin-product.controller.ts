@@ -32,6 +32,11 @@ export class AdminProductController {
     return this.productService.getAdminProductDetail(params.productId);
   }
 
+  @Patch('approve-all')
+  approveAllPendingProducts() {
+    return this.productService.approveAllPendingProducts();
+  }
+
   @Patch(':productId/approve')
   approveProduct(@Param() params: ProductIdParamDto) {
     return this.productService.approveProduct(params.productId);
