@@ -21,8 +21,6 @@ import { OrderStatus } from '../order/enums/order-status.enum.js';
 import { Product } from '../product/entities/product.entity.js';
 import { ProductStatus } from '../product/enums/product-status.enum.js';
 import { ShopStatus } from '../shop/enums/shop-status.enum.js';
-import { BehaviorType } from '../user-behavior/enums/behavior-type.enum.js';
-import { UserBehaviorService } from '../user-behavior/user-behavior.service.js';
 import { ShippingConfigService } from '../shipping-config/shipping-config.service.js';
 import { CheckoutPreviewDto } from './dto/checkout-preview.dto.js';
 import { ConfirmCheckoutDto } from './dto/confirm-checkout.dto.js';
@@ -155,7 +153,6 @@ export class CheckoutService {
     @InjectRepository(Discount)
     private readonly discountRepository: Repository<Discount>,
     private readonly dataSource: DataSource,
-    private readonly userBehaviorService: UserBehaviorService,
     private readonly shippingConfigService: ShippingConfigService,
   ) {}
 
@@ -194,10 +191,7 @@ export class CheckoutService {
       .addOrderBy('cartItem.cartItemId', 'ASC')
       .getMany();
 
-    this.ensureAllSelectedCartItemsWereLoaded(
-      selectedCartItemIds,
-      cartItems,
-    );
+    this.ensureAllSelectedCartItemsWereLoaded(selectedCartItemIds, cartItems);
 
     const groupsByShop = new Map<string, PreviewShopGroupAccumulator>();
     let cartSubtotalInCents = 0n;
@@ -288,10 +282,7 @@ export class CheckoutService {
       ? this.calculateDiscountAmount(cartSubtotalInCents, productDiscount)
       : 0n;
     const shippingDiscountAmountInCents = shippingDiscount
-      ? this.calculateDiscountAmount(
-          shippingFeeInCents,
-          shippingDiscount,
-        )
+      ? this.calculateDiscountAmount(shippingFeeInCents, shippingDiscount)
       : 0n;
     const productDiscountAllocations = this.allocateAmountByShop(
       shopGroupAccumulators,
@@ -310,9 +301,7 @@ export class CheckoutService {
         shopName: shopGroup.shopName,
         items: shopGroup.items,
         subtotal: this.formatCents(shopGroup.subtotalInCents),
-        productDiscountAmount: this.formatCents(
-          shopProductDiscountInCents,
-        ),
+        productDiscountAmount: this.formatCents(shopProductDiscountInCents),
         totalAmount: this.formatCents(totalAmountInCents),
       };
     });
@@ -328,13 +317,9 @@ export class CheckoutService {
       cartSubtotal: this.formatCents(cartSubtotalInCents),
       productDiscount: this.buildPreviewDiscount(productDiscount),
       shippingDiscount: this.buildPreviewDiscount(shippingDiscount),
-      productDiscountAmount: this.formatCents(
-        productDiscountAmountInCents,
-      ),
+      productDiscountAmount: this.formatCents(productDiscountAmountInCents),
       shippingFee: this.formatCents(shippingFeeInCents),
-      shippingDiscountAmount: this.formatCents(
-        shippingDiscountAmountInCents,
-      ),
+      shippingDiscountAmount: this.formatCents(shippingDiscountAmountInCents),
       totalAmount: this.formatCents(totalAmountInCents),
       discount: this.buildPreviewDiscount(productDiscount),
       discountAmount: this.formatCents(productDiscountAmountInCents),
@@ -420,10 +405,7 @@ export class CheckoutService {
           ? this.calculateDiscountAmount(cartSubtotalInCents, productDiscount)
           : 0n;
         const shippingDiscountAmountInCents = shippingDiscount
-          ? this.calculateDiscountAmount(
-              shippingFeeInCents,
-              shippingDiscount,
-            )
+          ? this.calculateDiscountAmount(shippingFeeInCents, shippingDiscount)
           : 0n;
         const finalTotalInCents =
           cartSubtotalInCents -
@@ -538,59 +520,41 @@ export class CheckoutService {
         }
 
         return {
-          customerId: customer.customerId,
-          productIds: Array.from(
-            new Set(cartItems.map((cartItem) => cartItem.productId)),
+          orderGroupId: orderGroup.orderGroupId,
+          subtotal: this.formatCents(cartSubtotalInCents),
+          cartSubtotal: this.formatCents(cartSubtotalInCents),
+          productDiscount: productDiscount
+            ? {
+                discountId: productDiscount.discountId,
+                code: productDiscount.code,
+              }
+            : null,
+          shippingDiscount: shippingDiscount
+            ? {
+                discountId: shippingDiscount.discountId,
+                code: shippingDiscount.code,
+              }
+            : null,
+          productDiscountAmount: this.formatCents(productDiscountAmountInCents),
+          shippingFee: orderGroup.shippingFee,
+          shippingDiscountAmount: this.formatCents(
+            shippingDiscountAmountInCents,
           ),
-          response: {
-            orderGroupId: orderGroup.orderGroupId,
-            subtotal: this.formatCents(cartSubtotalInCents),
-            cartSubtotal: this.formatCents(cartSubtotalInCents),
-            productDiscount: productDiscount
-              ? {
-                  discountId: productDiscount.discountId,
-                  code: productDiscount.code,
-                }
-              : null,
-            shippingDiscount: shippingDiscount
-              ? {
-                  discountId: shippingDiscount.discountId,
-                  code: shippingDiscount.code,
-                }
-              : null,
-            productDiscountAmount: this.formatCents(
-              productDiscountAmountInCents,
-            ),
-            shippingFee: orderGroup.shippingFee,
-            shippingDiscountAmount: this.formatCents(
-              shippingDiscountAmountInCents,
-            ),
-            discount: productDiscount
-              ? {
-                  discountId: productDiscount.discountId,
-                  code: productDiscount.code,
-                }
-              : null,
-            discountAmount: this.formatCents(productDiscountAmountInCents),
-            totalAmount: orderGroup.totalAmount,
-            orders,
-            createdAt: orderGroup.createdAt,
-          },
+          discount: productDiscount
+            ? {
+                discountId: productDiscount.discountId,
+                code: productDiscount.code,
+              }
+            : null,
+          discountAmount: this.formatCents(productDiscountAmountInCents),
+          totalAmount: orderGroup.totalAmount,
+          orders,
+          createdAt: orderGroup.createdAt,
         };
       },
     );
 
-    await Promise.all(
-      transactionResult.productIds.map((productId) =>
-        this.userBehaviorService.recordBehavior(
-          transactionResult.customerId,
-          productId,
-          BehaviorType.PURCHASE,
-        ),
-      ),
-    );
-
-    return transactionResult.response;
+    return transactionResult;
   }
 
   private async findAndValidateDiscount(
@@ -862,8 +826,7 @@ export class CheckoutService {
       const isLastGroup = index === shopGroups.length - 1;
       const allocationInCents = isLastGroup
         ? amountInCents - allocatedInCents
-        : (amountInCents * getWeightInCents(shopGroup)) /
-          totalWeightInCents;
+        : (amountInCents * getWeightInCents(shopGroup)) / totalWeightInCents;
 
       allocations.set(shopGroup.shopId, allocationInCents);
       allocatedInCents += allocationInCents;
@@ -873,8 +836,7 @@ export class CheckoutService {
 
     if (lastGroup) {
       const lastAllocation = allocations.get(lastGroup.shopId) ?? 0n;
-      let overflowInCents =
-        lastAllocation - getWeightInCents(lastGroup);
+      let overflowInCents = lastAllocation - getWeightInCents(lastGroup);
 
       if (overflowInCents > 0n) {
         allocations.set(lastGroup.shopId, getWeightInCents(lastGroup));

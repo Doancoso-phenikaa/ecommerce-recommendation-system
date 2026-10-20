@@ -3,8 +3,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '../auth/auth.module.js';
 import { Customer } from '../customer/entities/customer.entity.js';
 import { Inventory } from '../inventory/entities/inventory.entity.js';
+import { RecommendationEventModule } from '../recommendation/recommendation-event.module.js';
 import { Seller } from '../seller/entities/seller.entity.js';
 import { Shop } from '../shop/entities/shop.entity.js';
+import { UserBehaviorModule } from '../user-behavior/user-behavior.module.js';
 import { OrderGroup } from './entities/order-group.entity.js';
 import { OrderItem } from './entities/order-item.entity.js';
 import { Order } from './entities/order.entity.js';
@@ -24,6 +26,8 @@ import { SellerOrderController } from './seller-order.controller.js';
       Shop,
     ]),
     AuthModule,
+    UserBehaviorModule,
+    RecommendationEventModule,
   ],
   controllers: [CustomerOrderController, SellerOrderController],
   providers: [OrderService],

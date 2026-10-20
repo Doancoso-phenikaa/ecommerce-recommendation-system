@@ -1,75 +1,96 @@
-import { BadGatewayException } from '@nestjs/common';
-
-export interface RecommendationProviderContext {
-  customerId: string;
-  hasBehavior: boolean;
-}
-
-export interface RecommendationProviderRequest {
-  customerId: string;
-  mode: 'DEFAULT' | 'PERSONALIZED';
-}
-
 export interface RecommendationCandidate {
-  productId: string;
+  itemId: string;
   score: number;
+  reason: string | null;
 }
 
-/**
- * This is the only place that maps NestJS data to the Python API request.
- * Update it when the Python team finalizes the request contract.
- */
-export function buildRecommendationProviderRequest(
-  context: RecommendationProviderContext,
-): RecommendationProviderRequest {
+export interface PersonalizedProviderResponse {
+  recommendations: RecommendationCandidate[];
+  coldStart: boolean;
+  strategy: string;
+  modelVersion: string;
+}
+
+export interface SimilarProviderResponse {
+  items: RecommendationCandidate[];
+  strategy: string;
+  modelVersion: string;
+}
+
+export function parsePersonalizedProviderResponse(
+  data: unknown,
+): PersonalizedProviderResponse {
+  const record = requireRecord(data);
+
+  if (!Array.isArray(record.recommendations)) {
+    throw new Error('Provider recommendations must be an array');
+  }
+
+  if (typeof record.cold_start !== 'boolean') {
+    throw new Error('Provider cold_start must be a boolean');
+  }
+
   return {
-    customerId: context.customerId,
-    mode: context.hasBehavior ? 'PERSONALIZED' : 'DEFAULT',
+    recommendations: record.recommendations.map(parseCandidate),
+    coldStart: record.cold_start,
+    strategy: requireString(record.strategy, 'strategy'),
+    modelVersion: requireString(record.model_version, 'model_version'),
   };
 }
 
-/**
- * The currently known response contract is an array of productId and score.
- * Keep provider-specific response changes isolated in this parser.
- */
-export function parseRecommendationProviderResponse(
+export function parseSimilarProviderResponse(
   data: unknown,
-): RecommendationCandidate[] {
-  if (!Array.isArray(data)) {
-    throw new BadGatewayException(
-      'Recommendation service returned an invalid response',
-    );
+): SimilarProviderResponse {
+  const record = requireRecord(data);
+
+  if (!Array.isArray(record.items)) {
+    throw new Error('Provider items must be an array');
   }
 
-  return data.map((item) => {
-    if (typeof item !== 'object' || item === null) {
-      throw new BadGatewayException(
-        'Recommendation service returned an invalid item',
-      );
-    }
-
-    const candidate = item as Record<string, unknown>;
-    const productId = normalizeProductId(candidate.productId);
-    const score = candidate.score;
-
-    if (productId === null || typeof score !== 'number' || !Number.isFinite(score)) {
-      throw new BadGatewayException(
-        'Recommendation service returned an invalid item',
-      );
-    }
-
-    return { productId, score };
-  });
+  return {
+    items: record.items.map(parseCandidate),
+    strategy: requireString(record.strategy, 'strategy'),
+    modelVersion: requireString(record.model_version, 'model_version'),
+  };
 }
 
-function normalizeProductId(value: unknown): string | null {
-  if (typeof value === 'string' && /^\d+$/.test(value)) {
-    return value;
+function parseCandidate(value: unknown): RecommendationCandidate {
+  const record = requireRecord(value);
+  const itemId = record.item_id;
+  const score = record.score;
+  const reason = record.reason;
+
+  if (typeof itemId !== 'string' || !/^[1-9]\d*$/.test(itemId)) {
+    throw new Error('Provider item_id must be a positive integer string');
   }
 
-  if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0) {
-    return String(value);
+  if (typeof score !== 'number' || !Number.isFinite(score)) {
+    throw new Error('Provider score must be a finite number');
   }
 
-  return null;
+  if (reason !== undefined && reason !== null && typeof reason !== 'string') {
+    throw new Error('Provider reason must be a string or null');
+  }
+
+  return {
+    itemId,
+    score,
+    reason: typeof reason === 'string' ? reason : null,
+  };
+}
+
+function requireRecord(value: unknown): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('Provider response must be an object');
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function requireString(value: unknown, field: string): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`Provider ${field} must be a non-empty string`);
+  }
+
+  return value;
 }

@@ -95,9 +95,9 @@ export function PaymentResultPage() {
 
     const loadRecommendations = async () => {
       try {
-        const result = await getRecommendations();
+        const result = await getRecommendations(4);
         if (isCurrent) {
-          setRecommendations(result.slice(0, 4).map(({ product }) => product));
+          setRecommendations(result.items.map(({ product }) => product));
         }
       } catch {
         if (isCurrent) setRecommendations([]);

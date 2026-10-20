@@ -9,7 +9,6 @@ import { Inventory } from '../inventory/entities/inventory.entity.js';
 import { OrderGroup } from '../order/entities/order-group.entity.js';
 import { OrderItem } from '../order/entities/order-item.entity.js';
 import { Order } from '../order/entities/order.entity.js';
-import { UserBehaviorModule } from '../user-behavior/user-behavior.module.js';
 import { ShippingConfigModule } from '../shipping-config/shipping-config.module.js';
 import { CheckoutController } from './checkout.controller.js';
 import { CheckoutService } from './checkout.service.js';
@@ -27,7 +26,6 @@ import { CheckoutService } from './checkout.service.js';
       OrderItem,
     ]),
     AuthModule,
-    UserBehaviorModule,
     ShippingConfigModule,
   ],
   controllers: [CheckoutController],

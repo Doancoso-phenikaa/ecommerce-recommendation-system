@@ -10,8 +10,11 @@ import { Inventory } from '../inventory/entities/inventory.entity.js';
 import { Payment } from '../payment/entities/payment.entity.js';
 import { PaymentMethod } from '../payment/enums/payment-method.enum.js';
 import { PaymentStatus } from '../payment/enums/payment-status.enum.js';
+import { RecommendationEventPublisherService } from '../recommendation/recommendation-event-publisher.service.js';
 import { Seller } from '../seller/entities/seller.entity.js';
 import { Shop } from '../shop/entities/shop.entity.js';
+import { BehaviorType } from '../user-behavior/enums/behavior-type.enum.js';
+import { UserBehaviorService } from '../user-behavior/user-behavior.service.js';
 import { OrderGroup } from './entities/order-group.entity.js';
 import { OrderItem } from './entities/order-item.entity.js';
 import { Order } from './entities/order.entity.js';
@@ -29,6 +32,8 @@ export class OrderService {
     @InjectRepository(Shop)
     private readonly shopRepository: Repository<Shop>,
     private readonly dataSource: DataSource,
+    private readonly userBehaviorService: UserBehaviorService,
+    private readonly recommendationEventPublisher: RecommendationEventPublisherService,
   ) {}
 
   async getMyOrders(userId: string) {
@@ -262,10 +267,10 @@ export class OrderService {
   }
 
   async confirmOrderReceived(userId: string, orderId: string) {
-    return this.dataSource.transaction(async (manager) => {
-      const customer = await manager
-        .getRepository(Customer)
-        .findOneBy({ userId });
+    const completion = await this.dataSource.transaction(async (manager) => {
+      const customer = await manager.getRepository(Customer).findOneBy({
+        userId,
+      });
 
       if (!customer) {
         throw new NotFoundException('Customer profile not found');
@@ -292,6 +297,7 @@ export class OrderService {
         );
       }
 
+      const orderItems = await this.findOrderItems(manager, order.orderId);
       order.status = OrderStatus.COMPLETED;
       const completedOrder = await manager.getRepository(Order).save(order);
 
@@ -303,11 +309,38 @@ export class OrderService {
         payment,
       );
 
-      return this.buildOrderStatusResponse(
-        completedOrder,
-        'Order receipt confirmed successfully',
-      );
+      return {
+        customerId: customer.customerId,
+        orderItems: orderItems.map((orderItem) => ({
+          productId: orderItem.productId,
+          quantity: orderItem.quantity,
+          unitPrice: orderItem.unitPrice,
+        })),
+        response: this.buildOrderStatusResponse(
+          completedOrder,
+          'Order receipt confirmed successfully',
+        ),
+      };
     });
+
+    await Promise.all(
+      completion.orderItems.map(async (orderItem) => {
+        const behavior = await this.userBehaviorService.recordBehavior(
+          completion.customerId,
+          orderItem.productId,
+          BehaviorType.PURCHASE,
+        );
+
+        if (behavior) {
+          await this.recommendationEventPublisher.publishBehavior(behavior, {
+            quantity: orderItem.quantity,
+            unitPrice: orderItem.unitPrice,
+          });
+        }
+      }),
+    );
+
+    return completion.response;
   }
 
   async confirmOrder(userId: string, orderId: string) {
